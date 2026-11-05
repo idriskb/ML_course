@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>k-nearest neighbours — Machine Learning</title>
+  <meta name="description" content="Non-linear and non-parametric learning, and k-nearest neighbours: distance-based prediction, k-NN regression and classification, model complexity and the choice of k, and the curse of dimensionality.">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/knn-regression.js"></script>
+  <script defer src="../assets/js/viz/knn-classify.js"></script>
+  <script defer src="../assets/js/viz/curse-dimension.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="07-knn">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>k-nearest neighbours</h1>
+          <p class="lede">This chapter opens the last module of the course: non-linear and non-parametric models. We
+            first ask what linear models cannot do and what it means to learn without a fixed formula. Then we meet
+            the simplest method of this kind: to predict at a new point, look at the training points closest to it and
+            copy what they do. Simple as it is, k-NN shows every theme of the module: flexibility, the
+            bias–variance trade-off controlled by one number, and the price paid in high dimension.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>Explain the limits of global parametric models, and what makes a method non-linear and
+              non-parametric.</li>
+            <li>Define distance-based prediction, and explain why features must be scaled.</li>
+            <li>State the k-NN rules for regression and classification and compute them by hand.</li>
+            <li>Explain how $k$ controls model complexity, derive the bias–variance decomposition of k-NN regression,
+              and choose $k$ by cross-validation.</li>
+            <li>Describe the curse of dimensionality and quantify it with simple calculations.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="beyond-linear">Beyond global parametric models</h2>
+        <p>Every supervised model of Modules 1 and 2 had the same shape. We chose a family of functions with a
+          <em>fixed</em> number of parameters,
+          $$f_\theta(\bx) = \bx\T\theta \quad\text{(linear regression)}, \qquad
+          \P(y = 1 \mid \bx) = \sigma(\bx\T\theta) \quad\text{(logistic regression)},$$
+          estimated $\theta \in \R^{p+1}$ from the data, and then threw the data away: all predictions are made with
+          the same $\theta$. Such models are <strong>parametric</strong> and <strong>global</strong>: one formula,
+          valid everywhere in the input space.</p>
+        <p>This works well when the relationship is close to linear, and it has real advantages: few parameters,
+          fast predictions, interpretable coefficients. But it has two limits.</p>
+        <ul>
+          <li><strong>The shape must be guessed in advance.</strong> A straight line cannot follow a curve. We can add
+            features ($x^2$, $x^3$, $x_1x_2$, …) as in <a href="01-learning-problem.html">Chapter 1</a> and
+            <a href="04-logistic-regression.html">Chapter 4</a>, but we must know which ones, and with many inputs the
+            number of possible features explodes.</li>
+          <li><strong>One formula for the whole space.</strong> Data often behave differently in different regions:
+            house prices follow different rules in different neighbourhoods, the effect of a drug depends on a
+            combination of a patient's characteristics. A single global formula averages these behaviours away.</li>
+        </ul>
+        <p>We have already met data where this fails: on the two moons, logistic regression can only draw a straight
+          boundary, and k-means can only cut the plane into convex pieces.</p>
+
+        <h3 id="local-idea">The local idea</h3>
+        <p>Recall what we are estimating. In regression, the best prediction of $y$ at $\bx$ (in squared error) is
+          the <strong>regression function</strong>, the average value of $y$ among all cases with features $\bx$:
+          $$f^\ast(\bx) = \E[\,y \mid \bx\,].$$
+          In classification, we want the class probabilities $\P(y = c \mid \bx)$. A parametric model guesses a formula
+          for these quantities. But we could also estimate them <em>directly</em>, as averages:</p>
+        <ul>
+          <li>we rarely have training points with features exactly equal to $\bx$, so we relax "equal to $\bx$" into
+            "<strong>close to</strong> $\bx$";</li>
+          <li>and replace the average over all cases by the average over the training points close to $\bx$.</li>
+        </ul>
+        <p>The assumption is only that <em>similar inputs have similar outputs</em>: no formula, no list of features.
+          The prediction rule is then determined by the geometry of the training set itself.</p>
+
+        <h3 id="nonparametric">Non-linear and non-parametric methods</h3>
+        <div class="env definition" id="def-nonparametric">
+          <ul>
+            <li>A method is <strong>non-linear</strong> if its predictions are not a linear function of the inputs
+              $\bx$ with fixed coefficients.</li>
+            <li>A method is <strong>parametric</strong> if it summarises the training data by a parameter vector of
+              fixed dimension, which does not grow with the number $n$ of examples. It is
+              <strong>non-parametric</strong> otherwise: its complexity can grow with $n$, and it often keeps (part
+              of) the training data to make predictions.</li>
+          </ul>
+        </div>
+        <p>Linear regression with $p$ features has $p + 1$ parameters whether $n = 100$ or $n = 100\,000$. A
+          non-parametric method can describe finer and finer detail as more data arrive.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col"></th><th scope="col">Parametric (Modules 1–2)</th><th scope="col">Non-parametric (Module 3)</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Model</th><td>a formula with fixed parameters $\theta$</td><td>shape learned from the data</td></tr>
+              <tr><th scope="row">Complexity</th><td>fixed by the number of parameters</td><td>can grow with $n$</td></tr>
+              <tr><th scope="row">Assumptions</th><td>strong (e.g. linearity)</td><td>weaker (e.g. smoothness, locality)</td></tr>
+              <tr><th scope="row">Data needed</th><td>moderate</td><td>more, especially in high dimension</td></tr>
+              <tr><th scope="row">Interpretability</th><td>high (coefficients)</td><td>usually lower</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout pitfall">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>
+          <p class="callout__title">Non-parametric does not mean assumption-free</p>
+          <div class="callout__body">
+            <p>k-NN assumes that nearby points have similar outputs, which depends entirely on how "nearby" is
+              measured: the choice of features, their scales and the distance. Non-parametric methods also still have
+              <em>hyperparameters</em> (here the number of neighbours $k$) that control their complexity.</p>
+          </div>
+        </div>
+
+        <p>The four chapters of this module give four ways of building a flexible predictor:</p>
+        <ul>
+          <li><strong>k-nearest neighbours</strong> (this chapter): average the outputs of the closest training
+            points;</li>
+          <li><strong>decision trees</strong>: learn a partition of the input space into boxes by asking simple
+            questions;</li>
+          <li><strong>kernel methods</strong>: weigh training points by a similarity, or equivalently use implicit,
+            possibly infinite, feature maps;</li>
+          <li><strong>neural networks</strong>: learn the features themselves (these are parametric, but with so many
+            parameters that they behave like flexible models).</li>
+        </ul>
+
+        <figure class="viz viz--wide" data-viz="knn-regression" id="fig-knn-regression">
+          <div class="viz__stage"></div>
+          <figcaption>Global versus local prediction. A car's fuel consumption is lowest at moderate speeds and rises
+            at both ends (simulated data). The least-squares line (dashed) cannot follow the curve. k-NN predicts at
+            each speed by averaging the consumption of the $k$ training cars with the closest speeds.
+            <strong>Try:</strong> (1) $k = 1$: the prediction jumps through every training point and the training
+            error is zero, but the test error is not; (2) increase $k$: the curve becomes smoother and the test error
+            falls, then rises again when $k$ is so large that the curve flattens; (3) at $k = 40 = n$, every prediction
+            is the overall mean; (4) tick distance weighting and compare.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="distances">Distance-based prediction</h2>
+        <p>Everything in k-NN rests on a notion of distance between feature vectors $\bx, \bx' \in \R^p$.</p>
+
+        <div class="env definition" id="def-minkowski">
+          <p>For $q \geq 1$, the <strong>Minkowski distance</strong> of order $q$ is
+            $$d_q(\bx, \bx') = \Big(\sum_{j=1}^p |x_j - x'_j|^q\Big)^{1/q} .$$
+            The <strong>Euclidean distance</strong> is $q = 2$, $d_2(\bx, \bx') = \norm{\bx - \bx'}$, the ordinary
+            straight-line distance. The <strong>Manhattan distance</strong> is $q = 1$,
+            $d_1(\bx, \bx') = \sum_j |x_j - x'_j|$, the distance travelled along a grid of streets.</p>
+        </div>
+        <p>The points at distance at most $r$ from a query $\bx$ form a ball. For $q = 2$ it is round (a disc in the
+          plane); for $q = 1$ it is a diamond (a square rotated by $45°$). The $k$ nearest neighbours of $\bx$ are the
+          training points inside the smallest such ball that contains $k$ of them, so the distance determines which
+          points count as neighbours. You can switch between the two shapes in
+          <a class="ref" href="#fig-knn-classify"></a>.</p>
+
+        <h3 id="scaling">Scaling comes first</h3>
+        <p>Distances add up differences across features, so the units matter. Take two customers described by
+          (age in years, yearly income in euros):
+          $$\bx = (25,\ 30\,000), \qquad \bx' = (65,\ 31\,000), \qquad \bx'' = (26,\ 34\,000).$$
+          In Euclidean distance, $d(\bx, \bx') = \sqrt{40^2 + 1000^2} \approx 1001$ and
+          $d(\bx, \bx'') = \sqrt{1^2 + 4000^2} \approx 4000$. So the 25-year-old's nearest neighbour is the
+          65-year-old: the age difference of 40 years is invisible next to income differences in euros. After
+          standardising each feature (subtract the mean, divide by the standard deviation), both features count on
+          comparable scales. <strong>Standardise numerical features before using k-NN</strong>, as for PCA and
+          k-means.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="knn-regression">k-NN for regression</h2>
+        <p>Let $\mathcal D = \{(\bx_i, y_i)\}_{i=1}^n$ be the training set, with $y_i \in \R$. For a query point $\bx$,
+          let $N_k(\bx) \subseteq \{1, \dots, n\}$ be the indices of the $k$ training points closest to $\bx$ (ties
+          broken by any fixed rule).</p>
+
+        <div class="env definition" id="def-knn-reg">
+          <p>The <strong>k-NN regression</strong> prediction at $\bx$ is the average output of its $k$ nearest
+            neighbours:
+            $$\hat f_k(\bx) = \frac1k\sum_{i \in N_k(\bx)} y_i .$$</p>
+        </div>
+        <p>It is a <em>local average</em>: an estimate of $\E[y \mid \bx]$ that replaces "given $\bx$" by "among the $k$
+          points closest to $\bx$". Two extreme cases:</p>
+        <ul>
+          <li>$k = 1$: $\hat f_1(\bx) = y_{i^\ast}$ where $\bx_{i^\ast}$ is the nearest training point. The predictor
+            copies one point and jumps from value to value.</li>
+          <li>$k = n$: $\hat f_n(\bx) = \frac1n\sum_{i=1}^n y_i = \bar y$ for every $\bx$. The features are ignored.</li>
+        </ul>
+
+        <div class="env example" id="ex-knn-reg">
+          <p>One feature, four training points $(x_i, y_i)$: $(1, 2)$, $(2, 3)$, $(4, 7)$, $(5, 8)$. Predict at
+            $x = 3$ with $k = 2$.</p>
+          <p><strong>Step 1: distances.</strong> $|3 - 1| = 2$, $|3 - 2| = 1$, $|3 - 4| = 1$, $|3 - 5| = 2$.</p>
+          <p><strong>Step 2: neighbours.</strong> The two closest are $x = 2$ and $x = 4$, with outputs $3$ and $7$.</p>
+          <p><strong>Step 3: average.</strong> $\hat f_2(3) = \frac{3 + 7}{2} = 5$. (With $k = 1$ the two candidates are
+            tied, and the tie-breaking rule decides between $3$ and $7$.)</p>
+        </div>
+
+        <p><strong>Weighted k-NN.</strong> Closer neighbours can be given more influence:
+          $$\hat f(\bx) = \frac{\sum_{i \in N_k(\bx)} w_i(\bx)\, y_i}{\sum_{i \in N_k(\bx)} w_i(\bx)}, \qquad
+          \text{e.g. } w_i(\bx) = \frac{1}{d(\bx, \bx_i) + \varepsilon},$$
+          with a small $\varepsilon > 0$ to avoid dividing by zero. This smooths the predictions a little and reduces
+          the influence of the $k$-th neighbour when it is much farther than the first.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="knn-classification">k-NN for classification</h2>
+        <p>Now $y_i \in \{1, \dots, C\}$. The neighbours vote.</p>
+
+        <div class="env definition" id="def-knn-clf">
+          <p>The <strong>k-NN class probability estimates</strong> at $\bx$ are the class proportions among its
+            neighbours,
+            $$\hat p_c(\bx) = \frac1k\sum_{i \in N_k(\bx)} \mathbf 1\{y_i = c\}, \qquad c = 1, \dots, C,$$
+            and the <strong>k-NN classifier</strong> predicts the majority class,
+            $$\hat y(\bx) = \argmax_{c}\ \hat p_c(\bx) = \argmax_{c}\sum_{i \in N_k(\bx)} \mathbf 1\{y_i = c\} .$$</p>
+        </div>
+        <p>With two classes coded $0/1$, $\hat p_1(\bx)$ is the k-NN regression estimate applied to the labels, and the
+          classifier predicts $1$ when $\hat p_1(\bx) > \frac12$. Choosing $k$ odd avoids ties. Weighted voting works as
+          in regression. Unlike logistic regression, whose boundary is a straight line unless we engineer features,
+          the k-NN boundary bends to follow the data.</p>
+
+        <figure class="viz viz--wide" data-viz="knn-classify" id="fig-knn-classify">
+          <div class="viz__stage"></div>
+          <figcaption>k-NN on the two moons (150 training points; the test error uses 400 new points). The shading
+            shows the estimated probability $\hat p_B$; the square is a query point and the dashed circle (or diamond)
+            encloses its $k$ nearest neighbours, which are ringed.
+            <strong>Try:</strong> (1) tick the logistic regression boundary: a straight line cannot follow the moons;
+            (2) $k = 1$: zero training error and a ragged boundary with islands around single points; (3) increase $k$
+            and watch the boundary smooth and the test error fall, then rise for very large $k$; (4) drag the query point
+            near the boundary and read the votes; (5) switch to the Manhattan distance: the neighbourhood becomes a
+            diamond, but the results barely change.</figcaption>
+        </figure>
+
+        <p><strong>The geometry of 1-NN.</strong> With $k = 1$, each training point owns the region of the plane closer
+          to it than to any other training point: its Voronoi cell, exactly as for the centroids of
+          <a href="06-kmeans.html#voronoi">k-means</a>, but now with one cell per training point. The 1-NN classifier
+          is constant on each cell, and its boundary is made of pieces of perpendicular bisectors between points of
+          different classes. For larger $k$, the regions where the set of $k$ neighbours stays the same are smaller and
+          more intricate, and the predictor is still piecewise constant.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="complexity">Model complexity and the choice of k</h2>
+        <p>k-NN has no parameter vector to fit, but $k$ plays the role of a complexity knob:</p>
+        <ul>
+          <li><strong>small $k$</strong>: very local predictions that follow every detail of the training data,
+            including the noise (low bias, high variance);</li>
+          <li><strong>large $k$</strong>: averages over large neighbourhoods, smooth and stable predictions that may
+            miss real structure (high bias, low variance).</li>
+        </ul>
+
+        <div class="env proposition" id="prop-train-zero">
+          <p>If the training inputs are distinct, the 1-NN predictor has zero training error, in regression and in
+            classification.</p>
+        </div>
+        <details class="proof" data-for="prop-train-zero">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>At a training input $\bx_i$, the nearest training point is $\bx_i$ itself, at distance $0$, and every
+              other point is at positive distance. So $\hat f_1(\bx_i) = y_i$.</p>
+          </div>
+        </details>
+        <p>Zero training error says nothing about generalisation: it is the interpolation of
+          <a href="01-learning-problem.html">Chapter 1</a> again. As in <a class="ref" href="#fig-knn-regression"></a>
+          and <a class="ref" href="#fig-knn-classify"></a>, the training error grows with $k$, while the test error
+          is U-shaped.</p>
+
+        <h3 id="effective-parameters">How many parameters does k-NN have?</h3>
+        <p>For least squares with $p + 1$ coefficients, the fitted values are $\hat\by = H\by$ with the hat matrix $H$,
+          and $\tr(H) = p + 1$, the number of parameters. k-NN regression is also linear in $\by$, and the same trace
+          measures its complexity.</p>
+
+        <div class="env proposition" id="prop-df">
+          <p>Assume the training inputs are distinct. The k-NN fitted values on the training set are $\hat\by = S\by$,
+            where
+            $$S_{ij} = \begin{cases} 1/k & \text{if } j \in N_k(\bx_i), \\ 0 & \text{otherwise,} \end{cases}
+            \qquad\text{and}\qquad \tr(S) = \frac{n}{k} .$$
+            The <em>effective number of parameters</em> $n/k$ grows with $n$: k-NN is non-parametric.</p>
+        </div>
+        <details class="proof" data-for="prop-df">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: linear in the outputs.</strong> By definition,
+              $\hat y_i = \hat f_k(\bx_i) = \sum_{j=1}^n S_{ij}\,y_j$ with $S_{ij}$ as stated. The neighbourhoods depend
+              only on the inputs, not on $\by$.</p>
+            <p><strong>Step 2: the diagonal.</strong> Each $\bx_i$ is its own nearest neighbour (distance $0$), so
+              $i \in N_k(\bx_i)$ and $S_{ii} = 1/k$. Hence
+              $$\tr(S) = \sum_{i=1}^n S_{ii} = n \cdot \frac1k .$$</p>
+          </div>
+        </details>
+        <p>So $k = n$ uses one effective parameter (the mean) and $k = 1$ uses $n$ (one per point). With $n$ points in
+          roughly $n/k$ neighbourhoods, k-NN behaves like a model that fits one constant per neighbourhood.</p>
+
+        <h3 id="bias-variance">The bias–variance trade-off, exactly</h3>
+        <p>For k-NN regression the decomposition of <a href="03-regularization.html">Chapter 3</a> can be computed
+          explicitly. Assume a fixed design: the training inputs $\bx_1, \dots, \bx_n$ are fixed, and
+          $$y_i = f(\bx_i) + \varepsilon_i, \qquad \E[\varepsilon_i] = 0, \quad \Var(\varepsilon_i) = \sigma^2,$$
+          with independent noise. Fix a query point $\bx_0$, and let $\bx_{(1)}, \dots, \bx_{(k)}$ be its $k$ nearest
+          neighbours (fixed, since the inputs are fixed). A new output at $\bx_0$ is $y_0 = f(\bx_0) + \varepsilon_0$,
+          with fresh noise independent of the training noise.</p>
+
+        <div class="env theorem" id="thm-knn-bv" data-name="Bias–variance of k-NN regression">
+          <p>Under these assumptions,
+            $$\E\big[(y_0 - \hat f_k(\bx_0))^2\big]
+            = \underbrace{\sigma^2}_{\text{noise}}
+            + \underbrace{\Big(f(\bx_0) - \frac1k\sum_{l=1}^k f(\bx_{(l)})\Big)^2}_{\text{bias}^2}
+            + \underbrace{\frac{\sigma^2}{k}}_{\text{variance}} .$$</p>
+        </div>
+        <details class="proof" data-for="thm-knn-bv">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: split the prediction.</strong> Substituting the model,
+              $$\hat f_k(\bx_0) = \frac1k\sum_{l=1}^k y_{(l)}
+              = \underbrace{\frac1k\sum_{l=1}^k f(\bx_{(l)})}_{=:\ \bar f\ \text{(not random)}} + \underbrace{\frac1k\sum_{l=1}^k \varepsilon_{(l)}}_{=:\ \bar\varepsilon} .$$</p>
+            <p><strong>Step 2: mean and variance of the prediction.</strong> $\E[\bar\varepsilon] = 0$, and by
+              independence
+              $$\Var(\bar\varepsilon) = \frac{1}{k^2}\sum_{l=1}^k \Var(\varepsilon_{(l)}) = \frac{1}{k^2}\cdot k\sigma^2
+              = \frac{\sigma^2}{k} .$$</p>
+            <p><strong>Step 3: write the error as a sum of three terms.</strong>
+              $$y_0 - \hat f_k(\bx_0) = \varepsilon_0 + \big(f(\bx_0) - \bar f\big) - \bar\varepsilon .$$</p>
+            <p><strong>Step 4: square and take expectations.</strong> The middle term is a constant. The cross terms
+              vanish because $\varepsilon_0$ and $\bar\varepsilon$ have mean zero and are independent of each other:
+              $$\E\big[(y_0 - \hat f_k(\bx_0))^2\big] = \underbrace{\E[\varepsilon_0^2]}_{=\,\sigma^2}
+              + \big(f(\bx_0) - \bar f\big)^2 + \underbrace{\E[\bar\varepsilon^2]}_{=\,\sigma^2/k}
+              + \underbrace{2\,\E[\varepsilon_0]\big(f(\bx_0) - \bar f\big) - 2\,\E[\varepsilon_0\bar\varepsilon] - 2\big(f(\bx_0) - \bar f\big)\E[\bar\varepsilon]}_{=\,0} .$$</p>
+          </div>
+        </details>
+        <p>The formula shows the trade-off term by term:</p>
+        <ul>
+          <li>the <strong>variance</strong> $\sigma^2/k$ decreases as $k$ grows: averaging more noisy outputs cancels
+            more noise;</li>
+          <li>the <strong>bias</strong> typically increases with $k$: the neighbours $\bx_{(l)}$ get farther from
+            $\bx_0$, and their average $f$-value drifts from $f(\bx_0)$. For $k = 1$ it is small (the nearest neighbour
+            is close); for $k = n$ it is the gap between $f(\bx_0)$ and the average of $f$ over all the data;</li>
+          <li>the <strong>noise</strong> $\sigma^2$ cannot be reduced by any $k$ (the dotted line in
+            <a class="ref" href="#fig-knn-regression"></a>).</li>
+        </ul>
+
+        <h3 id="choosing-k">Choosing k</h3>
+        <p>The best $k$ depends on the data, so it is chosen like any hyperparameter: by
+          <strong>cross-validation</strong> (<a href="03-regularization.html#cross-validation">Chapter 3</a>), on standardised
+          features, never on the test set.</p>
+
+        <div class="code" data-lang="python">
+<pre><code>from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import GridSearchCV
+
+model = make_pipeline(StandardScaler(), KNeighborsClassifier())
+grid = {"kneighborsclassifier__n_neighbors": range(1, 52, 2),
+        "kneighborsclassifier__p": [1, 2]}          # Manhattan or Euclidean
+search = GridSearchCV(model, grid, cv=5).fit(X_train, y_train)
+print(search.best_params_, search.score(X_test, y_test))</code></pre>
+        </div>
+        <p>Putting the scaler inside the pipeline means it is re-fitted on the training folds only, so no information
+          leaks from the validation fold.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="curse">The curse of dimensionality</h2>
+        <p>k-NN works when a query point has training points that are <em>genuinely close</em>. In low dimension a
+          moderate sample fills the space well. In high dimension, space is so vast that this fails, even with a lot of
+          data. Three calculations make this precise.</p>
+
+        <h3 id="curse-cube">Local neighbourhoods are not small</h3>
+        <div class="env proposition" id="prop-cube">
+          <p>Let the data be uniform in the unit cube $[0, 1]^p$. A sub-cube that contains on average a fraction
+            $\alpha$ of the data has side length
+            $$e_p(\alpha) = \alpha^{1/p} .$$</p>
+        </div>
+        <details class="proof" data-for="prop-cube">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Under the uniform distribution, the fraction of data in a region is its volume. A cube of side $e$ has
+              volume $e^p$, and $e^p = \alpha$ gives $e = \alpha^{1/p}$.</p>
+          </div>
+        </details>
+        <p>To capture $\alpha = 1\%$ of the data:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">dimension $p$</th><td>1</td><td>2</td><td>3</td><td>10</td><td>20</td><td>100</td></tr></thead>
+            <tbody><tr><th scope="row">side $0.01^{1/p}$</th><td>0.01</td><td>0.10</td><td>0.22</td><td>0.63</td><td>0.79</td><td>0.95</td></tr></tbody>
+          </table>
+        </div>
+        <p>In 20 dimensions, a "neighbourhood" holding only 1% of the data spans 79% of the range of every feature. It
+          is not local any more, and averaging over it introduces a large bias.</p>
+
+        <h3 id="curse-nearest">The nearest neighbour is far away</h3>
+        <div class="env proposition" id="prop-nn-distance">
+          <p>Let $n$ points be uniform in the unit ball of $\R^p$, and let the query be the centre. The median distance
+            from the centre to the nearest of the $n$ points is
+            $$d(p, n) = \Big(1 - 2^{-1/n}\Big)^{1/p} .$$</p>
+        </div>
+        <details class="proof" data-for="prop-nn-distance">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: one point.</strong> The ball of radius $r$ has volume proportional to $r^p$, so for one
+              uniform point $X$,
+              $$\P(\norm{X} \leq r) = r^p, \qquad \P(\norm{X} > r) = 1 - r^p \qquad (0 \leq r \leq 1).$$</p>
+            <p><strong>Step 2: the nearest of $n$ independent points.</strong> The nearest point is farther than $r$ if
+              and only if all $n$ points are:
+              $$\P\Big(\min_i \norm{X_i} > r\Big) = (1 - r^p)^n .$$</p>
+            <p><strong>Step 3: the median.</strong> Set this probability to $\frac12$:
+              $$(1 - r^p)^n = \tfrac12 \iff 1 - r^p = 2^{-1/n} \iff r = \big(1 - 2^{-1/n}\big)^{1/p} .$$</p>
+          </div>
+        </details>
+        <p>With $n = 500$ points: $d = 0.001$ for $p = 1$, $0.04$ for $p = 2$, but $0.52$ for $p = 10$. In 10
+          dimensions the nearest of 500 points is typically more than halfway to the boundary of the ball.</p>
+
+        <h3 id="curse-concentration">All distances look alike</h3>
+        <div class="env proposition" id="prop-concentration">
+          <p>Let $X, X'$ be independent and uniform in $[0, 1]^p$, and $D = \norm{X - X'}^2$. Then
+            $$\E[D] = \frac{p}{6}, \qquad \Var(D) = \frac{7p}{180}, \qquad
+            \frac{\sqrt{\Var(D)}}{\E[D]} = \frac{6}{\sqrt p}\sqrt{\frac{7}{180}} \approx \frac{1.18}{\sqrt p}
+            \;\xrightarrow[p \to \infty]{}\; 0 .$$
+            Squared distances grow like $p$, but their spread relative to their size shrinks like $1/\sqrt p$.</p>
+        </div>
+        <details class="proof" data-for="prop-concentration">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: a sum of independent terms.</strong> $D = \sum_{j=1}^p T_j^2$ with
+              $T_j = X_j - X'_j$, and the $T_j$ are independent with the same distribution as $T = U - U'$ for
+              independent uniform $U, U'$ on $[0, 1]$. So
+              $$\E[D] = p\,\E[T^2], \qquad \Var(D) = p\,\Var(T^2) = p\,\big(\E[T^4] - \E[T^2]^2\big).$$</p>
+            <p><strong>Step 2: second moment.</strong> $\E[T] = 0$ and $\Var(U) = \frac1{12}$, so
+              $\E[T^2] = \Var(U) + \Var(U') = \frac16$.</p>
+            <p><strong>Step 3: fourth moment.</strong> $T$ has the triangular density $1 - |t|$ on $[-1, 1]$, so
+              $$\E[T^4] = 2\int_0^1 t^4(1 - t)\,dt = 2\Big(\frac15 - \frac16\Big) = \frac{1}{15} .$$</p>
+            <p><strong>Step 4: combine.</strong> $\Var(T^2) = \frac1{15} - \frac1{36} = \frac{7}{180}$, so
+              $\E[D] = \frac p6$ and $\Var(D) = \frac{7p}{180}$. The ratio follows.</p>
+          </div>
+        </details>
+        <p>So in high dimension the distances from a query to all training points are nearly equal: the nearest
+          neighbour is barely nearer than the farthest point, and "nearest" carries little information.</p>
+
+        <figure class="viz viz--wide" data-viz="curse-dimension" id="fig-curse">
+          <div class="viz__stage"></div>
+          <figcaption>The curse of dimensionality. Left: the side of a cube holding a fraction $\alpha$ of uniformly
+            spread data (<a class="ref" href="#prop-cube"></a>). Right: distances from a random query point to 500
+            random points in $[0, 1]^p$, divided by the largest distance; the dashed line is the nearest neighbour.
+            <strong>Try:</strong> (1) with $\alpha = 1\%$, read the side for $p = 1, 2, 20$; (2) move $p$ from $2$ to
+            $100$: the histogram collapses towards $1$ and the nearest neighbour is almost as far as the farthest
+            point (<a class="ref" href="#prop-concentration"></a>).</figcaption>
+        </figure>
+
+        <p><strong>Irrelevant features make it worse.</strong> A distance adds up differences over <em>all</em>
+          features. If only 2 of 50 features matter, the 48 irrelevant ones add noise to every distance and can bury the
+          meaningful differences. Feature selection or dimensionality reduction (PCA,
+          <a href="05-pca.html">Chapter 5</a>) before k-NN can help a lot. The silver lining: real data often lie close
+          to a low-dimensional set inside $\R^p$, and then k-NN behaves as in that lower dimension.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="practice">k-NN in practice</h2>
+        <ul>
+          <li><strong>Preprocessing.</strong> Standardise numerical features; remove or down-weight irrelevant ones;
+            consider PCA in high dimension.</li>
+          <li><strong>Choose $k$ (and the distance) by cross-validation.</strong> Small $k$ overfits, large $k$
+            underfits.</li>
+          <li><strong>Choose a meaningful distance.</strong> Euclidean is the default; the distance should reflect what
+            "similar" means for the problem.</li>
+          <li><strong>Noise and outliers.</strong> With small $k$, a single mislabelled or extreme neighbour can decide
+            the prediction; larger $k$ or distance weighting helps.</li>
+          <li><strong>Computational cost.</strong> Training only stores the data (k-NN is a <em>lazy learner</em>).
+            Each prediction computes $n$ distances in $p$ dimensions, $O(np)$ operations, plus memory for the whole
+            training set. Tree-based search structures speed this up in low dimension. Parametric models are the
+            opposite: costly training, cheap predictions.</li>
+        </ul>
+        <p>k-NN works well in low or moderate dimension, with a meaningful distance, enough data to populate
+          neighbourhoods, and outputs that vary smoothly. It struggles in high dimension, with many irrelevant
+          features, or with sparse data.</p>
+
+        <h3 id="connections">Connections</h3>
+        <ul>
+          <li><strong>Linear models</strong> are global and interpretable but rigid; k-NN is local and flexible but
+            depends on the geometry and is less interpretable.</li>
+          <li><strong>Kernel methods</strong> also predict from similarities, but use <em>all</em> points with weights
+            that decay smoothly with distance (a soft neighbourhood), where k-NN uses exactly $k$ points (a hard
+            neighbourhood).</li>
+          <li><strong>Decision trees</strong> also split the space into regions with constant predictions, but learn the
+            regions explicitly by recursive splits, and handle features of different types more naturally.</li>
+          <li><strong>PCA</strong> can reduce the dimension first, keeping in mind that it preserves variance, not
+            necessarily what matters for the task.</li>
+        </ul>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-param">
+          <p>Classify each method as parametric or non-parametric, and justify: linear regression with polynomial
+            features of degree 3; logistic regression; k-NN; k-means (as a description of the data with $K$ fixed).</p>
+        </div>
+
+        <div class="env exercise" id="exo-hand-reg">
+          <p>Training data $(x, y)$: $(0, 1)$, $(1, 3)$, $(3, 4)$, $(4, 8)$, $(6, 9)$. Compute the k-NN regression
+            prediction at $x = 2.5$ for $k = 1, 2, 3, 5$. Then compute the weighted prediction for $k = 2$ with
+            $w_i = 1/d(x, x_i)$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-hand-clf">
+          <p>In the plane, class A has points $(0, 0)$, $(1, 0)$, $(0, 1)$ and class B has points $(2, 2)$, $(3, 2)$,
+            $(1, 2)$. Classify the query $(1, 1)$ with $k = 1$ and $k = 3$, first with the Euclidean and then with the
+            Manhattan distance. Comment on ties.</p>
+        </div>
+
+        <div class="env exercise" id="exo-scaling-knn">
+          <p>Two features: height in metres (between $1.5$ and $2.0$) and weight in grams (between $50\,000$ and
+            $100\,000$). Without standardisation, which feature decides who the nearest neighbours are? Give a small
+            numerical example, then redo it after standardising (assume standard deviations $0.1$ m and $10\,000$ g).</p>
+        </div>
+
+        <div class="env exercise" id="exo-extremes">
+          <p>Explain why 1-NN has zero training error, and why the training error is not a good guide for choosing
+            $k$. What is the prediction for $k = n$, and which effective number of parameters does it correspond to?</p>
+        </div>
+
+        <div class="env exercise" id="exo-bv">
+          <p>Let $f(x) = x^2$, $\sigma^2 = 1$, and the training inputs $x_i = -1, -0.5, 0, 0.5, 1$. At $x_0 = 0$,
+            compute the bias$^2$, the variance and the expected squared error of <a class="ref" href="#thm-knn-bv"></a>
+            for $k = 1, 3, 5$. Which $k$ is best?</p>
+        </div>
+
+        <div class="env exercise" id="exo-curse-numbers">
+          <p>(a) Using <a class="ref" href="#prop-cube"></a>, how large must the side of a cube be to hold $10\%$ of
+            uniform data in $p = 5$ and $p = 50$? (b) Using <a class="ref" href="#prop-nn-distance"></a>, how many points
+            $n$ are needed in $p = 10$ for the median nearest-neighbour distance from the centre to be $0.1$? Comment.</p>
+        </div>
+
+        <div class="env exercise" id="exo-irrelevant">
+          <p>Two classes differ only in feature 1: class A has $x_1 \approx 0$, class B has $x_1 \approx 1$. We add
+            $m$ irrelevant features, uniform on $[0, 1]$, to every point. Using <a class="ref" href="#prop-concentration"></a>,
+            explain why the k-NN error increases with $m$. What would you do before applying k-NN?</p>
+        </div>
+
+        <div class="env exercise" id="exo-cost">
+          <p>A k-NN classifier is trained on $n = 10^6$ examples with $p = 100$ features. Estimate the number of
+            operations needed to classify one new example, and compare with logistic regression. When is k-NN's
+            "lazy" behaviour an advantage?</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>Parametric models fix a formula with a fixed number of parameters. Non-parametric models let the data
+              shape the predictor, and their complexity can grow with $n$.</li>
+            <li>k-NN estimates $\E[y \mid \bx]$ (regression) or $\P(y = c \mid \bx)$ (classification) by averaging over
+              the $k$ nearest training points. Standardise the features first.</li>
+            <li>$k$ controls complexity: the effective number of parameters is $n/k$; the bias–variance decomposition
+              is noise $+$ bias$^2$ $+\ \sigma^2/k$. Choose $k$ by cross-validation.</li>
+            <li>1-NN has zero training error; the test error is U-shaped in $k$.</li>
+            <li>In high dimension, neighbourhoods stop being local and distances concentrate: the curse of
+              dimensionality. Reduce or select features.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-prob">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-prob">Probabilistic view: k-NN as an estimate of the Bayes classifier</h2>
+          <p class="extra__intro">The best possible classifier predicts $\argmax_c \P(y = c \mid \bx)$ (the Bayes
+            classifier, see the extra section of <a href="01-learning-problem.html#extra-bayes">Chapter 1</a>). k-NN
+            estimates these probabilities without any model, and it can be derived from density estimation.</p>
+
+          <h3 id="extra-density">k-NN from density estimation</h3>
+          <p>Fix $\bx$ and grow a ball around it until it contains $k$ training points, of which $k_c$ belong to class
+            $c$. Let $V$ be its volume, $n_c$ the number of training points of class $c$. If the ball is small, the
+            density is roughly constant inside it, which suggests the estimates
+            $$\hat p(\bx) = \frac{k}{nV}, \qquad \hat p(\bx \mid y = c) = \frac{k_c}{n_c V}, \qquad \hat\P(y = c) = \frac{n_c}{n} .$$</p>
+
+          <div class="env proposition" id="prop-knn-bayes">
+            <p>Plugging these estimates into Bayes' rule gives exactly the k-NN probabilities:
+              $$\hat\P(y = c \mid \bx) = \frac{k_c}{k} = \hat p_c(\bx) .$$</p>
+          </div>
+          <details class="proof" data-for="prop-knn-bayes">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: Bayes' rule.</strong>
+                $$\hat\P(y = c \mid \bx) = \frac{\hat p(\bx \mid y = c)\,\hat\P(y = c)}{\hat p(\bx)} .$$</p>
+              <p><strong>Step 2: substitute.</strong>
+                $$\hat\P(y = c \mid \bx) = \frac{\dfrac{k_c}{n_c V}\cdot\dfrac{n_c}{n}}{\dfrac{k}{nV}}
+                = \frac{k_c}{nV}\cdot\frac{nV}{k} = \frac{k_c}{k} .$$</p>
+            </div>
+          </details>
+          <p>So the majority vote is the plug-in Bayes classifier built on these local density estimates.</p>
+
+          <h3 id="extra-consistency">How good can k-NN be?</h3>
+          <p>Two classical results, stated without proof, describe the large-sample behaviour. Let $R^\ast$ be the error
+            rate of the Bayes classifier (the smallest possible).</p>
+          <ul>
+            <li><strong>1-NN is at most twice as bad as the best.</strong> As $n \to \infty$, the error rate of the 1-NN
+              classifier converges to a value $R_{1\text{NN}}$ with $R^\ast \leq R_{1\text{NN}} \leq 2R^\ast(1 - R^\ast)$
+              in two-class problems.</li>
+            <li><strong>Consistency.</strong> If $k \to \infty$ and $k/n \to 0$ as $n \to \infty$ (more and more neighbours,
+              but a vanishing fraction of the data), the error of k-NN converges to $R^\ast$ for any distribution of
+              the data.</li>
+          </ul>
+          <p>The second result explains the trade-off: $k \to \infty$ makes the vote reliable (small variance), and
+            $k/n \to 0$ keeps the neighbourhood local (small bias). The curse of dimensionality says how slowly this
+            happens when $p$ is large.</p>
+
+          <div class="env exercise" id="exo-nn-bound">
+            <p>In a two-class problem the Bayes error is $R^\ast = 5\%$. What does the first result say about the
+              large-sample error of 1-NN? Why can 1-NN not reach $R^\ast$ even with infinite data? (<em>Hint:</em> the
+              single nearest neighbour's label is itself random.)</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

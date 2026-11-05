@@ -43,7 +43,7 @@ window.COURSE = {
       title: "Clustering: k-means",
       summary: "The k-means objective, Lloyd's algorithm, k-means++, choosing k." },
 
-    { num: "7", slug: "07-knn", part: "Module 3 · Nonlinear & non-parametric models", status: "planned", sessions: "14",
+    { num: "7", slug: "07-knn", part: "Module 3 · Nonlinear & non-parametric models", status: "ready", sessions: "14",
       title: "k-nearest neighbours",
       summary: "Distance-based prediction for regression and classification; model complexity and the curse of dimensionality." },
     { num: "8", slug: "08-trees", part: "Module 3 · Nonlinear & non-parametric models", status: "planned", sessions: "16–17",

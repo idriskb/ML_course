@@ -84,14 +84,14 @@
       const G = V.frame(c, { xlim: [0, 1], ylim: [0, top], xticks: [], yticks: V.ticks(0, top, 5), ylabel: "Σ‖xᵢ − μ‖²", pad: { l: 52, b: 26 } });
       const { ctx, sx, sy, T } = G;
       G.clip();
-      const x0 = sx(0.3), w = sx(0.7) - x0;
+      const x0 = sx(0.1), w = sx(0.45) - x0;
       ctx.fillStyle = T.curve; ctx.fillRect(x0, sy(within), w, sy(0) - sy(within));
       ctx.globalAlpha = 0.85; ctx.fillStyle = T.path;
       ctx.fillRect(x0, sy(Math.min(top, within + extra)), w, sy(within) - sy(Math.min(top, within + extra)));
       ctx.globalAlpha = 1;
       ctx.font = T.font(12, 600); ctx.textAlign = "left"; ctx.fillStyle = T.text;
-      ctx.fillText("fixed: Σ‖xᵢ − x̄‖²", sx(0.72), sy(within / 2) + 4);
-      if (extra > top * 0.04) ctx.fillText("extra: n‖x̄ − μ‖²", sx(0.72), sy(within + Math.min(extra, top - within) / 2) + 4);
+      ctx.fillText("fixed: Σ‖xᵢ − x̄‖²", sx(0.49), sy(within / 2) + 4);
+      if (extra > top * 0.04) ctx.fillText("extra: n‖x̄ − μ‖²", sx(0.49), sy(within + Math.min(extra, top - within) / 2) + 4);
       G.unclip();
     }
 

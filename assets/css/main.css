@@ -16,24 +16,25 @@
   --surface: var(--color-grey-iewhite);
   --text: var(--color-grey-ieblack);
   --text-muted: var(--color-grey-darkgrey);
-  --heading: var(--color-primary-oceanblue);
-  --link: var(--color-secondary-electricblue);
-  --link-hover: var(--color-primary-oceanblue);
+  --heading: var(--color-green-dark);
+  --link: var(--color-green-text);
+  --link-hover: var(--color-green-dark);
   --border: var(--color-grey-lightgrey);
   --border-strong: var(--color-grey-middlegrey);
-  --focus: var(--color-secondary-electricblue);
-  --brand: var(--color-primary-oceanblue);
+  --focus: var(--color-green-text);
+  --brand: var(--color-green-dark);
+  --brand-hover: var(--color-green-hover);
   --on-brand: var(--color-grey-white);
-  --brand-accent: var(--color-primary-seablue);
-  --brand-tint: var(--color-semantic-iceblue);
+  --brand-accent: var(--color-green);
+  --brand-tint: var(--color-green-tint);
 
   /* Math environments (border = decorative accent; label text always AA) */
-  --env-def: var(--color-secondary-marineblue);
-  --env-def-bg: var(--color-semantic-iceblue);
-  --env-thm: var(--color-primary-oceanblue);
+  --env-def: var(--color-green-text);
+  --env-def-bg: var(--color-green-tint);
+  --env-thm: var(--color-green-dark);
   --env-thm-bg: var(--color-grey-softgrey);
-  --env-ex: var(--color-school-snt);
-  --env-ex-label: var(--color-school-sntdark);
+  --env-ex: var(--color-school-business);
+  --env-ex-label: var(--color-blue-text);
   --env-rem: var(--color-grey-middlegrey);
   --env-exo: var(--color-semantic-tangerine);
   --env-exo-label: var(--color-semantic-winered);
@@ -41,14 +42,14 @@
   --status-error: var(--color-school-law);
 
   /* Visualizations (read by JS at draw time) */
-  --viz-curve: var(--color-primary-oceanblue);
+  --viz-curve: var(--color-green-dark);
   --viz-path: var(--color-school-law);
   --viz-grid: var(--color-grey-iewhite);
   --viz-axis: var(--color-grey-middlegrey);
   --viz-text: var(--color-grey-darkgrey);
   /* Cluster palette (k-means and other multi-group plots); always paired with shapes */
-  --viz-c1: #000066; --viz-c2: #D90011; --viz-c3: #0097DC;
-  --viz-c4: #921AD4; --viz-c5: #C24400; --viz-c6: #1F3700;
+  --viz-c1: #1F3700; --viz-c2: #D90011; --viz-c3: #0097DC;
+  --viz-c4: #921AD4; --viz-c5: #C24400; --viz-c6: #000066;
 
   --radius: 6px;
   --radius-lg: 12px;
@@ -70,29 +71,33 @@
   --surface: var(--color-ext-night-surface);
   --text: var(--color-grey-iewhite);
   --text-muted: var(--color-grey-lightgrey);
-  --heading: var(--color-secondary-lightblue);
-  --link: var(--color-secondary-lightblue);
+  --heading: var(--color-green-light);
+  --link: var(--color-green-light);
   --link-hover: var(--color-grey-white);
   --border: var(--color-ext-night-border);
   --border-strong: var(--color-grey-middlegrey);
-  --focus: var(--color-primary-seablue);
-  --brand: var(--color-semantic-alumniblue);
+  --focus: var(--color-green);
+  --brand: var(--color-green);
+  --brand-hover: var(--color-green-light);
+  --on-brand: var(--color-ext-night);
+  --brand-accent: var(--color-green);
   --brand-tint: var(--color-ext-night-surface);
 
-  --env-def: var(--color-primary-seablue);
+  --env-def: var(--color-green);
   --env-def-bg: var(--color-ext-night-surface);
-  --env-thm: var(--color-secondary-lightblue);
+  --env-thm: var(--color-green-light);
   --env-thm-bg: var(--color-ext-night-surface);
-  --env-ex-label: var(--color-school-snt);
+  --env-ex: var(--color-primary-seablue);
+  --env-ex-label: var(--color-primary-seablue);
   --env-exo-label: var(--color-semantic-tangerine);
   --status-error: var(--color-semantic-tangerine);
 
-  --viz-curve: var(--color-secondary-lightblue);
+  --viz-curve: var(--color-green-light);
   --viz-path: var(--color-semantic-tangerine);
   --viz-grid: var(--color-ext-night-surface);
   --viz-axis: var(--color-grey-middlegrey);
   --viz-text: var(--color-grey-lightgrey);
-  --viz-c1: #BDE8FF; --viz-c2: #FF7B31; --viz-c3: #23CE6B;
+  --viz-c1: #A6E36B; --viz-c2: #FF7B31; --viz-c3: #47BFFF;
   --viz-c4: #FBCA1E; --viz-c5: #C58BFF; --viz-c6: #F4F4F4;
 
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .3);
@@ -482,10 +487,8 @@ details[open] .summary__hint { display: none; }
   cursor: pointer; text-decoration: none;
 }
 .btn:hover { background: var(--bg-soft); color: var(--heading); }
-.btn--primary { background: var(--color-primary-oceanblue); border-color: var(--color-primary-oceanblue); color: var(--color-grey-white); }
-.btn--primary:hover { background: var(--color-secondary-marineblue); border-color: var(--color-secondary-marineblue); color: var(--color-grey-white); }
-:root[data-theme="dark"] .btn--primary { background: var(--color-secondary-lightblue); border-color: var(--color-secondary-lightblue); color: var(--color-primary-oceanblue); }
-:root[data-theme="dark"] .btn--primary:hover { background: var(--color-grey-white); border-color: var(--color-grey-white); color: var(--color-primary-oceanblue); }
+.btn--primary { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.btn--primary:hover { background: var(--brand-hover); border-color: var(--brand-hover); color: var(--on-brand); }
 .btn--small { min-height: 32px; padding: .4rem .7rem; font-size: .75rem; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
 .btn svg { width: 16px; height: 16px; }
@@ -563,29 +566,25 @@ p.todo { padding: .75rem 1rem; border: 1px dashed var(--border-strong); border-r
    10. Home page
    -------------------------------------------------------------------------- */
 .hero {
-  background: var(--color-primary-oceanblue); color: var(--color-grey-white);
+  background: var(--bg); color: var(--text);
+  border-bottom: 1px solid var(--border);
   font-family: var(--font-ui);
   overflow: hidden;
 }
-:root[data-theme="dark"] .hero { background: var(--color-semantic-alumniblue); }
 .hero__inner {
   max-width: 1200px; margin: 0 auto; padding: clamp(3rem, 7vw, 6rem) 1.5rem;
   display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 3rem; align-items: center;
 }
-.hero .eyebrow { color: var(--color-secondary-lightblue); }
+.hero .eyebrow { color: var(--link); }
 .hero h1 {
-  color: var(--color-grey-white);
+  color: var(--heading);
   font-size: clamp(2.5rem, 1.5rem + 4.5vw, 4rem); line-height: 1.02; font-weight: 500;
   margin-bottom: 1.25rem;
 }
 .hero__lede { font: 400 clamp(1.125rem, 1rem + .4vw, 1.375rem)/1.45 var(--font-ui); margin: 0 0 2rem; max-width: 34rem; }
-.hero__meta { font-size: .9375rem; color: var(--color-secondary-lightblue); margin: 1.75rem 0 0; }
+.hero__meta { font-size: .9375rem; color: var(--text-muted); margin: 1.75rem 0 0; }
 .hero__actions { display: flex; flex-wrap: wrap; gap: .75rem; }
 .hero .btn { min-height: 48px; padding: .8rem 1.4rem; font-size: .9375rem; }
-.hero .btn--primary { background: var(--color-grey-white); border-color: var(--color-grey-white); color: var(--color-primary-oceanblue); }
-.hero .btn--primary:hover { background: var(--color-secondary-lightblue); border-color: var(--color-secondary-lightblue); color: var(--color-primary-oceanblue); }
-.hero .btn--ghost { background: transparent; border-color: var(--color-grey-white); color: var(--color-grey-white); }
-.hero .btn--ghost:hover { background: rgba(255, 255, 255, .1); color: var(--color-grey-white); }
 .hero__art { width: 100%; height: auto; }
 @media (max-width: 800px) { .hero__inner { grid-template-columns: 1fr; } .hero__art { max-width: 360px; } }
 

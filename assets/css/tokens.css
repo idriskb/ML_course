@@ -51,9 +51,17 @@
   --color-semantic-alumniblue: #1B1A43;
   --color-semantic-midnight: #23207E;
 
-  /* Site extension: dark-theme neutrals (not part of the base palette;
-     derived from Alumni Blue for comfortable night reading) */
-  --color-ext-night: #0E0E26;
-  --color-ext-night-surface: #17173A;
-  --color-ext-night-border: #3A3A66;
+  /* Site theme: School of Science & Technology greens */
+  --color-green-dark: #1F3700;    /* main brand colour (headings, buttons) */
+  --color-green-hover: #2E5200;
+  --color-green-text: #2F6A00;    /* links and labels: 6.6:1 on white */
+  --color-green: #6DC201;         /* bright accent: decoration only on white */
+  --color-green-light: #A6E36B;   /* text and accents on dark backgrounds */
+  --color-green-tint: #F2F8EA;    /* light backgrounds */
+  --color-blue-text: #00658F;     /* example label: 6.4:1 on white */
+
+  /* Site extension: dark-theme neutrals with a green cast */
+  --color-ext-night: #0F120D;
+  --color-ext-night-surface: #181D14;
+  --color-ext-night-border: #343D2C;
 }

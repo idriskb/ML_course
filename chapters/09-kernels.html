@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kernel methods — Machine Learning</title>
+  <meta name="description" content="Kernel methods: feature maps and basis expansions, the dual formulation of ridge regression, the kernel trick, common kernels, kernel ridge regression and kernel logistic regression, hyperparameters, and kernel PCA.">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/kernel-lib.js"></script>
+  <script defer src="../assets/js/viz/kernel-ridge.js"></script>
+  <script defer src="../assets/js/viz/kernel-logistic.js"></script>
+  <script defer src="../assets/js/viz/kernel-pca.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="09-kernels">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Kernel methods</h1>
+          <p class="lede">Linear models become non-linear as soon as we feed them non-linear features. The trouble is
+            that the number of features explodes. Kernel methods avoid building the features at all: many linear
+            algorithms only need inner products between data points, and a kernel computes these inner products
+            directly, even for infinitely many features. We derive this for ridge regression, then apply it to
+            classification and to PCA.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>Explain how feature maps make linear models non-linear, and why explicit feature expansions do not scale.</li>
+            <li>Derive the dual form of ridge regression and show that it only uses inner products.</li>
+            <li>State the kernel trick, recognise valid kernels, and interpret the linear, polynomial and Gaussian kernels.</li>
+            <li>Fit kernel ridge regression and kernel logistic regression, and explain the roles of $\lambda$ and the
+              kernel width.</li>
+            <li>Derive kernel PCA as PCA in feature space.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="feature-maps">From linear models to feature spaces</h2>
+        <p>A linear model can describe non-linear relationships if we first transform the inputs. With a
+          <strong>feature map</strong> $\phi : \R^p \to \R^M$, the model
+          $$\hat y(\bx) = \theta\T\phi(\bx), \qquad \theta \in \R^M,$$
+          is non-linear in $\bx$ but still <em>linear in the parameters</em>, so everything we know about least squares,
+          ridge and logistic regression still applies, with the design matrix $\Phi$ whose rows are
+          $\phi(\bx_i)\T$. Polynomial regression in <a href="01-learning-problem.html">Chapter 1</a> is the example
+          $\phi(x) = (1, x, x^2, \dots, x^d)$.</p>
+        <p>In the feature space a straight line or plane can separate data that no straight line separates in the input
+          space.</p>
+
+        <figure class="numbered diagram" id="fig-lifting">
+          <svg viewBox="0 0 640 240" role="img" aria-label="Left: points on a line, four of class A in the middle and two of class B on each side, so no single threshold separates them. Right: after mapping x to the pair x and x squared, the points lie on a parabola, class A at the bottom and class B higher up, and a horizontal line separates them.">
+            <line class="d-ink" stroke-width="1.5" x1="30" y1="150" x2="280" y2="150"/>
+            <line class="d-muted" x1="30.0" y1="145" x2="30.0" y2="155"/><text class="d-label" x="30.0" y="172" text-anchor="middle">-2</text>
+            <line class="d-muted" x1="92.5" y1="145" x2="92.5" y2="155"/><text class="d-label" x="92.5" y="172" text-anchor="middle">-1</text>
+            <line class="d-muted" x1="155.0" y1="145" x2="155.0" y2="155"/><text class="d-label" x="155.0" y="172" text-anchor="middle">0</text>
+            <line class="d-muted" x1="217.5" y1="145" x2="217.5" y2="155"/><text class="d-label" x="217.5" y="172" text-anchor="middle">1</text>
+            <line class="d-muted" x1="280.0" y1="145" x2="280.0" y2="155"/><text class="d-label" x="280.0" y="172" text-anchor="middle">2</text>
+            <circle class="d-a" cx="120.6" cy="150" r="6"/>
+            <circle class="d-a" cx="142.5" cy="150" r="6"/>
+            <circle class="d-a" cx="164.4" cy="150" r="6"/>
+            <circle class="d-a" cx="183.1" cy="150" r="6"/>
+            <polygon class="d-b" points="55.0,143.0 48.5,155.0 61.5,155.0"/>
+            <polygon class="d-b" points="80.0,143.0 73.5,155.0 86.5,155.0"/>
+            <polygon class="d-b" points="223.8,143.0 217.2,155.0 230.2,155.0"/>
+            <polygon class="d-b" points="248.8,143.0 242.2,155.0 255.2,155.0"/>
+            <text class="d-label" x="155" y="196" text-anchor="middle">input x (one dimension)</text>
+            <line class="d-ink" stroke-width="1.5" x1="360" y1="210" x2="620" y2="210"/>
+            <line class="d-ink" stroke-width="1.5" x1="490" y1="210" x2="490" y2="30"/>
+            <polyline class="d-muted" stroke-dasharray="4 4" points="360.0,30.0 363.2,38.9 366.5,47.6 369.8,56.0 373.0,64.2 376.2,72.2 379.5,80.0 382.8,87.5 386.0,94.8 389.2,101.9 392.5,108.8 395.8,115.4 399.0,121.8 402.2,128.0 405.5,133.9 408.8,139.7 412.0,145.2 415.2,150.5 418.5,155.5 421.8,160.4 425.0,165.0 428.2,169.4 431.5,173.6 434.8,177.5 438.0,181.2 441.2,184.7 444.5,187.9 447.8,191.0 451.0,193.8 454.2,196.4 457.5,198.8 460.8,200.9 464.0,202.8 467.2,204.5 470.5,205.9 473.8,207.2 477.0,208.2 480.2,209.0 483.5,209.6 486.8,209.9 490.0,210.0 493.2,209.9 496.5,209.6 499.8,209.0 503.0,208.2 506.2,207.2 509.5,205.9 512.8,204.5 516.0,202.8 519.2,200.9 522.5,198.8 525.8,196.4 529.0,193.8 532.2,191.0 535.5,187.9 538.8,184.7 542.0,181.2 545.2,177.5 548.5,173.6 551.8,169.4 555.0,165.0 558.2,160.4 561.5,155.5 564.8,150.5 568.0,145.2 571.2,139.7 574.5,133.9 577.8,128.0 581.0,121.8 584.2,115.4 587.5,108.8 590.8,101.9 594.0,94.8 597.2,87.5 600.5,80.0 603.8,72.2 607.0,64.2 610.2,56.0 613.5,47.6 616.8,38.9 620.0,30.0"/>
+            <line class="d-b-stroke" stroke-width="2.5" x1="360" y1="176.2" x2="620" y2="176.2"/>
+            <circle class="d-a" cx="454.2" cy="196.4" r="6"/>
+            <circle class="d-a" cx="477.0" cy="208.2" r="6"/>
+            <circle class="d-a" cx="499.8" cy="209.0" r="6"/>
+            <circle class="d-a" cx="519.2" cy="200.9" r="6"/>
+            <polygon class="d-b" points="386.0,87.8 379.5,99.8 392.5,99.8"/>
+            <polygon class="d-b" points="412.0,138.2 405.5,150.2 418.5,150.2"/>
+            <polygon class="d-b" points="561.5,148.5 555.0,160.5 568.0,160.5"/>
+            <polygon class="d-b" points="587.5,101.8 581.0,113.8 594.0,113.8"/>
+            <text class="d-label" x="366" y="168.2">linear boundary x² = 0.75</text>
+            <text class="d-label" x="490" y="228" text-anchor="middle">x</text>
+            <text class="d-label" x="498" y="40">x²</text>
+            <text class="d-text" x="155" y="40" text-anchor="middle" font-weight="700">not separable by one threshold</text>
+            <text class="d-text" x="490" y="18" text-anchor="middle" font-weight="700">feature map φ(x) = (x, x²)</text>
+            <line class="d-ink" stroke-width="1.5" x1="292" y1="120" x2="335" y2="120"/><polygon class="d-text" points="342,120 332,115 332,125"/>
+          </svg>
+          <figcaption>Lifting data to a feature space. On the line (left), class A sits between two groups of class B and
+            no threshold separates them. After the feature map $\phi(x) = (x, x^2)$ (right), a horizontal line, which is
+            linear in the features, separates the classes. Back on the line it corresponds to $|x| \leq 0.87$.</figcaption>
+        </figure>
+
+        <h3 id="explosion">The number of features explodes</h3>
+        <p>With $p$ inputs, a polynomial model of total degree $d$ uses every monomial
+          $x_1^{a_1}x_2^{a_2}\cdots x_p^{a_p}$ with $a_1 + \dots + a_p \leq d$.</p>
+
+        <div class="env proposition" id="prop-monomials">
+          <p>The number of monomials of total degree at most $d$ in $p$ variables is
+            $$M = \binom{p + d}{d} .$$</p>
+        </div>
+        <details class="proof" data-for="prop-monomials">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: add a slack exponent.</strong> Let $a_0 = d - (a_1 + \dots + a_p) \geq 0$. Monomials of
+              degree at most $d$ correspond exactly to non-negative integer solutions of
+              $$a_0 + a_1 + \dots + a_p = d .$$</p>
+            <p><strong>Step 2: stars and bars.</strong> Write $d$ stars in a row and insert $p$ bars to cut them into
+              $p + 1$ groups of sizes $a_0, \dots, a_p$ (groups may be empty). Each solution is one arrangement of $d$
+              stars and $p$ bars, so their number is the number of ways to choose which $d$ of the $p + d$ positions hold
+              stars: $\binom{p + d}{d}$.</p>
+          </div>
+        </details>
+        <p>For $p = 2$, $d = 2$ there are 6 features ($1, x_1, x_2, x_1^2, x_1x_2, x_2^2$); for $p = 10$, $d = 5$
+          there are $\binom{15}{5} = 3003$; for $p = 100$, $d = 3$ already $176\,851$. Building and storing these
+          features, and fitting as many parameters, quickly becomes impossible. The way out is to notice that we never
+          need the features themselves.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="dual">The dual form of ridge regression</h2>
+        <p>Ridge regression in feature space minimises
+          $\norm{\Phi\theta - \by}^2 + \lambda\norm{\theta}^2$, with solution
+          (<a href="03-regularization.html">Chapter 3</a>)
+          $$\hat\theta = \big(\Phi\T\Phi + \lambda I_M\big)^{-1}\Phi\T\by .$$
+          This requires solving an $M \times M$ system. An identity lets us move the inverse to the $N \times N$ side
+          ($N$ is the number of training points).</p>
+
+        <div class="env lemma" id="lem-push-through">
+          <p>For any $\Phi \in \R^{N \times M}$ and $\lambda > 0$,
+            $$\big(\Phi\T\Phi + \lambda I_M\big)^{-1}\Phi\T = \Phi\T\big(\Phi\Phi\T + \lambda I_N\big)^{-1} .$$</p>
+        </div>
+        <details class="proof" data-for="lem-push-through">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: both matrices are invertible.</strong> $\Phi\T\Phi$ and $\Phi\Phi\T$ are positive
+              semidefinite, so adding $\lambda I$ with $\lambda > 0$ makes all eigenvalues at least $\lambda > 0$.</p>
+            <p><strong>Step 2: one product, two ways.</strong>
+              $$\Phi\T\big(\Phi\Phi\T + \lambda I_N\big) = \Phi\T\Phi\Phi\T + \lambda\Phi\T = \big(\Phi\T\Phi + \lambda I_M\big)\Phi\T .$$</p>
+            <p><strong>Step 3: invert.</strong> Multiply on the left by $(\Phi\T\Phi + \lambda I_M)^{-1}$ and on the right
+              by $(\Phi\Phi\T + \lambda I_N)^{-1}$.</p>
+          </div>
+        </details>
+
+        <div class="env theorem" id="thm-dual-ridge" data-name="Dual ridge regression">
+          <p>Let $K = \Phi\Phi\T \in \R^{N \times N}$, so $K_{ij} = \phi(\bx_i)\T\phi(\bx_j)$, and for a new input let
+            $\mathbf k(\bx) \in \R^N$ with $\mathbf k(\bx)_i = \phi(\bx_i)\T\phi(\bx)$. Then
+            $$\hat\theta = \Phi\T\boldsymbol\alpha = \sum_{i=1}^N \alpha_i\,\phi(\bx_i), \qquad
+            \boldsymbol\alpha = \big(K + \lambda I_N\big)^{-1}\by,$$
+            and the prediction is
+            $$\hat y(\bx) = \sum_{i=1}^N \alpha_i\,\phi(\bx_i)\T\phi(\bx) = \mathbf k(\bx)\T\big(K + \lambda I_N\big)^{-1}\by .$$</p>
+        </div>
+        <details class="proof" data-for="thm-dual-ridge">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: apply the lemma.</strong>
+              $$\hat\theta = \big(\Phi\T\Phi + \lambda I_M\big)^{-1}\Phi\T\by = \Phi\T\underbrace{\big(\Phi\Phi\T + \lambda I_N\big)^{-1}\by}_{=\ \boldsymbol\alpha} .$$</p>
+            <p><strong>Step 2: predict.</strong>
+              $$\hat y(\bx) = \phi(\bx)\T\hat\theta = \phi(\bx)\T\Phi\T\boldsymbol\alpha = \sum_{i=1}^N \alpha_i\,\phi(\bx)\T\phi(\bx_i) = \mathbf k(\bx)\T\boldsymbol\alpha .$$</p>
+          </div>
+        </details>
+
+        <p>The training data enter <em>only</em> through the inner products $\phi(\bx_i)\T\phi(\bx_j)$ and
+          $\phi(\bx_i)\T\phi(\bx)$. The primal form solves an $M \times M$ system; the dual form an $N \times N$ system,
+          which is cheaper whenever there are more features than examples. The coefficients $\alpha_i$ have three
+          readings:</p>
+        <ul>
+          <li><strong>coordinates</strong>: $\hat\theta$ lies in the span of the training features, and $\boldsymbol\alpha$
+            gives its coordinates in that spanning set;</li>
+          <li><strong>weights</strong>: $\alpha_i$ measures how much training point $i$ influences predictions;</li>
+          <li><strong>amplitudes</strong>: the prediction $\sum_i \alpha_i\,k(\bx_i, \bx)$ is a sum of bumps centred at the
+            training points (see <a class="ref" href="#fig-kernel-ridge"></a>).</li>
+        </ul>
+
+        <p>That $\hat\theta$ lies in the span of the training features is not a coincidence of ridge regression.</p>
+
+        <div class="env theorem" id="thm-representer" data-name="Representer theorem">
+          <p>Let $L$ be any loss and $\lambda > 0$. Every minimiser of
+            $$J(\theta) = \sum_{i=1}^N L\big(y_i,\ \theta\T\phi(\bx_i)\big) + \lambda\norm{\theta}^2$$
+            has the form $\theta = \sum_{i=1}^N \alpha_i\,\phi(\bx_i)$ for some $\boldsymbol\alpha \in \R^N$.</p>
+        </div>
+        <details class="proof" data-for="thm-representer">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: decompose.</strong> Let $S = \operatorname{span}\{\phi(\bx_1), \dots, \phi(\bx_N)\}$ and write
+              any $\theta = \theta_S + \theta_\perp$ with $\theta_S \in S$ and $\theta_\perp$ orthogonal to $S$.</p>
+            <p><strong>Step 2: the loss does not see $\theta_\perp$.</strong> For every training point,
+              $\theta\T\phi(\bx_i) = \theta_S\T\phi(\bx_i) + \underbrace{\theta_\perp\T\phi(\bx_i)}_{=\,0}$.</p>
+            <p><strong>Step 3: the penalty does.</strong> By Pythagoras,
+              $\norm{\theta}^2 = \norm{\theta_S}^2 + \norm{\theta_\perp}^2$. Hence
+              $$J(\theta) = J(\theta_S) + \lambda\norm{\theta_\perp}^2 ,$$
+              so any $\theta$ with $\theta_\perp \neq 0$ is beaten by $\theta_S$. A minimiser lies in $S$.</p>
+          </div>
+        </details>
+        <p>So for logistic regression, or any regularised linear model, we may search only over
+          $\theta = \sum_i \alpha_i\phi(\bx_i)$, and then every prediction $\theta\T\phi(\bx) = \sum_i\alpha_i\,\phi(\bx_i)\T\phi(\bx)$
+          again needs only inner products.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="kernel-trick">The kernel trick</h2>
+        <div class="env definition" id="def-kernel">
+          <p>A <strong>kernel</strong> is a function $k : \R^p \times \R^p \to \R$ that is an inner product of features,
+            $$k(\bx, \bx') = \phi(\bx)\T\phi(\bx')$$
+            for some feature map $\phi$ into a (possibly infinite-dimensional) space. Its <strong>kernel matrix</strong>
+            (Gram matrix) on points $\bx_1, \dots, \bx_N$ is $K_{ij} = k(\bx_i, \bx_j)$.</p>
+        </div>
+        <p>The <strong>kernel trick</strong>: in any algorithm that uses the data only through inner products, replace
+          $\phi(\bx)\T\phi(\bx')$ by $k(\bx, \bx')$. We then work in the feature space without ever computing $\phi$.</p>
+
+        <div class="env example" id="ex-poly-kernel">
+          <p>In one dimension, take $\phi(x) = (1, \sqrt2\,x, x^2)$. Then
+            $$\phi(x)\T\phi(x') = 1 + 2xx' + x^2x'^2 = (1 + xx')^2 .$$
+            Evaluating $(1 + xx')^2$ costs two multiplications and gives the inner product of the three features without
+            forming them. More generally the <strong>polynomial kernel</strong> $k(\bx, \bx') = (1 + \bx\T\bx')^d$ is the
+            inner product of a feature map containing all monomials of degree at most $d$ (with suitable weights): the
+            $\binom{p + d}{d}$ features of <a class="ref" href="#prop-monomials"></a> at the cost of one inner product
+            in $\R^p$.</p>
+        </div>
+
+        <p>Three kernels cover most uses:</p>
+        <ul>
+          <li><strong>Linear:</strong> $k(\bx, \bx') = \bx\T\bx'$. No lifting: ordinary linear models.</li>
+          <li><strong>Polynomial:</strong> $k(\bx, \bx') = (1 + \bx\T\bx')^d$. Smooth curved boundaries, all interactions
+            up to degree $d$.</li>
+          <li><strong>Gaussian</strong> (radial basis function, RBF):
+            $$k(\bx, \bx') = \exp\Big(-\frac{\norm{\bx - \bx'}^2}{2\sigma^2}\Big).$$
+            Similarity decays with distance at a length scale $\sigma$. Its feature space is infinite-dimensional.</li>
+        </ul>
+
+        <h3 id="valid-kernels">Which functions are kernels?</h3>
+        <div class="env proposition" id="prop-kernel-psd">
+          <p>For any kernel and any points $\bx_1, \dots, \bx_N$, the kernel matrix $K$ is symmetric and positive
+            semidefinite.</p>
+        </div>
+        <details class="proof" data-for="prop-kernel-psd">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Symmetry: $k(\bx_i, \bx_j) = \phi(\bx_i)\T\phi(\bx_j) = \phi(\bx_j)\T\phi(\bx_i)$. For any
+              $\mathbf v \in \R^N$,
+              $$\mathbf v\T K\mathbf v = \sum_{i,j} v_i v_j\,\phi(\bx_i)\T\phi(\bx_j)
+              = \Big(\sum_i v_i\phi(\bx_i)\Big)\T\Big(\sum_j v_j\phi(\bx_j)\Big) = \Big\lVert\sum_i v_i\phi(\bx_i)\Big\rVert^2 \geq 0 .$$</p>
+          </div>
+        </details>
+        <p>The converse is <strong>Mercer's theorem</strong> (stated without proof): a symmetric function $k$ whose kernel
+          matrices are positive semidefinite for every finite set of points is an inner product $\phi(\bx)\T\phi(\bx')$
+          in some feature space. So we can check validity <em>without</em> finding $\phi$. Valid kernels can also be
+          built from others.</p>
+
+        <div class="env proposition" id="prop-kernel-rules">
+          <p>If $k_1, k_2$ are kernels, $c > 0$ and $g : \R^p \to \R$ is any function, then
+            $k_1 + k_2$, $\ c\,k_1$ and $g(\bx)\,k_1(\bx, \bx')\,g(\bx')$ are kernels. (Products $k_1k_2$ and limits of
+            kernels are kernels too; we state this without proof.)</p>
+        </div>
+        <details class="proof" data-for="prop-kernel-rules">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>We check positive semidefiniteness of the kernel matrices and use Mercer's theorem.</p>
+            <p><strong>Sum and scaling.</strong> $\mathbf v\T(K_1 + K_2)\mathbf v = \mathbf v\T K_1\mathbf v + \mathbf v\T K_2\mathbf v \geq 0$,
+              and $\mathbf v\T(cK_1)\mathbf v = c\,\mathbf v\T K_1\mathbf v \geq 0$.</p>
+            <p><strong>Rescaling by $g$.</strong> The new matrix is $DK_1D$ with $D = \operatorname{diag}(g(\bx_i))$, and
+              $\mathbf v\T DK_1D\mathbf v = (D\mathbf v)\T K_1(D\mathbf v) \geq 0$.</p>
+          </div>
+        </details>
+        <p>For example, the Gaussian kernel is
+          $e^{-\norm{\bx}^2/2\sigma^2}\, e^{\bx\T\bx'/\sigma^2}\, e^{-\norm{\bx'}^2/2\sigma^2}$, and
+          $e^{\bx\T\bx'/\sigma^2} = \sum_{n \geq 0}(\bx\T\bx')^n/(\sigma^{2n}n!)$ is a limit of sums of positive multiples
+          of products of linear kernels. By the rules it is a kernel, with infinitely many features (one block per degree
+          $n$).</p>
+
+        <h3 id="kernel-geometry">Kernels define a geometry</h3>
+        <p>A kernel fixes the inner products in the feature space, hence also lengths and distances:
+          $$\norm{\phi(\bx) - \phi(\bx')}^2 = k(\bx, \bx) + k(\bx', \bx') - 2k(\bx, \bx') .$$
+          (Expand the square.) For the Gaussian kernel $k(\bx, \bx) = 1$: every point is mapped to the unit sphere of the
+          feature space, and $\norm{\phi(\bx) - \phi(\bx')}^2 = 2 - 2k(\bx, \bx')$. Close inputs have nearly equal
+          features; inputs much farther apart than $\sigma$ are mapped to nearly orthogonal directions. The width $\sigma$
+          sets which points count as similar.</p>
+
+        <div class="env proposition" id="prop-rbf-limits">
+          <p>For the Gaussian kernel on distinct training points $\bx_1, \dots, \bx_N$:</p>
+          <ul>
+            <li>as $\sigma \to 0$, $K \to I_N$ and kernel ridge predictions at any new $\bx$ not in the training set tend
+              to $0$ (each point only "sees" itself: memorisation);</li>
+            <li>as $\sigma \to \infty$, every entry of $K$ tends to $1$: all points look alike and the fit tends to a
+              constant.</li>
+          </ul>
+        </div>
+        <details class="proof" data-for="prop-rbf-limits">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Small $\sigma$.</strong> For $i \neq j$, $\norm{\bx_i - \bx_j} > 0$, so
+              $e^{-\norm{\bx_i - \bx_j}^2/2\sigma^2} \to 0$, while the diagonal is $1$. Likewise $\mathbf k(\bx) \to \mathbf 0$
+              for $\bx$ different from all $\bx_i$. Then $\boldsymbol\alpha \to \by/(1 + \lambda)$ and
+              $\hat y(\bx) = \mathbf k(\bx)\T\boldsymbol\alpha \to 0$.</p>
+            <p><strong>Large $\sigma$.</strong> For fixed points, $\norm{\bx - \bx'}^2/2\sigma^2 \to 0$, so every kernel value
+              tends to $e^0 = 1$, independently of the inputs.</p>
+          </div>
+        </details>
+        <p>Small $\sigma$ gives low bias and high variance; large $\sigma$ the opposite. Like $k$ in k-NN, $\sigma$ is a
+          complexity knob, and it interacts with $\lambda$.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="kernel-ridge">Kernel ridge regression</h2>
+        <div class="env definition" id="def-krr">
+          <p><strong>Kernel ridge regression</strong> predicts
+            $$\hat y(\bx) = \sum_{i=1}^N \alpha_i\,k(\bx_i, \bx), \qquad \boldsymbol\alpha = (K + \lambda I_N)^{-1}\by .$$
+            In practice $\by$ is centred first (or a constant is added to the kernel) so that the intercept is not
+            penalised.</p>
+        </div>
+        <p>The model is non-parametric in the sense of <a href="07-knn.html">Chapter 7</a>: it keeps all training points,
+          one coefficient each. How many parameters does it effectively use? On the training inputs,
+          $\hat\by = K\boldsymbol\alpha = K(K + \lambda I)^{-1}\by = S\by$, and as for least squares and k-NN we measure
+          complexity by $\tr(S)$.</p>
+
+        <div class="env proposition" id="prop-krr-df">
+          <p>Let $\mu_1, \dots, \mu_N \geq 0$ be the eigenvalues of $K$. The effective number of parameters of kernel ridge
+            regression is
+            $$\mathrm{df}(\lambda) = \tr\big(K(K + \lambda I)^{-1}\big) = \sum_{i=1}^N \frac{\mu_i}{\mu_i + \lambda} .$$
+            It decreases from $\operatorname{rank}(K)$ (as $\lambda \to 0$) to $0$ (as $\lambda \to \infty$).</p>
+        </div>
+        <details class="proof" data-for="prop-krr-df">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: diagonalise.</strong> $K = U\operatorname{diag}(\mu_i)U\T$ with $U$ orthogonal, so
+              $K + \lambda I = U\operatorname{diag}(\mu_i + \lambda)U\T$ and
+              $$K(K + \lambda I)^{-1} = U\operatorname{diag}\Big(\frac{\mu_i}{\mu_i + \lambda}\Big)U\T .$$</p>
+            <p><strong>Step 2: trace.</strong> The trace is invariant under $A \mapsto UAU\T$, so it is the sum of the
+              diagonal entries $\mu_i/(\mu_i + \lambda)$. Each term is $1$ (if $\mu_i > 0$) or $0$ (if $\mu_i = 0$) in the limit
+              $\lambda \to 0$, and tends to $0$ as $\lambda \to \infty$.</p>
+          </div>
+        </details>
+        <p>Each eigen-direction of $K$ is kept in proportion $\mu_i/(\mu_i + \lambda)$: directions with large eigenvalues
+          (smooth patterns shared by many points) survive, those with small eigenvalues (wiggles) are shrunk. This is the
+          same shrinkage as ridge regression in <a href="03-regularization.html">Chapter 3</a>, now in the kernel's
+          geometry.</p>
+
+        <figure class="viz viz--wide" data-viz="kernel-ridge" id="fig-kernel-ridge">
+          <div class="viz__stage"></div>
+          <figcaption>Kernel ridge regression on the fuel consumption data (speed standardised inside the model). The fit
+            is a weighted sum of kernels centred at the training points.
+            <strong>Try:</strong> (1) tick <em>Show the weighted kernels</em>: the red curve is the sum of the grey bumps
+            (shifted up for visibility); (2) with the Gaussian kernel, make $\sigma$ small and $\lambda$ tiny: the fit
+            interpolates the noise and the effective number of parameters approaches 40; (3) make $\sigma$ large: the
+            fit stiffens towards a low-degree curve; (4) move $\lambda$ along the right panel: the test error is
+            U-shaped; (5) the linear kernel gives back the straight line, the degree-2 polynomial a parabola.</figcaption>
+        </figure>
+
+        <h3 id="tuning">Choosing the kernel and its hyperparameters</h3>
+        <ul>
+          <li><strong>The kernel</strong> encodes what "similar" means. The Gaussian kernel is a good default for numerical
+            features; the polynomial kernel suits interactions of known order; the linear kernel is the baseline.</li>
+          <li><strong>The hyperparameters</strong> ($\lambda$, and $\sigma$ or $d$) are chosen by cross-validation on a
+            logarithmic grid, e.g. $\lambda \in \{10^{-4}, \dots, 10^{1}\}$, $\sigma$ around the typical distance between
+            points.</li>
+          <li><strong>Scaling:</strong> the Gaussian kernel uses Euclidean distances, so standardise the features first, as
+            for k-NN.</li>
+        </ul>
+
+        <div class="code" data-lang="python">
+<pre><code>from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.kernel_ridge import KernelRidge
+from sklearn.model_selection import GridSearchCV
+
+model = make_pipeline(StandardScaler(), KernelRidge(kernel="rbf"))
+grid = {"kernelridge__alpha": [1e-4, 1e-3, 1e-2, 1e-1, 1],      # λ
+        "kernelridge__gamma": [0.01, 0.1, 1, 10]}                # γ = 1 / (2σ²)
+search = GridSearchCV(model, grid, cv=5).fit(X_train, y_train)</code></pre>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="kernel-classification">Kernels for classification</h2>
+        <p>By the representer theorem, a regularised linear classifier in feature space has a decision function of the
+          form
+          $$f(\bx) = \sum_{i=1}^N \alpha_i\,k(\bx_i, \bx) + b .$$
+          The boundary $f(\bx) = 0$ is a hyperplane in feature space, and a curve in input space whose shape is set by the
+          kernel: straight for the linear kernel, smooth curves for the polynomial kernel, flexible and local for the
+          Gaussian kernel.</p>
+
+        <h3 id="klr">Kernel logistic regression</h3>
+        <p>Logistic regression with $\P(y = 1 \mid \bx) = \sigma(f(\bx))$ and an L2 penalty
+          (<a href="04-logistic-regression.html">Chapter 4</a>) becomes, with $\theta = \sum_i\alpha_i\phi(\bx_i)$ so that
+          $\norm{\theta}^2 = \boldsymbol\alpha\T K\boldsymbol\alpha$ and $(f(\bx_1), \dots, f(\bx_N)) = K\boldsymbol\alpha$:
+          $$J(\boldsymbol\alpha) = \frac1N\sum_{i=1}^N \Big[-y_i\log\sigma\big((K\boldsymbol\alpha)_i\big) - (1 - y_i)\log\big(1 - \sigma((K\boldsymbol\alpha)_i)\big)\Big]
+          + \frac\lambda2\,\boldsymbol\alpha\T K\boldsymbol\alpha .$$</p>
+
+        <div class="env proposition" id="prop-klr-grad">
+          <p>With $\mathbf p = \sigma(K\boldsymbol\alpha)$ (applied entrywise),
+            $$\nabla J(\boldsymbol\alpha) = K\Big(\frac1N(\mathbf p - \by) + \lambda\boldsymbol\alpha\Big) .$$
+            $J$ is convex, so gradient descent or Newton's method finds the global minimum.</p>
+        </div>
+        <details class="proof" data-for="prop-klr-grad">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: the loss term.</strong> Write $\mathbf f = K\boldsymbol\alpha$. From Chapter 4, the gradient
+              of the average cross-entropy with respect to $\mathbf f$ is $\frac1N(\mathbf p - \by)$. By the chain rule, with
+              $\partial\mathbf f/\partial\boldsymbol\alpha = K$ (symmetric), the gradient with respect to
+              $\boldsymbol\alpha$ is $K\cdot\frac1N(\mathbf p - \by)$.</p>
+            <p><strong>Step 2: the penalty.</strong> $\nabla\big(\frac\lambda2\boldsymbol\alpha\T K\boldsymbol\alpha\big) = \lambda K\boldsymbol\alpha$.</p>
+            <p><strong>Step 3: convexity.</strong> The cross-entropy is convex in $\mathbf f$ (Chapter 4) and $\mathbf f$ is
+              linear in $\boldsymbol\alpha$; $\boldsymbol\alpha\T K\boldsymbol\alpha$ is convex because $K$ is positive
+              semidefinite.</p>
+          </div>
+        </details>
+
+        <figure class="viz viz--wide" data-viz="kernel-logistic" id="fig-kernel-logistic">
+          <div class="viz__stage"></div>
+          <figcaption>Kernel logistic regression on the two moons (150 training points; the test error uses 400 new points).
+            A constant is added to the kernel to provide an intercept. The model is refitted when you release a slider.
+            <strong>Try:</strong> (1) the linear kernel gives ordinary logistic regression and a straight boundary;
+            (2) the degree-3 polynomial kernel already bends the boundary around the moons; (3) the Gaussian kernel with
+            $\sigma \approx 0.5$ follows them closely; (4) a very small $\sigma$ with a tiny $\lambda$ draws islands around
+            single points (overfitting); a large $\lambda$ smooths everything.</figcaption>
+        </figure>
+
+        <div class="env remark" id="rem-svm">
+          <p><strong>Support vector machines.</strong> Replacing the cross-entropy by the hinge loss
+            $\max(0, 1 - s_i f(\bx_i))$ with $s_i = \pm1$ gives the support vector machine. Its solution has the same form
+            $\sum_i\alpha_i k(\bx_i, \bx) + b$, with a useful extra property: most $\alpha_i$ are exactly zero, and only the
+            training points on or inside the margin (the <em>support vectors</em>) are needed for prediction. In
+            scikit-learn: <code>SVC(kernel="rbf", C=..., gamma=...)</code>, where $C$ plays the role of $1/\lambda$.</p>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="kernel-pca">Kernel PCA</h2>
+        <p>Kernels also apply to unsupervised methods. PCA (<a href="05-pca.html">Chapter 5</a>) finds directions of
+          maximum variance, but only straight ones. <strong>Kernel PCA</strong> performs PCA in the feature space, where a
+          straight direction can correspond to a curved one in the input space.</p>
+        <p>Assume for now that the features are centred, $\sum_i\phi(\bx_i) = \mathbf 0$. The covariance in feature space is
+          $C = \frac1N\Phi\T\Phi$ ($M \times M$, possibly infinite), and we look for its eigenvectors $\mathbf v$ with
+          $C\mathbf v = \lambda\mathbf v$.</p>
+
+        <div class="env theorem" id="thm-kpca" data-name="Kernel PCA">
+          <p>Let $K = \Phi\Phi\T$. If $\boldsymbol\alpha \in \R^N$ satisfies
+            $$K\boldsymbol\alpha = N\lambda\,\boldsymbol\alpha, \qquad \lambda > 0, \qquad \boldsymbol\alpha\T K\boldsymbol\alpha = 1,$$
+            then $\mathbf v = \sum_i\alpha_i\phi(\bx_i)$ is a unit eigenvector of $C$ with eigenvalue $\lambda$, and every
+            eigenvector of $C$ with $\lambda > 0$ arises this way. The score of any input on this component is
+            $$z(\bx) = \mathbf v\T\phi(\bx) = \sum_{i=1}^N \alpha_i\,k(\bx_i, \bx) .$$</p>
+        </div>
+        <details class="proof" data-for="thm-kpca">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: eigenvectors lie in the span of the data.</strong> If $C\mathbf v = \lambda\mathbf v$ with
+              $\lambda > 0$, then
+              $$\mathbf v = \frac{1}{\lambda}C\mathbf v = \frac{1}{N\lambda}\Phi\T(\Phi\mathbf v) = \Phi\T\boldsymbol\alpha,
+              \qquad \boldsymbol\alpha = \frac{1}{N\lambda}\Phi\mathbf v ,$$
+              so $\mathbf v = \sum_i\alpha_i\phi(\bx_i)$.</p>
+            <p><strong>Step 2: the eigen-equation in terms of $K$.</strong> With $\mathbf v = \Phi\T\boldsymbol\alpha$, the
+              definition of $\boldsymbol\alpha$ in Step 1 gives
+              $$N\lambda\,\boldsymbol\alpha = \Phi\mathbf v = \Phi\Phi\T\boldsymbol\alpha = K\boldsymbol\alpha .$$
+              Conversely, if $K\boldsymbol\alpha = N\lambda\boldsymbol\alpha$, then
+              $C\Phi\T\boldsymbol\alpha = \frac1N\Phi\T K\boldsymbol\alpha = \lambda\,\Phi\T\boldsymbol\alpha$.</p>
+            <p><strong>Step 3: normalisation.</strong> $\norm{\mathbf v}^2 = \boldsymbol\alpha\T\Phi\Phi\T\boldsymbol\alpha = \boldsymbol\alpha\T K\boldsymbol\alpha$,
+              so $\mathbf v$ has unit length exactly when $\boldsymbol\alpha\T K\boldsymbol\alpha = 1$, i.e.
+              $\norm{\boldsymbol\alpha}^2 = 1/(N\lambda)$.</p>
+            <p><strong>Step 4: scores.</strong> $\mathbf v\T\phi(\bx) = \sum_i\alpha_i\,\phi(\bx_i)\T\phi(\bx) = \sum_i\alpha_i\,k(\bx_i, \bx)$.</p>
+          </div>
+        </details>
+
+        <p>In practice: compute $K$, centre it (below), find its top eigenvectors, rescale them so that
+          $\boldsymbol\alpha_k\T K\boldsymbol\alpha_k = 1$, and project. On the training points the scores are simply
+          $\mathbf z_k = K\boldsymbol\alpha_k = N\lambda_k\boldsymbol\alpha_k$. The linear kernel gives back ordinary PCA
+          (through the Gram matrix of Chapter 5).</p>
+
+        <div class="env proposition" id="prop-kpca-centre">
+          <p>The kernel matrix of the centred features $\tilde\phi(\bx_i) = \phi(\bx_i) - \frac1N\sum_j\phi(\bx_j)$ is
+            $$\tilde K = K - \mathbf 1_N K - K\mathbf 1_N + \mathbf 1_N K\mathbf 1_N ,$$
+            where $\mathbf 1_N$ is the $N \times N$ matrix with all entries $1/N$. So centring needs only $K$.</p>
+        </div>
+        <details class="proof" data-for="prop-kpca-centre">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: expand one entry.</strong> With $\bar\phi = \frac1N\sum_j\phi(\bx_j)$,
+              $$\tilde K_{ij} = \big(\phi(\bx_i) - \bar\phi\big)\T\big(\phi(\bx_j) - \bar\phi\big)
+              = K_{ij} - \phi(\bx_i)\T\bar\phi - \bar\phi\T\phi(\bx_j) + \bar\phi\T\bar\phi .$$</p>
+            <p><strong>Step 2: each term in terms of $K$.</strong>
+              $$\phi(\bx_i)\T\bar\phi = \frac1N\sum_l K_{il} = (K\mathbf 1_N)_{ij}, \quad
+              \bar\phi\T\phi(\bx_j) = \frac1N\sum_l K_{lj} = (\mathbf 1_N K)_{ij}, \quad
+              \bar\phi\T\bar\phi = \frac{1}{N^2}\sum_{l,m}K_{lm} = (\mathbf 1_N K\mathbf 1_N)_{ij} .$$</p>
+          </div>
+        </details>
+
+        <figure class="viz viz--wide" data-viz="kernel-pca" id="fig-kernel-pca">
+          <div class="viz__stage"></div>
+          <figcaption>Kernel PCA. Left: the data (the two groups are shown by shape for reference; kernel PCA does not use
+            them). Right: the scores on the first two components.
+            <strong>Try:</strong> (1) the linear kernel on the circles: ordinary PCA only rotates the plane, and the rings
+            stay nested; (2) the Gaussian kernel with $\sigma \approx 0.5$: the first component separates the inner ring from
+            the outer ring; (3) vary $\sigma$: too small and every point becomes its own direction, too large and the result
+            approaches ordinary PCA; (4) the moons: a suitable $\sigma$ pulls them apart.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="practice">Strengths, limitations and connections</h2>
+        <ul>
+          <li><strong>Strengths.</strong> Non-linear models built on linear algebra: convex problems with a unique solution
+            (ridge, logistic, SVM); flexible through the choice of kernel; the effective complexity adapts to the data.</li>
+          <li><strong>Cost.</strong> The kernel matrix has $N^2$ entries and solving with it costs about $N^3$ operations; every
+            prediction uses all $N$ training points (or the support vectors). Beyond $N \approx 10^4$–$10^5$, approximations
+            such as random features or the Nyström method are needed.</li>
+          <li><strong>Choices.</strong> There is no universal kernel; the kernel and its parameters must be tuned, and
+            features scaled.</li>
+          <li><strong>Interpretability.</strong> The implicit features cannot be inspected; we see the predictions, not a
+            representation.</li>
+        </ul>
+        <p><strong>Connections.</strong> The Gaussian kernel makes kernel methods <em>local</em> like k-NN, but with a soft
+          neighbourhood: every point contributes with a weight that decays with distance. (The Nadaraya–Watson estimator
+          $\hat f(\bx) = \sum_i k(\bx_i, \bx)y_i / \sum_i k(\bx_i, \bx)$ is the soft version of the k-NN average.) Kernel
+          ridge regression is ridge regression in feature space, and kernel PCA is PCA in feature space. Neural networks,
+          next, take the opposite route: they <em>learn</em> the feature map instead of fixing it through a kernel.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-why-kernels">
+          <p>Explain why linear models may fail to capture complex relationships. Give a dataset where a linear decision
+            boundary performs poorly, and a feature map that would make it linearly separable.</p>
+        </div>
+
+        <div class="env exercise" id="exo-feature-goal">
+          <p>In words, what is the goal of mapping $\bx$ to $\phi(\bx)$? Why can a linear algorithm then model non-linear
+            relationships? What is the cost of doing this explicitly?</p>
+        </div>
+
+        <div class="env exercise" id="exo-poly2d">
+          <p>For $\bx, \bx' \in \R^2$, expand $(1 + \bx\T\bx')^2$ and find a feature map $\phi : \R^2 \to \R^6$ with
+            $(1 + \bx\T\bx')^2 = \phi(\bx)\T\phi(\bx')$. Check the count against <a class="ref" href="#prop-monomials"></a>.</p>
+        </div>
+
+        <div class="env exercise" id="exo-dual-small">
+          <p>With one feature, $\phi(x) = x$, and data $(x, y) = (1, 1), (2, 3)$, compute the ridge estimate $\hat\theta$ for
+            $\lambda = 1$ in the primal form and in the dual form, and check that they agree.</p>
+        </div>
+
+        <div class="env exercise" id="exo-kernel-trick">
+          <p>Explain in your own words what the kernel trick is, and why replacing $\phi(\bx_i)\T\phi(\bx_j)$ by
+            $k(\bx_i, \bx_j)$ avoids computations in the feature space. When is the dual form cheaper than the primal form,
+            and when is it more expensive?</p>
+        </div>
+
+        <div class="env exercise" id="exo-krr-lambda">
+          <p>In kernel ridge regression, explain what $\boldsymbol\alpha$, $K$ and $\lambda$ represent and how $\lambda$
+            changes the smoothness of the fit. Using <a class="ref" href="#prop-krr-df"></a>, sketch the effective number of
+            parameters as a function of $\lambda$, and the expected training and validation errors. How would you choose
+            $\lambda$?</p>
+        </div>
+
+        <div class="env exercise" id="exo-kernel-choice">
+          <p>Discuss how the choice of kernel (linear, polynomial, Gaussian) affects flexibility and generalisation. What is
+            the risk of a kernel that is too flexible, and how does it show in practice?</p>
+        </div>
+
+        <div class="env exercise" id="exo-valid">
+          <p>Which of the following are valid kernels on $\R^p$? Justify, without computing feature maps.
+            (a) $k_1(\bx, \bx') = (1 + \bx\T\bx')^2$; (b) $k_2(x, x') = e^{-|x - x'|}$ on $\R$ (you may use that its kernel
+            matrices are positive semidefinite); (c) $k_3(\bx, \bx') = \bx\T\bx' - 2$. (<em>Hint for (c):</em> look at
+            $k_3(\bx, \bx)$ for a single small $\bx$.)</p>
+        </div>
+
+        <div class="env exercise" id="exo-rbf-sigma">
+          <p>For the Gaussian kernel: (a) what does $\sigma$ control? (b) How does $\sigma$ affect the bias–variance
+            trade-off? (c) Using <a class="ref" href="#prop-rbf-limits"></a> and the distance formula, describe the feature
+            space representation as $\sigma \to 0$ and $\sigma \to \infty$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-kpca-linear">
+          <p>Show that kernel PCA with the linear kernel gives the same scores as ordinary PCA (use the Gram-matrix result
+            of Chapter 5). Why must the kernel matrix be centred?</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>A feature map makes a linear model non-linear in $\bx$, but explicit features explode in number
+              ($\binom{p+d}{d}$ monomials).</li>
+            <li>Ridge regression has a dual form $\hat y(\bx) = \mathbf k(\bx)\T(K + \lambda I)^{-1}\by$ that uses only inner
+              products; by the representer theorem the same holds for any regularised linear model.</li>
+            <li>A kernel computes feature inner products directly. Valid kernels have positive semidefinite kernel
+              matrices; linear, polynomial and Gaussian kernels are the usual choices.</li>
+            <li>$\lambda$ and the kernel width control complexity (effective parameters $\sum\mu_i/(\mu_i + \lambda)$);
+              tune them by cross-validation on scaled features.</li>
+            <li>Kernel logistic regression and SVMs classify with $\sum_i\alpha_i k(\bx_i, \bx) + b$; kernel PCA solves
+              $K\boldsymbol\alpha = N\lambda\boldsymbol\alpha$ on the centred kernel matrix.</li>
+            <li>Cost grows like $N^2$ in memory and $N^3$ in time.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-prob">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-prob">Probabilistic view: Gaussian processes</h2>
+          <p class="extra__intro">Kernel ridge regression has an exact Bayesian twin. Instead of fitting a function, put a
+            probability distribution on functions whose covariance is the kernel.</p>
+
+          <div class="env definition" id="def-gp">
+            <p>A <strong>Gaussian process</strong> with covariance function $k$, written $f \sim \mathcal{GP}(0, k)$, is a
+              random function such that for any inputs $\bx_1, \dots, \bx_m$ the vector $(f(\bx_1), \dots, f(\bx_m))$ is
+              Gaussian with mean $\mathbf 0$ and covariance matrix $[k(\bx_i, \bx_j)]_{ij}$.</p>
+          </div>
+          <p>A valid kernel is exactly what makes these covariance matrices positive semidefinite. The Gaussian kernel gives
+            smooth random functions that vary on a length scale $\sigma$. For example, Bayesian linear regression in
+            feature space, $f(\bx) = \theta\T\phi(\bx)$ with prior $\theta \sim \mathcal N(\mathbf 0, I)$, is a Gaussian
+            process with $\Cov(f(\bx), f(\bx')) = \phi(\bx)\T\phi(\bx') = k(\bx, \bx')$.</p>
+
+          <div class="env theorem" id="thm-gp-posterior">
+            <p>Let $f \sim \mathcal{GP}(0, k)$ and $y_i = f(\bx_i) + \varepsilon_i$ with independent noise
+              $\varepsilon_i \sim \mathcal N(0, s^2)$. Given the data, $f(\bx)$ at a new input is Gaussian with
+              $$\E[f(\bx) \mid \by] = \mathbf k(\bx)\T\big(K + s^2 I\big)^{-1}\by, \qquad
+              \Var(f(\bx) \mid \by) = k(\bx, \bx) - \mathbf k(\bx)\T\big(K + s^2 I\big)^{-1}\mathbf k(\bx).$$
+              The posterior mean is exactly kernel ridge regression with $\lambda = s^2$.</p>
+          </div>
+          <details class="proof" data-for="thm-gp-posterior">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: the joint distribution.</strong> $(\by, f(\bx))$ is Gaussian with mean zero and
+                $$\Cov(\by) = K + s^2 I, \qquad \Cov(\by, f(\bx)) = \mathbf k(\bx), \qquad \Var(f(\bx)) = k(\bx, \bx),$$
+                because the noise is independent of $f$ and adds $s^2$ to the diagonal only.</p>
+              <p><strong>Step 2: Gaussian conditioning.</strong> For a zero-mean Gaussian vector $(\mathbf a, b)$, the
+                conditional distribution of $b$ given $\mathbf a$ is Gaussian with mean
+                $\Cov(b, \mathbf a)\Cov(\mathbf a)^{-1}\mathbf a$ and variance
+                $\Var(b) - \Cov(b, \mathbf a)\Cov(\mathbf a)^{-1}\Cov(\mathbf a, b)$ (a standard fact, which can be proved
+                by completing the square as in the extra section of Chapter 5).</p>
+              <p><strong>Step 3: substitute</strong> $\mathbf a = \by$, $b = f(\bx)$.</p>
+            </div>
+          </details>
+          <p>The Bayesian view adds two things to kernel ridge regression. The posterior variance gives error bars: it is
+            small near training points and grows back to $k(\bx, \bx)$ far from them. And the regularisation $\lambda$ gets a
+            meaning, the noise variance, while $\sigma$ and $s^2$ can be chosen by maximising the marginal likelihood of the
+            data instead of by cross-validation.</p>
+
+          <div class="env exercise" id="exo-gp-one">
+            <p>With a single training point $(\bx_1, y_1)$ and the Gaussian kernel, compute the posterior mean and variance of
+              $f(\bx)$. Describe them as functions of $\norm{\bx - \bx_1}$ and interpret the limits
+              $\norm{\bx - \bx_1} \to 0$ and $\to \infty$.</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

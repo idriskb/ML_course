@@ -49,7 +49,7 @@ window.COURSE = {
     { num: "8", slug: "08-trees", part: "Module 3 · Nonlinear & non-parametric models", status: "ready", sessions: "16–17",
       title: "Tree-based methods",
       summary: "Decision trees, splitting criteria and pruning; bagging, random forests and gradient boosting." },
-    { num: "9", slug: "09-kernels", part: "Module 3 · Nonlinear & non-parametric models", status: "planned", sessions: "19–20",
+    { num: "9", slug: "09-kernels", part: "Module 3 · Nonlinear & non-parametric models", status: "ready", sessions: "19–20",
       title: "Kernel methods",
       summary: "Feature maps, the dual of ridge regression, the kernel trick, kernel PCA." },
     { num: "10", slug: "10-neural-networks", part: "Module 3 · Nonlinear & non-parametric models", status: "planned", sessions: "22–24",

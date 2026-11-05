@@ -441,41 +441,76 @@ search = GridSearchCV(model, grid, cv=5).fit(X_train, y_train)</code></pre>
         <p>Kernels also apply to unsupervised methods. PCA (<a href="05-pca.html">Chapter 5</a>) finds directions of
           maximum variance, but only straight ones. <strong>Kernel PCA</strong> performs PCA in the feature space, where a
           straight direction can correspond to a curved one in the input space.</p>
-        <p>Assume for now that the features are centred, $\sum_i\phi(\bx_i) = \mathbf 0$. The covariance in feature space is
-          $C = \frac1N\Phi\T\Phi$ ($M \times M$, possibly infinite), and we look for its eigenvectors $\mathbf v$ with
-          $C\mathbf v = \lambda\mathbf v$.</p>
+        <p>Recall PCA from <a href="05-pca.html">Chapter 5</a>. For centred data with rows $\bx_i\T$ of $\bX$, PCA is the
+          eigen-decomposition of the covariance matrix:
+          $$\Sigma = \frac1N\bX\T\bX, \qquad \Sigma\,\bu = \lambda\,\bu, \qquad \norm{\bu} = 1, \qquad
+          \text{score } z(\bx) = \bu\T\bx .$$
+          Kernel PCA is this same computation with every $\bx_i$ replaced by its feature vector $\phi(\bx_i)$. Assume for now
+          that the features are centred, $\sum_i\phi(\bx_i) = \mathbf 0$ (we remove this assumption below).</p>
 
         <div class="env theorem" id="thm-kpca" data-name="Kernel PCA">
-          <p>Let $K = \Phi\Phi\T$. If $\boldsymbol\alpha \in \R^N$ satisfies
-            $$K\boldsymbol\alpha = N\lambda\,\boldsymbol\alpha, \qquad \lambda > 0, \qquad \boldsymbol\alpha\T K\boldsymbol\alpha = 1,$$
-            then $\mathbf v = \sum_i\alpha_i\phi(\bx_i)$ is a unit eigenvector of $C$ with eigenvalue $\lambda$, and every
-            eigenvector of $C$ with $\lambda > 0$ arises this way. The score of any input on this component is
+          <p>Let $\Phi$ be the matrix with rows $\phi(\bx_i)\T$ and $K = \Phi\Phi\T$. PCA in feature space, i.e. the
+            eigen-decomposition of $C = \frac1N\Phi\T\Phi$, is obtained from the $N \times N$ problem
+            $$K\boldsymbol\alpha = N\lambda\,\boldsymbol\alpha, \qquad \lambda > 0, \qquad \boldsymbol\alpha\T K\boldsymbol\alpha = 1 :$$
+            each such $\boldsymbol\alpha$ gives the unit principal direction $\mathbf v = \sum_i\alpha_i\phi(\bx_i)$ of $C$
+            with eigenvalue $\lambda$, every principal direction with $\lambda > 0$ arises this way, and the score of any
+            input is
             $$z(\bx) = \mathbf v\T\phi(\bx) = \sum_{i=1}^N \alpha_i\,k(\bx_i, \bx) .$$</p>
         </div>
         <details class="proof" data-for="thm-kpca">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p><strong>Step 1: eigenvectors lie in the span of the data.</strong> If $C\mathbf v = \lambda\mathbf v$ with
-              $\lambda > 0$, then
-              $$\mathbf v = \frac{1}{\lambda}C\mathbf v = \frac{1}{N\lambda}\Phi\T(\Phi\mathbf v) = \Phi\T\boldsymbol\alpha,
-              \qquad \boldsymbol\alpha = \frac{1}{N\lambda}\Phi\mathbf v ,$$
-              so $\mathbf v = \sum_i\alpha_i\phi(\bx_i)$.</p>
-            <p><strong>Step 2: the eigen-equation in terms of $K$.</strong> With $\mathbf v = \Phi\T\boldsymbol\alpha$, the
-              definition of $\boldsymbol\alpha$ in Step 1 gives
-              $$N\lambda\,\boldsymbol\alpha = \Phi\mathbf v = \Phi\Phi\T\boldsymbol\alpha = K\boldsymbol\alpha .$$
-              Conversely, if $K\boldsymbol\alpha = N\lambda\boldsymbol\alpha$, then
-              $C\Phi\T\boldsymbol\alpha = \frac1N\Phi\T K\boldsymbol\alpha = \lambda\,\Phi\T\boldsymbol\alpha$.</p>
-            <p><strong>Step 3: normalisation.</strong> $\norm{\mathbf v}^2 = \boldsymbol\alpha\T\Phi\Phi\T\boldsymbol\alpha = \boldsymbol\alpha\T K\boldsymbol\alpha$,
-              so $\mathbf v$ has unit length exactly when $\boldsymbol\alpha\T K\boldsymbol\alpha = 1$, i.e.
-              $\norm{\boldsymbol\alpha}^2 = 1/(N\lambda)$.</p>
-            <p><strong>Step 4: scores.</strong> $\mathbf v\T\phi(\bx) = \sum_i\alpha_i\,\phi(\bx_i)\T\phi(\bx) = \sum_i\alpha_i\,k(\bx_i, \bx)$.</p>
+            <p><strong>Step 1: PCA with features.</strong> Replace $\bx_i$ by $\phi(\bx_i)$ in the PCA recipe above: the data
+              matrix $\bX$ becomes $\Phi$, the covariance $\Sigma$ becomes $C = \frac1N\Phi\T\Phi$, and PCA asks for
+              $$C\mathbf v = \lambda\mathbf v \iff \frac1N\Phi\T\Phi\,\mathbf v = \lambda\mathbf v, \qquad \norm{\mathbf v} = 1 .
+              \tag{1}$$
+              This is an $M \times M$ problem, with $M$ huge or infinite: we cannot solve it directly.</p>
+            <p><strong>Step 2: the principal directions lie in the span of the data.</strong> If $\lambda > 0$, divide (1)
+              by $\lambda$:
+              $$\mathbf v = \frac{1}{N\lambda}\Phi\T(\Phi\mathbf v) = \Phi\T\boldsymbol\alpha = \sum_{i=1}^N \alpha_i\,\phi(\bx_i),
+              \qquad \boldsymbol\alpha = \frac{1}{N\lambda}\Phi\mathbf v \in \R^N .$$
+              So we only need the $N$ numbers $\boldsymbol\alpha$, as in the representer theorem.</p>
+            <p><strong>Step 3: substitute into the eigen-equation.</strong> Put $\mathbf v = \Phi\T\boldsymbol\alpha$ in (1)
+              and use $\Phi\Phi\T = K$:
+              $$\frac1N\Phi\T\underbrace{\Phi\Phi\T}_{=\,K}\boldsymbol\alpha = \lambda\,\Phi\T\boldsymbol\alpha .$$</p>
+            <p><strong>Step 4: only kernels remain.</strong> Multiply on the left by $\Phi$, which turns every
+              $\Phi\Phi\T$ into $K$:
+              $$\frac1N K^2\boldsymbol\alpha = \lambda\,K\boldsymbol\alpha
+              \iff K\big(K\boldsymbol\alpha - N\lambda\,\boldsymbol\alpha\big) = \mathbf 0 .$$
+              Every solution of $K\boldsymbol\alpha = N\lambda\boldsymbol\alpha$ satisfies this. The other solutions differ
+              from these by some $\mathbf w$ with $K\mathbf w = \mathbf 0$, which does not change $\mathbf v$:
+              $\norm{\Phi\T\mathbf w}^2 = \mathbf w\T K\mathbf w = 0$, so $\Phi\T\mathbf w = \mathbf 0$. Hence it suffices to
+              solve the $N \times N$ eigenvalue problem
+              $$K\boldsymbol\alpha = N\lambda\,\boldsymbol\alpha .$$
+              Conversely, such an $\boldsymbol\alpha$ gives an eigenvector of $C$:
+              $C\,\Phi\T\boldsymbol\alpha = \frac1N\Phi\T K\boldsymbol\alpha = \lambda\,\Phi\T\boldsymbol\alpha$.</p>
+            <p><strong>Step 5: the unit-length condition.</strong> PCA requires $\norm{\mathbf v} = 1$. With
+              $\mathbf v = \Phi\T\boldsymbol\alpha$,
+              $$\norm{\mathbf v}^2 = \boldsymbol\alpha\T\Phi\Phi\T\boldsymbol\alpha = \boldsymbol\alpha\T K\boldsymbol\alpha
+              = N\lambda\,\norm{\boldsymbol\alpha}^2 = 1 .$$
+              So the eigenvector of $K$ must be rescaled to $\norm{\boldsymbol\alpha}^2 = 1/(N\lambda)$, not to length $1$.</p>
+            <p><strong>Step 6: the scores.</strong> The PCA score $\bu\T\bx$ becomes
+              $$z(\bx) = \mathbf v\T\phi(\bx) = \sum_{i=1}^N \alpha_i\,\phi(\bx_i)\T\phi(\bx) = \sum_{i=1}^N \alpha_i\,k(\bx_i, \bx).$$
+              Every step uses $\phi$ only through inner products, which the kernel provides.</p>
           </div>
         </details>
 
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col"></th><th scope="col">PCA (Chapter 5)</th><th scope="col">Kernel PCA</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Matrix</th><td>$\Sigma = \frac1N\bX\T\bX$ ($p \times p$)</td><td>$K$, entries $k(\bx_i, \bx_j)$ ($N \times N$)</td></tr>
+              <tr><th scope="row">Eigen-problem</th><td>$\Sigma\bu = \lambda\bu$</td><td>$K\boldsymbol\alpha = N\lambda\boldsymbol\alpha$</td></tr>
+              <tr><th scope="row">Normalisation</th><td>$\norm{\bu} = 1$</td><td>$\boldsymbol\alpha\T K\boldsymbol\alpha = 1$</td></tr>
+              <tr><th scope="row">Score of $\bx$</th><td>$\bu\T\bx$</td><td>$\sum_i\alpha_i\,k(\bx_i, \bx)$</td></tr>
+            </tbody>
+          </table>
+        </div>
+
         <p>In practice: compute $K$, centre it (below), find its top eigenvectors, rescale them so that
           $\boldsymbol\alpha_k\T K\boldsymbol\alpha_k = 1$, and project. On the training points the scores are simply
-          $\mathbf z_k = K\boldsymbol\alpha_k = N\lambda_k\boldsymbol\alpha_k$. The linear kernel gives back ordinary PCA
-          (through the Gram matrix of Chapter 5).</p>
+          $\mathbf z_k = K\boldsymbol\alpha_k = N\lambda_k\boldsymbol\alpha_k$. With the linear kernel, $K = \bX\bX\T$ and
+          Steps 2 to 4 are exactly the Gram-matrix computation of PCA in Chapter 5: kernel PCA gives back ordinary PCA.</p>
 
         <div class="env proposition" id="prop-kpca-centre">
           <p>The kernel matrix of the centred features $\tilde\phi(\bx_i) = \phi(\bx_i) - \frac1N\sum_j\phi(\bx_j)$ is

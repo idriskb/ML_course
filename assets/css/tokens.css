@@ -58,7 +58,6 @@
   --color-green: #6DC201;         /* bright accent: decoration only on white */
   --color-green-light: #A6E36B;   /* text and accents on dark backgrounds */
   --color-green-tint: #F2F8EA;    /* light backgrounds */
-  --color-blue-text: #00658F;     /* example label: 6.4:1 on white */
 
   /* Site extension: dark-theme neutrals with a green cast */
   --color-ext-night: #0F120D;

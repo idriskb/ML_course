@@ -33,8 +33,8 @@
   --env-def-bg: var(--color-green-tint);
   --env-thm: var(--color-green-dark);
   --env-thm-bg: var(--color-grey-softgrey);
-  --env-ex: var(--color-school-business);
-  --env-ex-label: var(--color-blue-text);
+  --env-ex: var(--color-green);
+  --env-ex-label: var(--color-green-text);
   --env-rem: var(--color-grey-middlegrey);
   --env-exo: var(--color-semantic-tangerine);
   --env-exo-label: var(--color-semantic-winered);
@@ -87,8 +87,8 @@
   --env-def-bg: var(--color-ext-night-surface);
   --env-thm: var(--color-green-light);
   --env-thm-bg: var(--color-ext-night-surface);
-  --env-ex: var(--color-primary-seablue);
-  --env-ex-label: var(--color-primary-seablue);
+  --env-ex: var(--color-green);
+  --env-ex-label: var(--color-green-light);
   --env-exo-label: var(--color-semantic-tangerine);
   --status-error: var(--color-semantic-tangerine);
 

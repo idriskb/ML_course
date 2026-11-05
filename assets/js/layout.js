@@ -79,7 +79,6 @@
           </a>
           <nav class="top-nav" aria-label="Site">
             ${navLink(`${ROOT}index.html`, "Home", "home")}
-            ${navLink(`${ROOT}syllabus.html`, "Syllabus", "syllabus")}
             ${navLink(`${ROOT}index.html#chapters`, "Chapters", "chapter")}
           </nav>
           <button class="icon-btn theme-btn" type="button"></button>
@@ -113,10 +112,7 @@
     let html = `
       <button class="icon-btn sidebar__close" type="button" aria-label="Close course navigation">${ICONS.close}</button>
       <a class="sidebar__home" href="${ROOT}index.html">← Course home</a>
-      <ol>
-        <li><a class="sidebar__link" href="${ROOT}syllabus.html"${PAGE === "syllabus" ? ' aria-current="page"' : ""}>
-          <span class="sidebar__num">§</span><span>Syllabus</span></a></li>
-      </ol>`;
+`;
 
     groupByPart(C.chapters).forEach(([part, chapters], i) => {
       html += `<p class="sidebar__part" id="sb-part-${i}">${esc(part)}</p><ol aria-labelledby="sb-part-${i}">`;

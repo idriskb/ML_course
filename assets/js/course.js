@@ -17,7 +17,7 @@ window.COURSE = {
 
   // Chapters are grouped by `part` in the order they appear here.
   // status: "ready" (linked) | "planned" (shown as "Coming soon")
-  // `sessions` = syllabus sessions covered by the chapter.
+  // `sessions` = course sessions covered by the chapter.
   chapters: [
     { num: "0", slug: "00-style-guide", part: "Front matter", status: "ready",
       title: "How to read these notes",
@@ -39,7 +39,7 @@ window.COURSE = {
     { num: "5", slug: "05-pca", part: "Module 2 · Unsupervised learning", status: "ready", sessions: "9",
       title: "Dimensionality reduction: PCA",
       summary: "Variance maximisation, the eigen-decomposition and SVD, explained variance." },
-    { num: "6", slug: "06-kmeans", part: "Module 2 · Unsupervised learning", status: "planned", sessions: "10",
+    { num: "6", slug: "06-kmeans", part: "Module 2 · Unsupervised learning", status: "ready", sessions: "10",
       title: "Clustering: k-means",
       summary: "The k-means objective, Lloyd's algorithm, k-means++, choosing k." },
 

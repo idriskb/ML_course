@@ -46,6 +46,9 @@
   --viz-grid: var(--color-grey-iewhite);
   --viz-axis: var(--color-grey-middlegrey);
   --viz-text: var(--color-grey-darkgrey);
+  /* Cluster palette (k-means and other multi-group plots); always paired with shapes */
+  --viz-c1: #000066; --viz-c2: #D90011; --viz-c3: #0097DC;
+  --viz-c4: #921AD4; --viz-c5: #C24400; --viz-c6: #1F3700;
 
   --radius: 6px;
   --radius-lg: 12px;
@@ -89,6 +92,8 @@
   --viz-grid: var(--color-ext-night-surface);
   --viz-axis: var(--color-grey-middlegrey);
   --viz-text: var(--color-grey-lightgrey);
+  --viz-c1: #BDE8FF; --viz-c2: #FF7B31; --viz-c3: #23CE6B;
+  --viz-c4: #FBCA1E; --viz-c5: #C58BFF; --viz-c6: #F4F4F4;
 
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 16px rgba(0, 0, 0, .3);
   color-scheme: dark;

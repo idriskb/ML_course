@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clustering: k-means — Machine Learning</title>
+  <meta name="description" content="k-means clustering: the within-cluster sum of squares, the derivation of the optimal centroids, Lloyd's algorithm and its convergence, k-means++ initialisation, Voronoi regions, choosing the number of clusters, and limitations.">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/digits-data.js"></script>
+  <script defer src="../assets/js/viz/cluster-data.js"></script>
+  <script defer src="../assets/js/viz/centroid-mean.js"></script>
+  <script defer src="../assets/js/viz/kmeans-lloyd.js"></script>
+  <script defer src="../assets/js/viz/kmeans-k.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="06-kmeans">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Clustering: k-means</h1>
+          <p class="lede">PCA looked for continuous structure: a few directions that summarise the data. Clustering
+            looks for discrete structure: groups of points that are close to each other and far from the rest. k-means
+            describes each group by a single point, its centroid, and finds the groups by alternating two simple steps.
+            We derive both steps, prove that the algorithm converges, and see where it fails.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>State the k-means objective (within-cluster sum of squares).</li>
+            <li>Derive the optimal centroid of a cluster and the optimal assignment of a point.</li>
+            <li>Describe Lloyd's algorithm and prove that it converges in finitely many steps.</li>
+            <li>Explain why initialisation matters, and how k-means++ helps.</li>
+            <li>Choose the number of clusters with the elbow and silhouette criteria, and recognise the limitations of
+              k-means.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="motivation">Why cluster?</h2>
+        <p>A shop has data on its customers, say their (standardised) yearly income and spending. Nobody has labelled
+          the customers, yet the shop would like to know whether there are a few typical <em>kinds</em> of customer, to
+          design a different offer for each. This is <strong>clustering</strong>: partition unlabelled data
+          $\bx_1, \dots, \bx_n \in \R^p$ into groups (clusters) such that points in the same group are similar and
+          points in different groups are not.</p>
+        <p>In the language of the previous chapter, each point carries a hidden <em>discrete</em> latent variable, the
+          group it belongs to, and clustering tries to recover it. Other examples:</p>
+        <ul>
+          <li>grouping handwritten digits by shape without knowing which digit each image shows (in
+            <a href="05-pca.html">Chapter 5</a>, three such groups were already visible in two principal components);</li>
+          <li>reducing the colours of an image to $K$ representative colours;</li>
+          <li>organising documents by topic.</li>
+        </ul>
+        <p>Clustering is not classification: there are no labels to learn from, and no "correct" answer to compare
+          with. We have to <em>define</em> what a good clustering is. k-means makes the simplest choice.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="objective">The k-means objective</h2>
+        <p>Fix the number of clusters $K$. Each cluster $k$ is represented by a <strong>centroid</strong>
+          $\boldsymbol\mu_k \in \R^p$, and each point is assigned to one cluster. Encode the assignment with indicators
+          $$c_{ik} = \begin{cases} 1 & \text{if } \bx_i \text{ is assigned to cluster } k, \\ 0 & \text{otherwise,} \end{cases}
+          \qquad \sum_{k=1}^K c_{ik} = 1 \ \text{ for every } i .$$
+          Write $C_k = \{i : c_{ik} = 1\}$ for the points of cluster $k$ and $n_k = |C_k|$ for its size.</p>
+
+        <div class="env definition" id="def-wcss">
+          <p>The <strong>k-means objective</strong>, or <strong>within-cluster sum of squares</strong> (WCSS), is
+            $$J(c, \boldsymbol\mu) = \sum_{i=1}^n \sum_{k=1}^K c_{ik}\,\norm{\bx_i - \boldsymbol\mu_k}^2
+            = \sum_{k=1}^K \sum_{i \in C_k} \norm{\bx_i - \boldsymbol\mu_k}^2 .$$
+            k-means looks for the assignments $c$ and centroids $\boldsymbol\mu_1, \dots, \boldsymbol\mu_K$ that
+            minimise $J$.</p>
+        </div>
+        <p>Replacing every point by the centroid of its cluster costs $J$ in squared distance: k-means looks for the
+          best summary of the data by $K$ representative points. The objective mixes a discrete unknown (the
+          assignments) and a continuous one (the centroids). The trick is to optimise one while the other is fixed.
+          Both sub-problems have simple, explicit solutions.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="centroids">The optimal centroids</h2>
+        <p>Suppose the assignments are fixed. Where should the centroids go?</p>
+
+        <div class="env theorem" id="thm-centroid" data-name="Optimal centroid">
+          <p>For fixed assignments $c$, the objective $J$ is minimised over $\boldsymbol\mu_1, \dots, \boldsymbol\mu_K$
+            by placing each centroid at the mean of its cluster:
+            $$\boldsymbol\mu_k^\star = \bar\bx_k = \frac{1}{n_k}\sum_{i \in C_k} \bx_i
+            = \frac{\sum_{i=1}^n c_{ik}\,\bx_i}{\sum_{i=1}^n c_{ik}} \qquad (n_k \geq 1).$$
+            This minimiser is unique.</p>
+        </div>
+        <details class="proof" data-for="thm-centroid">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: the problem splits into one problem per cluster.</strong> In
+              $$J = \sum_{k=1}^K \underbrace{\sum_{i \in C_k} \norm{\bx_i - \boldsymbol\mu_k}^2}_{=:\ f_k(\boldsymbol\mu_k)},$$
+              the centroid $\boldsymbol\mu_k$ appears only in the $k$-th term. So we minimise each $f_k$ separately.
+              Fix $k$, write $\boldsymbol\mu$ for $\boldsymbol\mu_k$ and $f$ for $f_k$.</p>
+            <p><strong>Step 2: expand one term.</strong> For each point,
+              $$\norm{\bx_i - \boldsymbol\mu}^2 = (\bx_i - \boldsymbol\mu)\T(\bx_i - \boldsymbol\mu)
+              = \norm{\bx_i}^2 - 2\,\bx_i\T\boldsymbol\mu + \norm{\boldsymbol\mu}^2 .$$</p>
+            <p><strong>Step 3: the gradient.</strong> The gradient of $\bx_i\T\boldsymbol\mu$ is $\bx_i$, and that of
+              $\norm{\boldsymbol\mu}^2$ is $2\boldsymbol\mu$. Summing over the cluster,
+              $$\nabla f(\boldsymbol\mu) = \sum_{i \in C_k} \big(-2\,\bx_i + 2\boldsymbol\mu\big)
+              = -2\sum_{i \in C_k} \bx_i + 2\,n_k\,\boldsymbol\mu .$$</p>
+            <p><strong>Step 4: set it to zero.</strong>
+              $$-2\sum_{i \in C_k} \bx_i + 2\,n_k\,\boldsymbol\mu = \mathbf 0
+              \quad\Longleftrightarrow\quad
+              \boldsymbol\mu = \frac{1}{n_k}\sum_{i \in C_k} \bx_i = \bar\bx_k .$$</p>
+            <p><strong>Step 5: it is the global minimum.</strong> The Hessian is
+              $\nabla^2 f(\boldsymbol\mu) = 2\,n_k\, I_p$, which is positive definite. So $f$ is strictly convex, and its
+              only stationary point $\bar\bx_k$ is its unique global minimiser.</p>
+          </div>
+        </details>
+
+        <p>The next identity says exactly how much a wrong centre costs. It is the same "Pythagoras" decomposition as
+          for the bias–variance trade-off in <a href="03-regularization.html">Chapter 3</a>.</p>
+
+        <div class="env proposition" id="prop-centroid-decomp">
+          <p>For any $\boldsymbol\mu \in \R^p$,
+            $$\sum_{i \in C_k} \norm{\bx_i - \boldsymbol\mu}^2
+            = \underbrace{\sum_{i \in C_k} \norm{\bx_i - \bar\bx_k}^2}_{\text{does not depend on } \boldsymbol\mu}
+            + \ n_k\,\norm{\bar\bx_k - \boldsymbol\mu}^2 .$$
+            In particular the cost is smallest at $\boldsymbol\mu = \bar\bx_k$, and grows quadratically with the distance
+            from the mean.</p>
+        </div>
+        <details class="proof" data-for="prop-centroid-decomp">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: insert the mean.</strong> Write
+              $\bx_i - \boldsymbol\mu = (\bx_i - \bar\bx_k) + (\bar\bx_k - \boldsymbol\mu)$ and expand:
+              $$\norm{\bx_i - \boldsymbol\mu}^2 = \norm{\bx_i - \bar\bx_k}^2 + 2\,(\bx_i - \bar\bx_k)\T(\bar\bx_k - \boldsymbol\mu)
+              + \norm{\bar\bx_k - \boldsymbol\mu}^2 .$$</p>
+            <p><strong>Step 2: sum over the cluster.</strong> The vector $\bar\bx_k - \boldsymbol\mu$ does not depend
+              on $i$, and the deviations from the mean sum to zero:
+              $$\sum_{i \in C_k} \norm{\bx_i - \boldsymbol\mu}^2 = \sum_{i \in C_k} \norm{\bx_i - \bar\bx_k}^2
+              + 2\,\underbrace{\Big(\sum_{i \in C_k} (\bx_i - \bar\bx_k)\Big)\T}_{=\ \mathbf 0}(\bar\bx_k - \boldsymbol\mu)
+              + n_k\,\norm{\bar\bx_k - \boldsymbol\mu}^2 .$$</p>
+          </div>
+        </details>
+
+        <figure class="viz viz--wide" data-viz="centroid-mean" id="fig-centroid-mean">
+          <div class="viz__stage"></div>
+          <figcaption>The best centre of one cluster. Drag the candidate centre $\boldsymbol\mu$ (or focus the plot and
+            use the arrow keys). The bar shows the cost $\sum_i\norm{\bx_i - \boldsymbol\mu}^2$ split as in
+            <a class="ref" href="#prop-centroid-decomp"></a>: a fixed part, which no choice of $\boldsymbol\mu$ can
+            reduce, and the extra part $n\norm{\bar\bx - \boldsymbol\mu}^2$, which vanishes only at the mean.</figcaption>
+        </figure>
+
+        <p>The within-cluster cost also has a description that does not mention the centroid at all. It measures how
+          spread out the cluster is, through the distances between its points.</p>
+
+        <div class="env proposition" id="prop-pairwise">
+          <p>For every cluster,
+            $$\sum_{i \in C_k} \norm{\bx_i - \bar\bx_k}^2 = \frac{1}{2n_k}\sum_{i \in C_k}\sum_{j \in C_k} \norm{\bx_i - \bx_j}^2 .$$
+            So minimising $J$ makes the points of each cluster close to <em>each other</em>.</p>
+        </div>
+        <details class="proof" data-for="prop-pairwise">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1.</strong> Fix $j \in C_k$ and apply <a class="ref" href="#prop-centroid-decomp"></a>
+              with $\boldsymbol\mu = \bx_j$:
+              $$\sum_{i \in C_k} \norm{\bx_i - \bx_j}^2 = \sum_{i \in C_k} \norm{\bx_i - \bar\bx_k}^2 + n_k\,\norm{\bar\bx_k - \bx_j}^2 .$$</p>
+            <p><strong>Step 2.</strong> Sum over $j \in C_k$. Writing $W_k = \sum_{i \in C_k}\norm{\bx_i - \bar\bx_k}^2$,
+              $$\sum_{j \in C_k}\sum_{i \in C_k} \norm{\bx_i - \bx_j}^2 = n_k\,W_k + n_k\,W_k = 2n_k\,W_k .$$
+              Divide by $2n_k$.</p>
+          </div>
+        </details>
+
+        <!-- ============================================================ -->
+        <h2 id="assignments">The optimal assignments</h2>
+        <p>Now fix the centroids. Where should each point go?</p>
+
+        <div class="env proposition" id="prop-assign">
+          <p>For fixed centroids, $J$ is minimised over the assignments by sending each point to its nearest centroid:
+            $$c_{ik} = \begin{cases} 1 & \text{if } k = \argmin_{j} \norm{\bx_i - \boldsymbol\mu_j}^2, \\ 0 & \text{otherwise}
+            \end{cases}$$
+            (ties broken by any fixed rule).</p>
+        </div>
+        <details class="proof" data-for="prop-assign">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Write $J = \sum_{i=1}^n \big(\sum_k c_{ik}\norm{\bx_i - \boldsymbol\mu_k}^2\big)$. The $i$-th term
+              depends only on the assignment of point $i$, and equals $\norm{\bx_i - \boldsymbol\mu_k}^2$ if $\bx_i$ is
+              sent to cluster $k$. Each term is therefore minimised separately by choosing the closest centroid.</p>
+          </div>
+        </details>
+
+        <!-- ============================================================ -->
+        <h2 id="lloyd">Lloyd's algorithm</h2>
+        <p>Alternating the two optimal steps gives the standard k-means algorithm.</p>
+
+        <div class="callout intuition">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+          <p class="callout__title">Lloyd's algorithm</p>
+          <div class="callout__body">
+            <p><strong>Input:</strong> data $\bx_1, \dots, \bx_n$, number of clusters $K$.
+              <strong>Initialise</strong> the centroids $\boldsymbol\mu_1, \dots, \boldsymbol\mu_K$ (for example $K$
+              random data points, or k-means++ below). <strong>Repeat</strong> until the assignments stop changing:</p>
+            <ol>
+              <li><strong>Assignment step.</strong> Assign every point to its nearest centroid
+                (<a class="ref" href="#prop-assign"></a>).</li>
+              <li><strong>Update step.</strong> Move every centroid to the mean of its points
+                (<a class="ref" href="#thm-centroid"></a>). If a cluster is empty, keep its centroid (or re-initialise
+                it).</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="env theorem" id="thm-lloyd" data-name="Convergence of Lloyd's algorithm">
+          <p>Every step of Lloyd's algorithm leaves $J$ unchanged or decreases it. The algorithm stops after finitely
+            many iterations, at a point where each centroid is the mean of its cluster and each point is assigned to its
+            nearest centroid.</p>
+        </div>
+        <details class="proof" data-for="thm-lloyd">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: each half-step cannot increase $J$.</strong> Let $(c^{(t)}, \boldsymbol\mu^{(t)})$ be
+              the current state. The assignment step chooses the best $c$ for the current centroids, and the update step
+              the best $\boldsymbol\mu$ for the current assignments, so
+              $$J\big(c^{(t+1)}, \boldsymbol\mu^{(t)}\big) \leq J\big(c^{(t)}, \boldsymbol\mu^{(t)}\big),
+              \qquad
+              J\big(c^{(t+1)}, \boldsymbol\mu^{(t+1)}\big) \leq J\big(c^{(t+1)}, \boldsymbol\mu^{(t)}\big).$$</p>
+            <p><strong>Step 2: $J$ strictly decreases until the stop.</strong> Keep a point's current cluster whenever it
+              is tied for nearest. Then the assignment step changes the assignments only if it strictly lowers some
+              point's distance, hence strictly lowers $J$. Otherwise nothing changes and the algorithm stops.</p>
+            <p><strong>Step 3: finitely many states.</strong> After each update step, the centroids are the means of the
+              current partition, so the state is determined by the partition. There are at most $K^n$ partitions of
+              $n$ points into $K$ groups. Since $J$ strictly decreases until the stop, no partition can occur twice,
+              and the algorithm stops after at most $K^n$ iterations.</p>
+            <p><strong>Step 4: the final state.</strong> When the algorithm stops, the assignments are optimal for the
+              centroids and the centroids are the means of their clusters.</p>
+          </div>
+        </details>
+
+        <p>The bound $K^n$ is only a guarantee. In practice a few dozen iterations suffice, and each costs $O(nKp)$
+          operations (distances from every point to every centroid). The final state is a <strong>local
+          minimum</strong> in the sense that neither step can improve it. It need not be the global minimum.</p>
+
+        <div class="callout pitfall">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>
+          <p class="callout__title">The global minimum is hard to find</p>
+          <div class="callout__body">
+            <p>Minimising $J$ exactly is NP-hard: already for $K = 2$ clusters when the dimension $p$ can be large, and
+              already in the plane ($p = 2$) when the number of clusters $K$ can be large. No efficient algorithm is
+              known for these problems, and none is expected to exist. Lloyd's algorithm is fast but only finds a local
+              minimum, which depends on where it starts.</p>
+          </div>
+        </div>
+
+        <figure class="viz viz--wide" data-viz="kmeans-lloyd" id="fig-kmeans-lloyd">
+          <div class="viz__stage"></div>
+          <figcaption>Lloyd's algorithm one half-step at a time. The shading shows which centroid is nearest to each
+            location; the dashed lines are the paths of the centroids. Right: the objective $J$ after each assignment
+            (circles) and update (squares).
+            <strong>Try:</strong> (1) on the customer data with $K = 3$, step through: $J$ never goes up, and the
+            algorithm stops after a few steps; (2) choose <em>Five groups</em> with $K = 5$ and press <em>Run to convergence</em>,
+            then <em>New start</em>, several times with random initialisation: some starts end with two centroids
+            sharing one group while another centroid covers two groups, and $J$ is much larger, a bad local minimum;
+            switch to k-means++ and compare; (3) try the two moons or the two elongated groups with $K = 2$: k-means converges,
+            but not to the groups you see.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="initialisation">Initialisation and k-means++</h2>
+        <p>Because $J$ is not convex, the result depends on the starting centroids.</p>
+        <ul>
+          <li><strong>Random initialisation.</strong> Choose $K$ data points at random as centroids. It is simple but
+            fragile: if two starting centroids fall in the same group, the algorithm can end with one group split in two
+            and two other groups merged.</li>
+          <li><strong>Several restarts.</strong> Run the algorithm from several starts and keep the result with the
+            smallest $J$. This is what scikit-learn does (parameter <code>n_init</code>).</li>
+          <li><strong>k-means++.</strong> Spread the starting centroids out, by favouring points far from the centroids
+            already chosen.</li>
+        </ul>
+
+        <div class="env definition" id="def-kmeanspp">
+          <p><strong>k-means++ initialisation.</strong></p>
+          <ol>
+            <li>Choose the first centroid uniformly at random among the data points.</li>
+            <li>For each point, let $D(\bx_i)$ be its distance to the nearest centroid chosen so far. Choose the next
+              centroid among the data points, picking $\bx_i$ with probability
+              $$\frac{D(\bx_i)^2}{\sum_{j=1}^n D(\bx_j)^2} .$$</li>
+            <li>Repeat step 2 until $K$ centroids are chosen, then run Lloyd's algorithm.</li>
+          </ol>
+        </div>
+        <p>Points that are already well represented have a small chance of being picked, and points in an uncovered
+          region a large one. It can be shown that the expected cost of the initial centroids is at most
+          $8(\ln K + 2)$ times the optimal cost, and in practice it gives better and more stable results than random
+          starts. It is the default in scikit-learn.</p>
+
+        <div class="code" data-lang="python">
+<pre><code>from sklearn.cluster import KMeans
+
+km = KMeans(n_clusters=3, init="k-means++", n_init=10, random_state=0).fit(X)
+labels = km.labels_                 # cluster of each point
+centroids = km.cluster_centers_     # one row per centroid
+print(km.inertia_)                  # the objective J (WCSS)</code></pre>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="voronoi">The geometry of the clusters</h2>
+        <p>Once the centroids are fixed, every location $\bx \in \R^p$ is assigned to its nearest centroid. This splits
+          the space into regions
+          $$R_k = \big\{\bx \in \R^p : \norm{\bx - \boldsymbol\mu_k} \leq \norm{\bx - \boldsymbol\mu_j} \text{ for all } j\big\},$$
+          the <strong>Voronoi cells</strong> of the centroids (the shaded regions in
+          <a class="ref" href="#fig-kmeans-lloyd"></a>).</p>
+
+        <div class="env proposition" id="prop-voronoi">
+          <p>The boundary between the cells of $\boldsymbol\mu_k$ and $\boldsymbol\mu_j$ is the hyperplane
+            $$2\,(\boldsymbol\mu_j - \boldsymbol\mu_k)\T\bx = \norm{\boldsymbol\mu_j}^2 - \norm{\boldsymbol\mu_k}^2,$$
+            the perpendicular bisector of the segment joining them. Each cell is an intersection of half-spaces, hence
+            convex.</p>
+        </div>
+        <details class="proof" data-for="prop-voronoi">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: expand both distances.</strong>
+              $$\norm{\bx - \boldsymbol\mu_k}^2 \leq \norm{\bx - \boldsymbol\mu_j}^2
+              \iff \norm{\bx}^2 - 2\boldsymbol\mu_k\T\bx + \norm{\boldsymbol\mu_k}^2 \leq \norm{\bx}^2 - 2\boldsymbol\mu_j\T\bx + \norm{\boldsymbol\mu_j}^2 .$$</p>
+            <p><strong>Step 2: the quadratic terms cancel.</strong> Removing $\norm{\bx}^2$ from both sides,
+              $$2\,(\boldsymbol\mu_j - \boldsymbol\mu_k)\T\bx \leq \norm{\boldsymbol\mu_j}^2 - \norm{\boldsymbol\mu_k}^2,$$
+              a half-space, bounded by the stated hyperplane. It is orthogonal to $\boldsymbol\mu_j - \boldsymbol\mu_k$
+              and contains the midpoint $\frac12(\boldsymbol\mu_j + \boldsymbol\mu_k)$, so it is the perpendicular
+              bisector.</p>
+            <p><strong>Step 3: convexity.</strong> $R_k$ is the intersection of these half-spaces over $j \neq k$, and
+              an intersection of convex sets is convex.</p>
+          </div>
+        </details>
+        <p>So k-means always separates clusters by straight boundaries, and its clusters are convex. This is exactly
+          right for compact, roughly round groups of similar size, and wrong for curved or elongated ones.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="choosing-k">Choosing the number of clusters</h2>
+        <p>The number $K$ is not learned by the algorithm. And $J$ alone cannot choose it: more clusters always fit
+          better.</p>
+
+        <div class="env proposition" id="prop-wcss-decreasing">
+          <p>Let $J^\star(K)$ be the smallest WCSS achievable with $K$ clusters. Then
+            $J^\star(K + 1) \leq J^\star(K)$, and $J^\star(n) = 0$.</p>
+        </div>
+        <details class="proof" data-for="prop-wcss-decreasing">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Take an optimal solution with $K$ centroids and add one more centroid anywhere. Keeping the old
+              assignments gives the same $J$, and reassigning points to their nearest centroid can only lower it. So
+              $J^\star(K + 1) \leq J^\star(K)$. With $n$ clusters, put each point in its own cluster with itself as
+              centroid: $J = 0$.</p>
+          </div>
+        </details>
+
+        <p>Common criteria:</p>
+        <ul>
+          <li><strong>Elbow method.</strong> Plot $J^\star(K)$ against $K$. The curve decreases quickly while new
+            clusters split real groups, then flattens. Choose $K$ at the bend ("elbow"). Simple, but the bend is not
+            always clear.</li>
+          <li><strong>Silhouette score.</strong> Combines cohesion and separation (definition below). Choose the $K$
+            with the highest average silhouette.</li>
+          <li><strong>Davies–Bouldin index.</strong> With $\sigma_k$ the average distance of the points of cluster $k$
+            to $\boldsymbol\mu_k$,
+            $$\mathrm{DB} = \frac1K\sum_{k=1}^K \max_{j \neq k} \frac{\sigma_k + \sigma_j}{\norm{\boldsymbol\mu_k - \boldsymbol\mu_j}} .$$
+            Small values mean compact, well-separated clusters. Choose the $K$ that minimises it.</li>
+          <li><strong>The application.</strong> A business may want exactly four customer segments; an image may be
+            stored with 16 colours. Often the purpose of the clustering decides.</li>
+        </ul>
+
+        <div class="env definition" id="def-silhouette">
+          <p>For a point $\bx_i$ in cluster $C$, let $a(i)$ be its average distance to the other points of $C$, and
+            $b(i)$ the smallest average distance from $\bx_i$ to the points of another cluster. The
+            <strong>silhouette</strong> of $\bx_i$ is
+            $$s(i) = \frac{b(i) - a(i)}{\max\{a(i), b(i)\}} \in [-1, 1].$$
+            Values near $1$ mean $\bx_i$ is much closer to its own cluster than to the next one; values near $0$ mean it
+            lies between two clusters; negative values suggest it is in the wrong cluster. The
+            <strong>silhouette score</strong> is the average of $s(i)$ over all points.</p>
+        </div>
+
+        <figure class="viz viz--wide" data-viz="kmeans-k" id="fig-kmeans-k">
+          <div class="viz__stage"></div>
+          <figcaption>Choosing $K$. For each $K$ from 1 to 8, k-means is run from 10 k-means++ starts and the best
+            result is kept. Left: the WCSS as a fraction of its value for one cluster, and the silhouette score.
+            Right: the clustering for the selected $K$.
+            <strong>Try:</strong> (1) on the customer data, the WCSS curve has a clear elbow at $K = 3$ and the
+            silhouette peaks there; (2) on the digits scores, the three digits are recovered at $K = 3$; (3) on the
+            two moons, both criteria propose some $K$, but no choice of $K$ gives the two moons: the problem is the
+            straight boundaries, not $K$.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="practice">Applications and limitations</h2>
+        <h3 id="applications">Applications</h3>
+        <ul>
+          <li><strong>Market segmentation.</strong> Group customers with similar behaviour, then describe each group by
+            its centroid ("young, high spending").</li>
+          <li><strong>Vector quantisation and image compression.</strong> Cluster the colours of all pixels of an
+            image into $K$ centroids and replace each pixel by its centroid: the image is stored with $K$ colours.</li>
+          <li><strong>Document clustering.</strong> Represent documents as vectors and group them by topic.</li>
+          <li><strong>Preprocessing.</strong> Use the centroids as features or prototypes, or as a starting point for
+            more flexible models (for instance the mixtures of the extra section).</li>
+        </ul>
+
+        <h3 id="limitations">Limitations</h3>
+        <ul>
+          <li><strong>Round clusters of similar size.</strong> The boundaries are perpendicular bisectors between
+            centroids (<a class="ref" href="#prop-voronoi"></a>), so k-means prefers compact, round clusters of similar
+            extent. Elongated groups get cut across, and a small group next to a large one loses points to it
+            (try the corresponding datasets in <a class="ref" href="#fig-kmeans-lloyd"></a>).</li>
+          <li><strong>Non-convex shapes.</strong> Two moons or two concentric rings cannot be separated by straight
+            boundaries. Methods based on neighbourhoods or kernels are needed.</li>
+          <li><strong>Outliers.</strong> A centroid is a mean, so one extreme point pulls it away from its cluster
+            (<a class="ref" href="#exo-median"></a> shows a robust alternative).</li>
+          <li><strong>Scaling.</strong> Like PCA, k-means uses Euclidean distances: a feature measured in large units
+            dominates. Standardise features with different units.</li>
+          <li><strong>$K$ must be chosen,</strong> and the result depends on the initialisation.</li>
+        </ul>
+
+        <h3 id="pca-vs-kmeans">PCA and k-means</h3>
+        <p>Both methods summarise unlabelled data, in complementary ways.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col"></th><th scope="col">PCA</th><th scope="col">k-means</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Latent structure</th><td>continuous: a few coordinates</td><td>discrete: a group label</td></tr>
+              <tr><th scope="row">Summary of $\bx_i$</th><td>its projection $U_kU_k\T\bx_i$ onto a subspace</td><td>the centroid of its cluster</td></tr>
+              <tr><th scope="row">Objective</th><td>squared reconstruction error</td><td>squared distance to the centroid</td></tr>
+              <tr><th scope="row">Solution</th><td>exact (eigen-decomposition)</td><td>local minimum (Lloyd)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Both minimise a squared reconstruction error: PCA with points of a $k$-dimensional subspace, k-means with
+          only $K$ points. They are often combined. Running PCA first removes noisy, low-variance directions and makes
+          distances more meaningful and computation cheaper, as in the digits example of
+          <a class="ref" href="#fig-kmeans-k"></a>.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-steps">
+          <p>List the steps of the k-means algorithm in order. Describe what happens in the assignment and update
+            phases, and which quantity each of them minimises.</p>
+        </div>
+
+        <div class="env exercise" id="exo-1d">
+          <p>Run Lloyd's algorithm by hand on the six numbers $1, 2, 3, 8, 9, 15$ with $K = 2$, starting from the
+            centroids $\mu_1 = 1$, $\mu_2 = 2$. Give the clusters and $J$ after convergence. Is it the global minimum?
+            (There are only $2^5 - 1 = 31$ ways to split six sorted numbers into two non-empty groups, but you only need to
+            compare a few.)</p>
+        </div>
+
+        <div class="env exercise" id="exo-weighted">
+          <p>Each point $\bx_i$ has a weight $w_i > 0$ (for example, the number of customers with these exact values).
+            Derive the optimal centroid of a cluster for the weighted objective $\sum_{i \in C_k} w_i\norm{\bx_i - \boldsymbol\mu}^2$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-median">
+          <p>In one dimension, replace the squared distance by the absolute distance: minimise
+            $g(m) = \sum_{i \in C_k} |x_i - m|$. (a) Show that any median of the cluster minimises $g$.
+            (<em>Hint:</em> compute the slope of $g$ between two consecutive data points.) (b) For the cluster
+            $\{1, 2, 3, 4, 100\}$, compare the mean and the median. Which one is a better representative?</p>
+        </div>
+
+        <div class="env exercise" id="exo-bisector">
+          <p>Two centroids are $\boldsymbol\mu_1 = (0, 0)$ and $\boldsymbol\mu_2 = (2, 4)$. Find the equation of the
+            boundary between their Voronoi cells, and check that it passes through the midpoint and is orthogonal to
+            $\boldsymbol\mu_2 - \boldsymbol\mu_1$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-silhouette">
+          <p>Four points on a line, $0$ and $1$ in cluster A and $5$ and $6$ in cluster B. Compute the silhouette of
+            each point and the silhouette score. What happens to the score if the clusters move closer, to $0, 1$ and
+            $2, 3$?</p>
+        </div>
+
+        <div class="env exercise" id="exo-choose-k">
+          <p>Describe one quantitative and one qualitative way to choose $K$. What is the trade-off between a small and
+            a large $K$? Why can $J$ itself not be used to choose $K$?</p>
+        </div>
+
+        <div class="env exercise" id="exo-pca-kmeans">
+          <p>Compare the goals and outputs of PCA and k-means. When is PCA a useful preprocessing step before
+            k-means?</p>
+        </div>
+
+        <div class="env exercise" id="exo-three-clusters">
+          <p>A dataset consists of three well-separated, round clusters in $\R^3$. (a) What would the first two
+            principal components capture? (b) Explain why they often align with directions that separate the clusters,
+            although PCA does not know the clusters. (<em>Hint:</em> the spread between the cluster centres adds to the
+            variance.) (c) Describe a situation where PCA would hide the clusters (see the figure on variance and relevance
+            in <a href="05-pca.html#limitations">Chapter 5</a>).</p>
+        </div>
+
+        <div class="env exercise" id="exo-units">
+          <p>Customers are described by their yearly income in euros (from $20\,000$ to $120\,000$) and their age in
+            years (from $18$ to $80$). What will k-means find if the features are not standardised? Why?</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>k-means minimises the within-cluster sum of squares $J = \sum_k\sum_{i \in C_k}\norm{\bx_i - \boldsymbol\mu_k}^2$.</li>
+            <li>For fixed clusters the optimal centroid is the mean: the gradient $-2\sum_{i \in C_k}(\bx_i - \boldsymbol\mu)$
+              vanishes there, and a wrong centre costs an extra $n_k\norm{\bar\bx_k - \boldsymbol\mu}^2$.</li>
+            <li>For fixed centroids the optimal assignment is the nearest centroid.</li>
+            <li>Lloyd's algorithm alternates the two; $J$ never increases and the algorithm stops after finitely many
+              steps, at a local minimum. Use k-means++ and several restarts.</li>
+            <li>Clusters are Voronoi cells with straight boundaries: good for round, similar-sized groups; poor for
+              elongated, unequal or non-convex ones. Standardise features first.</li>
+            <li>Choose $K$ with the elbow, the silhouette, or the application, never with $J$ alone.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-prob">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-prob">Probabilistic view: Gaussian mixtures and EM</h2>
+          <p class="extra__intro">k-means makes hard decisions: each point belongs to exactly one cluster. A
+            probabilistic model replaces them by probabilities of membership. k-means then appears as a limiting case.</p>
+
+          <h3 id="extra-gmm">Gaussian mixture model</h3>
+          <p>Suppose each point is generated in two stages: first a hidden cluster label $z \in \{1, \dots, K\}$ with
+            probabilities $\pi_k = \P(z = k)$, then the point itself around the centre of that cluster,
+            $$\bx \mid z = k \ \sim\ \mathcal N\big(\boldsymbol\mu_k, \sigma^2 I_p\big).$$
+            Given a point, Bayes' rule gives the probability that it came from cluster $k$, its
+            <strong>responsibility</strong>
+            $$r_{k}(\bx) = \P(z = k \mid \bx) = \frac{\pi_k\exp\big(-\norm{\bx - \boldsymbol\mu_k}^2/2\sigma^2\big)}
+            {\sum_{j=1}^K \pi_j\exp\big(-\norm{\bx - \boldsymbol\mu_j}^2/2\sigma^2\big)}$$
+            (the Gaussian normalising constants are the same for all clusters and cancel).</p>
+
+          <div class="env proposition" id="prop-hard-limit">
+            <p>Suppose $\bx$ has a unique nearest centroid $\boldsymbol\mu_m$ and all $\pi_k > 0$. As $\sigma \to 0$,
+              $r_m(\bx) \to 1$ and $r_k(\bx) \to 0$ for $k \neq m$: the soft responsibilities become the hard k-means
+              assignment.</p>
+          </div>
+          <details class="proof" data-for="prop-hard-limit">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: divide by the nearest term.</strong> Write $d_k = \norm{\bx - \boldsymbol\mu_k}^2$.
+                Dividing numerator and denominator by $\pi_m e^{-d_m/2\sigma^2}$,
+                $$r_k(\bx) = \frac{(\pi_k/\pi_m)\,e^{-(d_k - d_m)/2\sigma^2}}{1 + \sum_{j \neq m}(\pi_j/\pi_m)\,e^{-(d_j - d_m)/2\sigma^2}} .$$</p>
+              <p><strong>Step 2: take the limit.</strong> For $j \neq m$, $d_j - d_m > 0$, so
+                $e^{-(d_j - d_m)/2\sigma^2} \to 0$ as $\sigma \to 0$. The denominator tends to $1$, the numerator to $0$
+                for $k \neq m$ and to $1$ for $k = m$.</p>
+            </div>
+          </details>
+
+          <h3 id="extra-em">The EM algorithm</h3>
+          <p>The parameters are fitted by maximum likelihood with the <strong>expectation–maximisation</strong> (EM)
+            algorithm, which mirrors Lloyd's two steps:</p>
+          <ul>
+            <li><strong>E-step</strong> (soft assignment): compute the responsibilities $r_{ik} = r_k(\bx_i)$ for the
+              current parameters.</li>
+            <li><strong>M-step</strong> (update): maximise the expected log-likelihood
+              $\sum_i\sum_k r_{ik}\log\big(\pi_k\,\mathcal N(\bx_i \mid \boldsymbol\mu_k, \sigma^2 I)\big)$ over the
+              parameters.</li>
+          </ul>
+
+          <div class="env proposition" id="prop-m-step">
+            <p>For fixed responsibilities, the M-step for the centres gives the weighted means
+              $$\boldsymbol\mu_k = \frac{\sum_{i=1}^n r_{ik}\,\bx_i}{\sum_{i=1}^n r_{ik}} .$$
+              With hard responsibilities ($r_{ik} = c_{ik}$) this is the k-means update.</p>
+          </div>
+          <details class="proof" data-for="prop-m-step">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: keep the terms that depend on $\boldsymbol\mu_k$.</strong> Since
+                $\log\mathcal N(\bx \mid \boldsymbol\mu, \sigma^2 I) = -\norm{\bx - \boldsymbol\mu}^2/2\sigma^2 + \text{const}$,
+                maximising over $\boldsymbol\mu_k$ means minimising
+                $$\sum_{i=1}^n r_{ik}\,\norm{\bx_i - \boldsymbol\mu_k}^2 .$$</p>
+              <p><strong>Step 2: set the gradient to zero.</strong> As in <a class="ref" href="#thm-centroid"></a>,
+                $$-2\sum_{i=1}^n r_{ik}(\bx_i - \boldsymbol\mu_k) = \mathbf 0
+                \quad\Longleftrightarrow\quad \boldsymbol\mu_k = \frac{\sum_i r_{ik}\,\bx_i}{\sum_i r_{ik}},$$
+                and the Hessian $2\sum_i r_{ik}\,I_p$ is positive definite.</p>
+            </div>
+          </details>
+
+          <p>So k-means is the "hard", zero-noise version of EM for a Gaussian mixture with equal spherical covariances.
+            Letting each cluster have its own covariance matrix $\Sigma_k$ gives elliptical clusters of different sizes
+            and orientations, which fixes the failures on elongated and unequal groups (though not on the two moons).
+            Each point also gets a probability of membership instead of a hard label, and the likelihood can be used to
+            compare different $K$.</p>
+
+          <div class="env exercise" id="exo-resp">
+            <p>One-dimensional mixture with $\pi_1 = \pi_2 = \frac12$, $\mu_1 = 0$ and $\mu_2 = 3$. Compute the
+              responsibilities of the point $x = 1$ for $\sigma = 1$ and for $\sigma = 0.3$. Which cluster would k-means
+              choose?</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

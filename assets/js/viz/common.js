@@ -22,6 +22,7 @@
       axis: col("--viz-axis"),
       text: col("--viz-text"),
       bg: col("--bg-soft"),
+      clusters: [1, 2, 3, 4, 5, 6].map((k) => col(`--viz-c${k}`)),
       font: (size = 12, weight = 500) => `${weight} ${size}px ${fontFamily}`,
     };
   };
@@ -320,6 +321,109 @@
       values: order.map((i) => Math.max(a[i][i], 0)),
       vectors: order.map((i) => v.map((row) => row[i])),
     };
+  };
+
+  /* ---------- axis helpers ---------- */
+  // "nice" tick values covering [lo, hi], about n of them
+  VIZ.ticks = function (lo, hi, n = 5) {
+    const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw);
+    const out = [];
+    for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+    return out;
+  };
+  // x/y limits with equal scale on both axes, containing all points (rows [x, y, …])
+  VIZ.equalLims = function (c, pad, pts, margin = 0.08) {
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const hx = ((x1 - x0) / 2) * (1 + 2 * margin) + 1e-6, hy = ((y1 - y0) / 2) * (1 + 2 * margin) + 1e-6;
+    const W = c.w - pad.l - pad.r, H = c.h - pad.t - pad.b, k = Math.min(W / (2 * hx), H / (2 * hy));
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    return { xlim: [cx - W / (2 * k), cx + W / (2 * k)], ylim: [cy - H / (2 * k), cy + H / (2 * k)] };
+  };
+
+  /* ---------- clustering data and k-means helpers ---------- */
+  VIZ.SHAPES = ["circle", "triangle", "square", "ring", "triangle", "circle"];
+
+  // Gaussian blobs: centres [[x, y], …], sds [[sx, sy], …], sizes [n, …] → rows [x, y, label]
+  VIZ.blobs = function (centres, sds, sizes, seed = 7) {
+    const r = VIZ.rng(seed), out = [];
+    centres.forEach(([cx, cy], k) => {
+      for (let i = 0; i < sizes[k]; i++) out.push([cx + sds[k][0] * r.normal(), cy + sds[k][1] * r.normal(), k]);
+    });
+    return out;
+  };
+
+  // scikit-learn style "two moons": rows [x, y, label]
+  VIZ.moons = function (n = 120, noise = 0.08, seed = 3) {
+    const r = VIZ.rng(seed), out = [], h = Math.floor(n / 2);
+    for (let i = 0; i < n; i++) {
+      const lab = i < h ? 0 : 1, t = Math.PI * ((i % h) / (h - 1));
+      const x = lab ? 1 - Math.cos(t) : Math.cos(t), y = lab ? 0.5 - Math.sin(t) : Math.sin(t);
+      out.push([x + noise * r.normal(), y + noise * r.normal(), lab]);
+    }
+    return out;
+  };
+
+  const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+  VIZ.KM = {
+    d2,
+    // index of the nearest centre
+    nearest: (x, mus) => { let best = 0, bd = Infinity; mus.forEach((m, k) => { const d = d2(x, m); if (d < bd) { bd = d; best = k; } }); return best; },
+    assign: (X, mus) => X.map((x) => VIZ.KM.nearest(x, mus)),
+    // centroid update; an empty cluster keeps its old centre
+    update: (X, lab, mus) => mus.map((m, k) => {
+      let sx = 0, sy = 0, c = 0;
+      X.forEach((x, i) => { if (lab[i] === k) { sx += x[0]; sy += x[1]; c++; } });
+      return c ? [sx / c, sy / c] : m.slice();
+    }),
+    wcss: (X, lab, mus) => X.reduce((s, x, i) => s + d2(x, mus[lab[i]]), 0),
+    initRandom: (X, K, r) => {
+      const idx = []; while (idx.length < K) { const i = Math.floor(r() * X.length); if (!idx.includes(i)) idx.push(i); }
+      return idx.map((i) => X[i].slice(0, 2));
+    },
+    // k-means++: next centre drawn with probability ∝ squared distance to the nearest chosen centre
+    initPlusPlus: (X, K, r) => {
+      const mus = [X[Math.floor(r() * X.length)].slice(0, 2)];
+      while (mus.length < K) {
+        const w = X.map((x) => Math.min(...mus.map((m) => d2(x, m))));
+        let u = r() * w.reduce((a, b) => a + b, 0), i = 0;
+        while (i < X.length - 1 && u > w[i]) { u -= w[i]; i++; }
+        mus.push(X[i].slice(0, 2));
+      }
+      return mus;
+    },
+    // full Lloyd run from given centres → { lab, mus, J, iters }
+    run: (X, mus, maxIt = 100) => {
+      let lab = VIZ.KM.assign(X, mus), it = 0;
+      for (; it < maxIt; it++) {
+        mus = VIZ.KM.update(X, lab, mus);
+        const nl = VIZ.KM.assign(X, mus);
+        if (nl.every((v, i) => v === lab[i])) { lab = nl; break; }
+        lab = nl;
+      }
+      return { lab, mus, J: VIZ.KM.wcss(X, lab, mus), iters: it + 1 };
+    },
+    // best of several k-means++ restarts
+    best: (X, K, restarts, r) => {
+      let best = null;
+      for (let s = 0; s < restarts; s++) { const res = VIZ.KM.run(X, VIZ.KM.initPlusPlus(X, K, r)); if (!best || res.J < best.J) best = res; }
+      return best;
+    },
+    // mean silhouette (Euclidean distances)
+    silhouette: (X, lab, K) => {
+      const n = X.length; let tot = 0;
+      for (let i = 0; i < n; i++) {
+        const sum = new Array(K).fill(0), cnt = new Array(K).fill(0);
+        for (let j = 0; j < n; j++) if (j !== i) { sum[lab[j]] += Math.sqrt(d2(X[i], X[j])); cnt[lab[j]]++; }
+        const own = lab[i];
+        if (!cnt[own]) continue; // singleton: s = 0
+        const a = sum[own] / cnt[own];
+        let b = Infinity; for (let k = 0; k < K; k++) if (k !== own && cnt[k]) b = Math.min(b, sum[k] / cnt[k]);
+        if (isFinite(b)) tot += (b - a) / Math.max(a, b);
+      }
+      return tot / n;
+    },
   };
 
   /* ---------- mounting & redraw ---------- */

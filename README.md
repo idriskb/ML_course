@@ -8,7 +8,6 @@ This is a plain static site with no build step. It works on GitHub Pages as-is a
 
 ```
 index.html                 Home: hero, how the notes work, course map
-syllabus.html              Syllabus (placeholders for now)
 chapters/
   _template.html           Copy this to start a new chapter
   00-style-guide.html      Every component, demonstrated on real content

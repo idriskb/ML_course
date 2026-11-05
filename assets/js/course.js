@@ -15,7 +15,8 @@ window.COURSE = {
   notesAuthor: "Nacho Molina",
   adaptedBy: "Idris Kouadri Boudjelthia",
 
-  // Chapters are grouped by `part` in the order they appear here.
+  // Chapters are grouped by `part` (module) in the order they appear here, and
+  // optionally by `sub` (a sub-heading inside the module, e.g. "Supervised").
   // status: "ready" (linked) | "planned" (shown as "Coming soon")
   // `sessions` = course sessions covered by the chapter.
   chapters: [
@@ -23,38 +24,44 @@ window.COURSE = {
       title: "How to read these notes",
       summary: "Notation, conventions, and a tour of every building block used in the course." },
 
-    { num: "1", slug: "01-learning-problem", part: "Module 1 · Supervised foundations", status: "ready", sessions: "1",
+    { num: "1", slug: "01-learning-problem", part: "Module 1 · Foundations: linear models", sub: "Supervised", status: "ready", sessions: "1",
       title: "Introduction & the learning problem",
       summary: "What machine learning is, its main paradigms, and the formal set-up: data, models, loss, risk. Overfitting and capacity." },
-    { num: "2", slug: "02-linear-regression", part: "Module 1 · Supervised foundations", status: "ready", sessions: "2–3",
+    { num: "2", slug: "02-linear-regression", part: "Module 1 · Foundations: linear models", sub: "Supervised", status: "ready", sessions: "2–3",
       title: "Linear regression",
       summary: "Least squares, normal equations and their geometry; gradient descent, SGD and regression metrics." },
-    { num: "3", slug: "03-regularization", part: "Module 1 · Supervised foundations", status: "ready", sessions: "4",
+    { num: "3", slug: "03-regularization", part: "Module 1 · Foundations: linear models", sub: "Supervised", status: "ready", sessions: "4",
       title: "Model performance & regularization",
       summary: "Train/validation/test, the bias–variance trade-off, ridge and lasso, cross-validation." },
-    { num: "4", slug: "04-logistic-regression", part: "Module 1 · Supervised foundations", status: "ready", sessions: "6–7",
+    { num: "4", slug: "04-logistic-regression", part: "Module 1 · Foundations: linear models", sub: "Supervised", status: "ready", sessions: "6–7",
       title: "Logistic regression",
       summary: "The sigmoid model, decision boundaries, cross-entropy, softmax, and classification metrics (ROC, AUC)." },
 
-    { num: "5", slug: "05-pca", part: "Module 2 · Unsupervised learning", status: "ready", sessions: "9",
+    { num: "5", slug: "05-pca", part: "Module 1 · Foundations: linear models", sub: "Unsupervised", status: "ready", sessions: "9",
       title: "Dimensionality reduction: PCA",
       summary: "Variance maximisation, the eigen-decomposition and SVD, explained variance." },
-    { num: "6", slug: "06-kmeans", part: "Module 2 · Unsupervised learning", status: "ready", sessions: "10",
+    { num: "6", slug: "06-kmeans", part: "Module 1 · Foundations: linear models", sub: "Unsupervised", status: "ready", sessions: "10",
       title: "Clustering: k-means",
       summary: "The k-means objective, Lloyd's algorithm, k-means++, choosing k." },
 
-    { num: "7", slug: "07-knn", part: "Module 3 · Nonlinear & non-parametric models", status: "ready", sessions: "14",
+    { num: "7", slug: "07-knn", part: "Module 2 · Nonlinear & non-parametric methods", status: "ready", sessions: "14",
       title: "k-nearest neighbours",
       summary: "Distance-based prediction for regression and classification; model complexity and the curse of dimensionality." },
-    { num: "8", slug: "08-trees", part: "Module 3 · Nonlinear & non-parametric models", status: "ready", sessions: "16–17",
+    { num: "8", slug: "08-trees", part: "Module 2 · Nonlinear & non-parametric methods", status: "ready", sessions: "16–17",
       title: "Tree-based methods",
       summary: "Decision trees, splitting criteria and pruning; bagging, random forests and gradient boosting." },
-    { num: "9", slug: "09-kernels", part: "Module 3 · Nonlinear & non-parametric models", status: "ready", sessions: "19–20",
+    { num: "9", slug: "09-kernels", part: "Module 2 · Nonlinear & non-parametric methods", status: "ready", sessions: "19–20",
       title: "Kernel methods",
       summary: "Feature maps, the dual of ridge regression, the kernel trick, kernel PCA." },
-    { num: "10", slug: "10-neural-networks", part: "Module 3 · Nonlinear & non-parametric models", status: "planned", sessions: "22–24",
-      title: "Neural networks",
-      summary: "Feedforward networks, universal approximation, backpropagation, training and regularization, autoencoders." }
+    { num: "10", slug: "10-neural-networks", part: "Module 3 · Neural networks", status: "planned", sessions: "22",
+      title: "Neural networks & backpropagation",
+      summary: "Feedforward networks, activations and universal approximation; computing gradients by backpropagation." },
+    { num: "11", slug: "11-training-networks", part: "Module 3 · Neural networks", status: "planned", sessions: "23",
+      title: "Training neural networks",
+      summary: "Optimisation and regularization for networks with many parameters." },
+    { num: "12", slug: "12-autoencoders", part: "Module 3 · Neural networks", status: "planned", sessions: "24",
+      title: "Autoencoders",
+      summary: "Learning compressed representations without labels; the link with PCA." }
   ],
 
   // KaTeX macros available on every page: write \R, \E, \argmin, ... in math.

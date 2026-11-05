@@ -251,10 +251,18 @@
         <details class="proof" data-for="prop-kernel-psd">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>Symmetry: $k(\bx_i, \bx_j) = \phi(\bx_i)\T\phi(\bx_j) = \phi(\bx_j)\T\phi(\bx_i)$. For any
-              $\mathbf v \in \R^N$,
-              $$\mathbf v\T K\mathbf v = \sum_{i,j} v_i v_j\,\phi(\bx_i)\T\phi(\bx_j)
-              = \Big(\sum_i v_i\phi(\bx_i)\Big)\T\Big(\sum_j v_j\phi(\bx_j)\Big) = \Big\lVert\sum_i v_i\phi(\bx_i)\Big\rVert^2 \geq 0 .$$</p>
+            <p><strong>Step 1: symmetry.</strong> The inner product is symmetric, so
+              $$K_{ij} = k(\bx_i, \bx_j) = \phi(\bx_i)\T\phi(\bx_j) = \phi(\bx_j)\T\phi(\bx_i) = K_{ji} .$$</p>
+            <p><strong>Step 2: expand the quadratic form.</strong> Take any $\mathbf v \in \R^N$. Then
+              $$\mathbf v\T K\mathbf v = \sum_{i=1}^N\sum_{j=1}^N v_i v_j\,K_{ij}
+              = \sum_{i=1}^N\sum_{j=1}^N v_i v_j\,\phi(\bx_i)\T\phi(\bx_j) .$$</p>
+            <p><strong>Step 3: factor the double sum.</strong> Set $\mathbf a = \sum_{i=1}^N v_i\,\phi(\bx_i)$. The
+              double sum splits into an inner product of $\mathbf a$ with itself:
+              $$\sum_{i,j} v_i v_j\,\phi(\bx_i)\T\phi(\bx_j)
+              = \Big(\sum_{i} v_i\phi(\bx_i)\Big)\T\Big(\sum_{j} v_j\phi(\bx_j)\Big) = \mathbf a\T\mathbf a .$$</p>
+            <p><strong>Step 4: conclude.</strong>
+              $$\mathbf v\T K\mathbf v = \norm{\mathbf a}^2 \geq 0 \quad\text{for every } \mathbf v ,$$
+              so $K$ is positive semidefinite.</p>
           </div>
         </details>
         <p>The converse is <strong>Mercer's theorem</strong> (stated without proof): a symmetric function $k$ whose kernel

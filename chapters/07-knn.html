@@ -32,7 +32,7 @@
         <header class="chapter-head">
           <p class="eyebrow"></p>
           <h1>k-nearest neighbours</h1>
-          <p class="lede">This chapter opens the last module of the course: non-linear and non-parametric models. We
+          <p class="lede">This chapter opens Module 2 of the course: non-linear and non-parametric methods. We
             first ask what linear models cannot do and what it means to learn without a fixed formula. Then we meet
             the simplest method of this kind: to predict at a new point, look at the training points closest to it and
             copy what they do. Simple as it is, k-NN shows every theme of the module: flexibility, the
@@ -57,7 +57,7 @@
 
         <!-- ============================================================ -->
         <h2 id="beyond-linear">Beyond global parametric models</h2>
-        <p>Every supervised model of Modules 1 and 2 had the same shape. We chose a family of functions with a
+        <p>Every supervised model of Module 1 had the same shape. We chose a family of functions with a
           <em>fixed</em> number of parameters,
           $$f_\theta(\bx) = \bx\T\theta \quad\text{(linear regression)}, \qquad
           \P(y = 1 \mid \bx) = \sigma(\bx\T\theta) \quad\text{(logistic regression)},$$
@@ -108,7 +108,7 @@
 
         <div class="table-wrap">
           <table>
-            <thead><tr><th scope="col"></th><th scope="col">Parametric (Modules 1–2)</th><th scope="col">Non-parametric (Module 3)</th></tr></thead>
+            <thead><tr><th scope="col"></th><th scope="col">Parametric (Module 1)</th><th scope="col">Non-parametric (Module 2)</th></tr></thead>
             <tbody>
               <tr><th scope="row">Model</th><td>a formula with fixed parameters $\theta$</td><td>shape learned from the data</td></tr>
               <tr><th scope="row">Complexity</th><td>fixed by the number of parameters</td><td>can grow with $n$</td></tr>
@@ -129,7 +129,8 @@
           </div>
         </div>
 
-        <p>The four chapters of this module give four ways of building a flexible predictor:</p>
+        <p>The three chapters of this module give three ways of building a flexible predictor, and Module 3 adds a
+          fourth:</p>
         <ul>
           <li><strong>k-nearest neighbours</strong> (this chapter): average the outputs of the closest training
             points;</li>
@@ -137,8 +138,8 @@
             questions;</li>
           <li><strong>kernel methods</strong>: weigh training points by a similarity, or equivalently use implicit,
             possibly infinite, feature maps;</li>
-          <li><strong>neural networks</strong>: learn the features themselves (these are parametric, but with so many
-            parameters that they behave like flexible models).</li>
+          <li><strong>neural networks</strong> (Module 3): learn the features themselves. They are parametric, but
+            with so many parameters that they behave like flexible models.</li>
         </ul>
 
         <figure class="viz viz--wide" data-viz="knn-regression" id="fig-knn-regression">

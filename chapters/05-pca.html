@@ -330,15 +330,22 @@
         <details class="proof" data-for="prop-uncorrelated">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>The scores are centred (as in <a class="ref" href="#lem-proj-var"></a>), and
-              $$\frac1n\sum_{i=1}^n \bz_i\bz_i\T = U_k\T\Big(\frac1n\sum_{i=1}^n \bx_i\bx_i\T\Big)U_k = U_k\T\Sigma\, U_k .$$
-              The $(j, l)$ entry is $\bu_j\T\Sigma\bu_l = \lambda_l\,\bu_j\T\bu_l = \lambda_l\,\delta_{jl}$.</p>
+            <p><strong>Step 1: the scores are centred.</strong> Since the data are centred
+              (as in <a class="ref" href="#lem-proj-var"></a>),
+              $$\frac1n\sum_{i=1}^n \bz_i = U_k\T\underbrace{\Big(\frac1n\sum_{i=1}^n \bx_i\Big)}_{=\ \mathbf 0} = \mathbf 0 ,$$
+              so the covariance matrix of the scores is $\frac1n\sum_{i} \bz_i\bz_i\T$.</p>
+            <p><strong>Step 2: write it in terms of $\Sigma$.</strong> Substitute $\bz_i = U_k\T\bx_i$ and take $U_k$
+              out of the sum:
+              $$\frac1n\sum_{i=1}^n \bz_i\bz_i\T = \frac1n\sum_{i=1}^n U_k\T\bx_i\bx_i\T U_k
+              = U_k\T\Big(\frac1n\sum_{i=1}^n \bx_i\bx_i\T\Big)U_k = U_k\T\Sigma\, U_k . \tag{1}$$</p>
+            <p><strong>Step 3: compute each entry.</strong> The $(j, l)$ entry of (1) is $\bu_j\T\Sigma\bu_l$. Use
+              $\Sigma\bu_l = \lambda_l\bu_l$ and the orthonormality of the eigenvectors:
+              $$\bu_j\T\Sigma\bu_l = \lambda_l\,\underbrace{\bu_j\T\bu_l}_{=\ \delta_{jl}} = \lambda_l\,\delta_{jl} .$$</p>
+            <p><strong>Step 4: conclude.</strong> The off-diagonal entries ($j \neq l$) vanish, so the scores are
+              uncorrelated, and the diagonal entries are the eigenvalues:
+              $$\frac1n\sum_{i=1}^n \bz_i\bz_i\T = \operatorname{diag}(\lambda_1, \dots, \lambda_k) = \Lambda_k .$$</p>
           </div>
         </details>
-
-        <p>Geometrically, PCA <em>rotates</em> the coordinate system so that its axes line up with the natural axes
-          of the cloud, ordered from the most to the least spread. In the new coordinates the features are
-          uncorrelated.</p>
 
         <p>Geometrically, PCA <em>rotates</em> the coordinate system so that its axes line up with the natural axes
           of the cloud, ordered from the most to the least spread. In the new coordinates the features are

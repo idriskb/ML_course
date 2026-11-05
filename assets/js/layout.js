@@ -40,6 +40,18 @@
   }
   window.COURSE.groupByPart = groupByPart;
 
+  // Split one part's chapters into runs that share the same `sub` heading
+  // (sub is "" for chapters without one).
+  function groupBySub(chapters) {
+    const runs = [];
+    chapters.forEach((c) => {
+      const sub = c.sub || "";
+      if (!runs.length || runs[runs.length - 1][0] !== sub) runs.push([sub, []]);
+      runs[runs.length - 1][1].push(c);
+    });
+    return runs;
+  }
+
   /* ---------------- Theme ---------------- */
   function theme() {
     return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
@@ -115,18 +127,23 @@
       <a class="sidebar__home" href="${ROOT}index.html">← Course home</a>
 `;
 
-    groupByPart(C.chapters).forEach(([part, chapters], i) => {
-      html += `<p class="sidebar__part" id="sb-part-${i}">${esc(part)}</p><ol aria-labelledby="sb-part-${i}">`;
-      chapters.forEach((c) => {
-        const inner = `<span class="sidebar__num">${esc(c.num)}</span>`;
-        if (c.status === "ready") {
-          const cur = current && c.slug === current.slug ? ' aria-current="page"' : "";
-          html += `<li><a class="sidebar__link" href="${chapterHref(c)}"${cur}>${inner}<span>${esc(c.title)}</span></a></li>`;
-        } else {
-          html += `<li><span class="sidebar__link is-planned">${inner}<span>${esc(c.title)}<span class="sidebar__soon">Coming soon</span></span></span></li>`;
-        }
+    groupByPart(C.chapters).forEach(([part, partChapters], i) => {
+      html += `<p class="sidebar__part" id="sb-part-${i}">${esc(part)}</p>`;
+      groupBySub(partChapters).forEach(([sub, chapters], j) => {
+        const label = sub ? `sb-part-${i} sb-sub-${i}-${j}` : `sb-part-${i}`;
+        if (sub) html += `<p class="sidebar__sub" id="sb-sub-${i}-${j}">${esc(sub)}</p>`;
+        html += `<ol aria-labelledby="${label}">`;
+        chapters.forEach((c) => {
+          const inner = `<span class="sidebar__num">${esc(c.num)}</span>`;
+          if (c.status === "ready") {
+            const cur = current && c.slug === current.slug ? ' aria-current="page"' : "";
+            html += `<li><a class="sidebar__link" href="${chapterHref(c)}"${cur}>${inner}<span>${esc(c.title)}</span></a></li>`;
+          } else {
+            html += `<li><span class="sidebar__link is-planned">${inner}<span>${esc(c.title)}<span class="sidebar__soon">Coming soon</span></span></span></li>`;
+          }
+        });
+        html += "</ol>";
       });
-      html += "</ol>";
     });
     nav.innerHTML = html;
   }
@@ -171,22 +188,26 @@
     let html = "";
     groupByPart(C.chapters).forEach(([part, chapters], i) => {
       html += `<section class="part" aria-labelledby="part-${i}">
-        <h3 class="part__title" id="part-${i}">${esc(part)} <small>${chapters.length} chapter${chapters.length > 1 ? "s" : ""}</small></h3>
-        <ul class="cards">`;
-      chapters.forEach((c) => {
-        const ready = c.status === "ready";
-        const inner = `
-          <span class="card__num">CHAPTER ${esc(c.num)}</span>
-          <span class="card__title">${esc(c.title)}</span>
-          <span class="card__summary">${esc(c.summary || "")}</span>
-          <span class="card__foot">${ready
-            ? `<span class="badge">${check} Available</span>`
-            : '<span class="badge badge--planned">Coming soon</span>'}</span>`;
-        html += ready
-          ? `<li><a class="card" href="${chapterHref(c)}">${inner}</a></li>`
-          : `<li><div class="card is-planned">${inner}</div></li>`;
+        <h3 class="part__title" id="part-${i}">${esc(part)} <small>${chapters.length} chapter${chapters.length > 1 ? "s" : ""}</small></h3>`;
+      groupBySub(chapters).forEach(([sub, subChapters]) => {
+        if (sub) html += `<h4 class="part__sub">${esc(sub)}</h4>`;
+        html += '<ul class="cards">';
+        subChapters.forEach((c) => {
+          const ready = c.status === "ready";
+          const inner = `
+            <span class="card__num">CHAPTER ${esc(c.num)}</span>
+            <span class="card__title">${esc(c.title)}</span>
+            <span class="card__summary">${esc(c.summary || "")}</span>
+            <span class="card__foot">${ready
+              ? `<span class="badge">${check} Available</span>`
+              : '<span class="badge badge--planned">Coming soon</span>'}</span>`;
+          html += ready
+            ? `<li><a class="card" href="${chapterHref(c)}">${inner}</a></li>`
+            : `<li><div class="card is-planned">${inner}</div></li>`;
+        });
+        html += "</ul>";
       });
-      html += "</ul></section>";
+      html += "</section>";
     });
     mount.innerHTML = html;
   }

@@ -1,72 +1,82 @@
-# Machine Learning — course website
+# Machine Learning
 
-Course notes for *Machine Learning* (Bachelor in Applied Mathematics), based on the lecture notes by
-Nacho Molina, with adjustments by Idris Kouadri Boudjelthia.
-This is a plain static site with no build step. It works on GitHub Pages as-is and can be opened locally.
+Course notes for **Machine Learning**, Bachelor in Applied Mathematics, academic year 2026–27.
+Based on the lecture notes by Nacho Molina, with adjustments by Idris Kouadri Boudjelthia.
 
-## Structure
+## About the course
 
-```
-index.html                 Home: hero, how the notes work, course map
-chapters/
-  _template.html           Copy this to start a new chapter
-  00-style-guide.html      Every component, demonstrated on real content
-assets/
-  css/tokens.css           Design tokens (colours, fonts)
-  css/main.css             Layout, typography, components, dark theme
-  js/course.js             ← course config: chapter list, KaTeX macros
-  js/layout.js             Builds header/sidebar/TOC, numbering, proofs, math
-  js/viz/*.js              One file per interactive visualization
-```
+This course covers the mathematics behind learning from data. Each method is introduced as a mathematical
+object: we state the model and the objective it minimises, derive the algorithm that solves it, and prove its
+main properties. We then look at how it behaves on real data.
 
-## Preview locally
+The notes are written like a mathematics text. Definitions, theorems and examples are numbered, and every proof
+is complete. Proofs are collapsed by default and open one step at a time, so you can try each argument yourself
+before reading it. Interactive figures sit next to the formal statements: move a slider, run an algorithm step
+by step, and watch the mathematics respond.
+
+## Contents
+
+| # | Chapter | Sessions | Topics |
+|---|---|---|---|
+| 0 | How to read these notes | | Notation, conventions, and how the notes are organised |
+| | **Module 1 · Foundations: linear models** | | |
+| | *Supervised* | | |
+| 1 | Introduction & the learning problem | 1 | Paradigms of ML; data, models, loss and risk; overfitting and capacity |
+| 2 | Linear regression | 2–3 | Least squares, normal equations and their geometry; gradient descent, SGD; regression metrics |
+| 3 | Model performance & regularization | 4 | Train/validation/test, bias–variance trade-off, ridge and lasso, cross-validation |
+| 4 | Logistic regression | 6–7 | Sigmoid model, decision boundaries, cross-entropy, softmax; ROC and AUC |
+| | *Unsupervised* | | |
+| 5 | Dimensionality reduction: PCA | 9 | Variance maximisation, eigen-decomposition and SVD, explained variance |
+| 6 | Clustering: k-means | 10 | The k-means objective, Lloyd's algorithm, k-means++, choosing k |
+| | **Module 2 · Nonlinear & non-parametric methods** | | |
+| 7 | k-nearest neighbours | 14 | Distance-based prediction, model complexity, the curse of dimensionality |
+| 8 | Tree-based methods | 16–17 | Decision trees, splitting and pruning; bagging, random forests, gradient boosting |
+| 9 | Kernel methods | 19–20 | Feature maps, dual ridge regression, the kernel trick, kernel PCA |
+| | **Module 3 · Neural networks** *(coming soon)* | | |
+| 10 | Neural networks & backpropagation | 22 | Feedforward networks, activations, universal approximation, backpropagation |
+| 11 | Training neural networks | 23 | Optimisation and regularization for networks with many parameters |
+| 12 | Autoencoders | 24 | Learning compressed representations without labels; the link with PCA |
+
+Module 1 builds the core ideas on linear models: a fixed set of parameters fitted by minimising a loss.
+Module 2 drops that assumption and lets the model's complexity grow with the data. Module 3 returns to
+parametric models, now non-linear and with very many parameters. Each module includes unsupervised
+methods: PCA and k-means, kernel PCA, and autoencoders.
+
+Chapters are released over the term.
+
+## Background
+
+You should be comfortable with:
+
+- **Linear algebra:** matrices, rank, eigenvalues and eigenvectors, orthogonal projections.
+- **Multivariable calculus:** gradients, Hessians, minimising a function of several variables.
+- **Basic probability and statistics:** expectation, variance, covariance.
+- **Python:** enough to read and run short NumPy and scikit-learn snippets.
+
+## Datasets
+
+The labs use standard scikit-learn datasets, one for each type of problem:
+
+- **House prices** (regression)
+- **Breast cancer, malignant vs benign** (binary classification)
+- **Two moons** (non-linear classification and clustering)
+- **Handwritten digits** (PCA and clustering)
+
+The interactive figures use small synthetic datasets, so each idea can be seen clearly.
+
+## Extra material
+
+Some chapters end with a section marked *Extra material · not examined this year*. It contains the
+probabilistic interpretations of the methods (maximum likelihood, Bayesian views). This material is optional.
+
+## Reading the notes
+
+The notes are a static website. Open the published site, or run it locally from this folder:
 
 ```bash
 python3 -m http.server 8000
-# open http://localhost:8000
+# then open http://localhost:8000
 ```
 
-## Add a chapter
-
-1. Copy `chapters/_template.html` to `chapters/02-linear-regression.html`.
-2. Set `data-chapter="02-linear-regression"` on `<body>`.
-3. In `assets/js/course.js`, set that chapter's `status` to `"ready"`.
-
-The sidebar, home-page card, section numbers, theorem numbers, table of contents and prev/next links all update automatically.
-
-## Writing cheat sheet
-
-| What | Markup |
-|---|---|
-| Inline / display math | `$...$`, `$$...$$` (KaTeX; macros like `\R`, `\E`, `\norm{x}` live in `course.js`) |
-| Numbered equation | `$$ ... \tag{2.1} $$` |
-| Environment | `<div class="env theorem" id="thm-x" data-name="Optional name">…</div>`. Types: `definition theorem lemma proposition corollary example exercise remark` |
-| Proof | `<details class="proof" data-for="thm-x"><summary>Proof</summary><div class="proof__body">…</div></details>` (add `open` to show it expanded) |
-| Exercise solution | same as proof, with `class="solution"` and `solution__body` |
-| Cross-reference | `<a class="ref" href="#thm-x"></a>` → "Theorem 2.3" (also works for figures and sections) |
-| Step-by-step derivation | `<div class="derivation" data-title="…"><ol class="derivation__steps"><li class="step">…</li></ol></div>` |
-| Callouts | `<div class="callout intuition">` / `<div class="callout pitfall">` |
-| Objectives / takeaways | `<section class="box objectives">` / `<section class="box takeaways">` |
-| Static figure | `<figure class="numbered" id="fig-x">…<figcaption>…</figcaption></figure>` |
-| Interactive figure | `<figure class="viz" data-viz="name"><div class="viz__stage"></div><figcaption>…</figcaption></figure>` + `<script defer src="../assets/js/viz/name.js">` |
-| Code | `<div class="code" data-lang="python"><pre><code>…</code></pre></div>` |
-
-Writing `<` inside math confuses the HTML parser, so use `\lt` instead.
-
-## Writing a new visualization
-
-Use `assets/js/viz/gradient-descent.js` as the pattern:
-
-- Mount on `[data-viz="name"]`.
-- Read colours from CSS variables (`--viz-curve`, `--viz-path`, …) at draw time.
-- Redraw on the `themechange` event and on resize.
-- Use labelled native `<input>`/`<button>` controls so everything works from the keyboard.
-- Give the canvas a `role="img"` and an `aria-label` describing the plot.
-
-## Publish on GitHub Pages
-
-1. Create a repository and push this folder.
-2. Go to **Settings → Pages → Build and deployment**, set **Source: Deploy from a branch**, then choose `main` and `/ (root)`.
-3. The site appears at `https://<user>.github.io/<repo>/`. All links are relative, so the sub-path works.
-
-`.nojekyll` is included so GitHub serves files as-is.
+Each chapter page has a table of contents, an "Expand all proofs" button, and a light/dark theme toggle. When you
+print a page, every proof and step is shown in full.

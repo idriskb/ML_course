@@ -377,10 +377,21 @@ print(km.inertia_)                  # the objective J (WCSS)</code></pre>
         <details class="proof" data-for="prop-wcss-decreasing">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>Take an optimal solution with $K$ centroids and add one more centroid anywhere. Keeping the old
-              assignments gives the same $J$, and reassigning points to their nearest centroid can only lower it. So
-              $J^\star(K + 1) \leq J^\star(K)$. With $n$ clusters, put each point in its own cluster with itself as
-              centroid: $J = 0$.</p>
+            <p><strong>Step 1: start from an optimal $K$-clustering.</strong> Let
+              $\boldsymbol\mu_1, \dots, \boldsymbol\mu_K$ and $c_{ik}$ be centroids and assignments that attain
+              $$J = \sum_{i=1}^n\sum_{k=1}^K c_{ik}\,\norm{\bx_i - \boldsymbol\mu_k}^2 = J^\star(K) .$$</p>
+            <p><strong>Step 2: add a centroid without changing $J$.</strong> Place a new centroid
+              $\boldsymbol\mu_{K+1}$ anywhere and keep every point in its old cluster ($c_{i,K+1} = 0$ for all $i$).
+              The new term contributes nothing:
+              $$J' = J^\star(K) + \underbrace{\sum_{i=1}^n c_{i,K+1}\,\norm{\bx_i - \boldsymbol\mu_{K+1}}^2}_{=\ 0} = J^\star(K) .$$</p>
+            <p><strong>Step 3: reassign to the nearest centroid.</strong> Moving each point to its nearest of the
+              $K + 1$ centroids can only shrink its term, giving $J'' \leq J'$. The best $(K+1)$-clustering does at
+              least as well:
+              $$J^\star(K + 1) \leq J'' \leq J' = J^\star(K) .$$</p>
+            <p><strong>Step 4: the case $K = n$.</strong> Put each point in its own cluster, with itself as centroid
+              ($\boldsymbol\mu_i = \bx_i$):
+              $$J = \sum_{i=1}^n \underbrace{\norm{\bx_i - \bx_i}^2}_{=\ 0} = 0 .$$
+              Since $J \geq 0$ always, $J^\star(n) = 0$.</p>
           </div>
         </details>
 

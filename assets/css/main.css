@@ -695,3 +695,9 @@ a.card:hover { border-color: var(--heading); box-shadow: var(--shadow); color: v
 /* PCA digits figure: short strip of small images above the two panels */
 .viz__canvas--strip { height: 150px; margin-bottom: 1rem; }
 @media (max-width: 560px) { .viz__canvas--strip { height: 110px; } }
+
+/* Tree figure: the tree written as rules */
+.viz__rules { margin-top: .75rem; font: 500 .875rem/1.5 var(--font-ui); }
+.viz__rules ol { margin: .25rem 0 0; padding-left: 1.5rem; }
+.viz__rules li { margin: .15rem 0; }
+.viz__muted { color: var(--text-muted); }

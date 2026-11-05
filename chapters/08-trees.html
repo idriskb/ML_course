@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tree-based methods — Machine Learning</title>
+  <meta name="description" content="Decision trees for regression and classification, splitting criteria, depth, leaf size and pruning; ensembles: bagging, random forests, out-of-bag error, variable importance, and gradient boosting.">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/tree-lib.js"></script>
+  <script defer src="../assets/js/viz/tree-split.js"></script>
+  <script defer src="../assets/js/viz/tree-grow.js"></script>
+  <script defer src="../assets/js/viz/tree-forest.js"></script>
+  <script defer src="../assets/js/viz/tree-boost.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="08-trees">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Tree-based methods</h1>
+          <p class="lede">k-NN predicted with regions defined implicitly by distances. Decision trees learn the regions
+            explicitly, by asking a sequence of simple yes/no questions about the features. A single tree is easy to
+            read but unstable. Averaging many trees (bagging, random forests) or adding them one after the other
+            (boosting) turns it into some of the most accurate predictors for tabular data.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>Describe a decision tree as a recursive partition of the input space, and derive its leaf predictions.</li>
+            <li>Compute impurity measures (variance, Gini, entropy) and choose a split by hand.</li>
+            <li>Control the complexity of a tree with its depth, leaf size and cost-complexity pruning.</li>
+            <li>Explain why averaging reduces variance, and how bagging and random forests exploit it; use the
+              out-of-bag error and variable importance.</li>
+            <li>Describe gradient boosting as gradient descent in function space, and compare it with random forests.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="motivation">Why trees?</h2>
+        <p>Much real data is <strong>tabular</strong>: each row is an individual (a customer, a patient, a house), each
+          column a feature, often of mixed types (age, income, country, education level). For such data we would like a
+          model that</p>
+        <ul>
+          <li>captures non-linear effects and <strong>interactions</strong> ("young <em>and</em> high income")
+            without hand-crafted features;</li>
+          <li>does not depend on the units of the features;</li>
+          <li>can be explained as rules.</li>
+        </ul>
+        <p>Decision trees do all three. Like k-NN, they predict with a constant in each region of the input space. Unlike
+          k-NN, the regions are <em>learned</em>: they are boxes chosen by the data, and they are described by a few
+          questions of the form "is feature $j$ at most $t$?".</p>
+
+        <figure class="numbered diagram" id="fig-tree-diagram">
+          <svg viewBox="0 0 680 260" role="img" aria-label="Left: a decision tree. The root asks whether size is at most 5 millimetres. If no, the leaf R3 predicts malignant. If yes, a second node asks whether texture is at most 20: yes leads to leaf R1, benign; no leads to leaf R2, malignant. Right: the same tree as three rectangles in the size-texture plane, split by a vertical line at size 5 and, on the left half only, a horizontal line at texture 20.">
+            <rect class="d-panel" x="95" y="12" width="140" height="34" rx="6"/>
+            <text class="d-text" x="165" y="34" text-anchor="middle" font-weight="700">size ≤ 5 mm ?</text>
+            <rect class="d-panel" x="10" y="102" width="140" height="34" rx="6"/>
+            <text class="d-text" x="80" y="124" text-anchor="middle" font-weight="700">texture ≤ 20 ?</text>
+            <rect class="d-b" opacity="0.25" x="200" y="102" width="120" height="34" rx="17"/>
+            <text class="d-text" x="260" y="124" text-anchor="middle">R₃: malignant</text>
+            <rect class="d-a" opacity="0.25" x="0" y="192" width="104" height="34" rx="17"/>
+            <text class="d-text" x="52" y="214" text-anchor="middle">R₁: benign</text>
+            <rect class="d-b" opacity="0.25" x="112" y="192" width="120" height="34" rx="17"/>
+            <text class="d-text" x="172" y="214" text-anchor="middle">R₂: malignant</text>
+            <line class="d-ink" stroke-width="1.5" x1="150" y1="46" x2="85" y2="102"/>
+            <line class="d-ink" stroke-width="1.5" x1="180" y1="46" x2="255" y2="102"/>
+            <line class="d-ink" stroke-width="1.5" x1="65" y1="136" x2="52" y2="192"/>
+            <line class="d-ink" stroke-width="1.5" x1="95" y1="136" x2="168" y2="192"/>
+            <text class="d-label" x="100" y="72">yes</text><text class="d-label" x="222" y="72">no</text>
+            <text class="d-label" x="36" y="168">yes</text><text class="d-label" x="138" y="168">no</text>
+
+            <rect class="d-a" opacity="0.2" x="400" y="120" width="130" height="100"/>
+            <rect class="d-b" opacity="0.2" x="400" y="20" width="130" height="100"/>
+            <rect class="d-b" opacity="0.2" x="530" y="20" width="130" height="200"/>
+            <rect class="d-muted" stroke-width="1.5" x="400" y="20" width="260" height="200"/>
+            <line class="d-ink" stroke-width="2" x1="530" y1="20" x2="530" y2="220"/>
+            <line class="d-ink" stroke-width="2" x1="400" y1="120" x2="530" y2="120"/>
+            <text class="d-text" x="465" y="175" text-anchor="middle" font-weight="700">R₁</text>
+            <text class="d-text" x="465" y="75" text-anchor="middle" font-weight="700">R₂</text>
+            <text class="d-text" x="595" y="125" text-anchor="middle" font-weight="700">R₃</text>
+            <text class="d-label" x="400" y="238" text-anchor="middle">0</text>
+            <text class="d-label" x="530" y="238" text-anchor="middle">5</text>
+            <text class="d-label" x="660" y="238" text-anchor="middle">10</text>
+            <text class="d-label" x="530" y="256" text-anchor="middle">size (mm)</text>
+            <text class="d-label" x="392" y="224" text-anchor="end">0</text>
+            <text class="d-label" x="392" y="124" text-anchor="end">20</text>
+            <text class="d-label" x="392" y="24" text-anchor="end">40</text>
+            <text class="d-label" x="372" y="124" text-anchor="middle" transform="rotate(-90 372 124)">texture</text>
+          </svg>
+          <figcaption>A decision tree (left) and the partition it defines (right). Each internal node tests one feature
+            against a threshold; each leaf is a rectangular region $R_m$ with a constant prediction. Reading a path from
+            the root gives a rule: "if size $\leq 5$ and texture $> 20$, predict malignant".</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="trees">Decision trees for regression and classification</h2>
+        <p>Training data are $(\bx_i, y_i)$, $i = 1, \dots, n$, with $\bx_i = (x_{i1}, \dots, x_{ip})$. A
+          <strong>binary decision tree</strong> is built from tests of the form
+          $$x_j \leq t \quad (\text{go left}) \qquad\text{or}\qquad x_j > t \quad (\text{go right}),$$
+          for a feature index $j$ and a threshold $t$. Starting from the root with all the data, each internal node
+          sends its points to two children. The leaves define disjoint regions $R_1, \dots, R_M$ that together cover the
+          input space. To predict at a new $\bx$, send it down the tree to its leaf.</p>
+        <p>Write $R_m$ also for the set of training indices $i$ with $\bx_i$ in region $m$, and $n_m = |R_m|$.</p>
+
+        <div class="env definition" id="def-tree-pred">
+          <ul>
+            <li><strong>Regression tree:</strong> for $\bx \in R_m$, predict the mean output of the region,
+              $$\hat f(\bx) = \bar y_m = \frac{1}{n_m}\sum_{i \in R_m} y_i .$$</li>
+            <li><strong>Classification tree</strong> with classes $c = 1, \dots, K$: estimate the class proportions of
+              the region and predict the most frequent class,
+              $$\hat\pi_{mc} = \frac{1}{n_m}\sum_{i \in R_m} \mathbf 1\{y_i = c\}, \qquad \hat y(\bx) = \argmax_c\ \hat\pi_{mc} .$$</li>
+          </ul>
+        </div>
+        <p>A tree is therefore a <strong>piecewise-constant</strong> function: $\hat f(\bx) = \sum_{m=1}^M \bar y_m
+          \mathbf 1\{\bx \in R_m\}$. These leaf values are the best possible constants for the training data.</p>
+
+        <div class="env proposition" id="prop-leaf-value">
+          <p>Given the regions, the leaf mean $\bar y_m$ minimises the training squared error $\sum_{i \in R_m}(y_i - c)^2$
+            over constants $c$, and the majority class minimises the number of misclassified training points in the
+            leaf.</p>
+        </div>
+        <details class="proof" data-for="prop-leaf-value">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: squared error.</strong> $g(c) = \sum_{i \in R_m}(y_i - c)^2$ is a convex parabola with
+              $$g'(c) = -2\sum_{i \in R_m}(y_i - c) = -2\Big(\sum_{i \in R_m} y_i - n_m c\Big) = 0
+              \quad\Longleftrightarrow\quad c = \bar y_m .$$
+              (This is the one-dimensional case of the optimal centroid of
+              <a href="06-kmeans.html#centroids">Chapter 6</a>.)</p>
+            <p><strong>Step 2: misclassification.</strong> Predicting class $c$ in the leaf misclassifies
+              $n_m - n_m\hat\pi_{mc} = n_m(1 - \hat\pi_{mc})$ training points, which is smallest when $\hat\pi_{mc}$ is
+              largest.</p>
+          </div>
+        </details>
+
+        <p>Features enter only through comparisons $x_j \leq t$. This has a useful consequence.</p>
+
+        <div class="env proposition" id="prop-monotone">
+          <p>If every feature is transformed by a strictly increasing function (for example a change of units, or a
+            logarithm), the tree grown by the algorithm below splits the training points in exactly the same way, with
+            transformed thresholds. In particular, trees do not need standardised features.</p>
+        </div>
+        <details class="proof" data-for="prop-monotone">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>If $\phi$ is strictly increasing, then $x_{ij} \leq x_{kj}$ if and only if
+              $\phi(x_{ij}) \leq \phi(x_{kj})$. A split $x_j \leq t$ only separates the points of a node into those below and
+              above a threshold, so the possible splits of the training points are the same before and after
+              transforming (only the ordering of each feature matters). The impurities of the children, and hence the
+              chosen splits, are therefore identical. The threshold $t$ between two consecutive values becomes a
+              threshold between their images.</p>
+          </div>
+        </details>
+        <p>Contrast this with k-NN and k-means, where changing units changes the distances and hence the answer.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="splitting">Choosing the splits</h2>
+        <p>A good split produces children that are as <strong>homogeneous</strong> (pure) as possible in the target.
+          Homogeneity is measured by an <strong>impurity</strong> $I(R)$ of a node; the quality of a split of $R$ into
+          $R_L$ and $R_R$ is the impurity decrease
+          $$\Delta I = I(R) - \Big(\frac{n_L}{n_L + n_R}\, I(R_L) + \frac{n_R}{n_L + n_R}\, I(R_R)\Big),$$
+          the parent impurity minus the size-weighted average impurity of the children ($n_L$, $n_R$ are the numbers of
+          points sent left and right).</p>
+
+        <h3 id="split-regression">Regression: variance reduction</h3>
+        <p>For regression, the impurity of a node is the variance of its outputs,
+          $$Q(R) = \frac{1}{|R|}\sum_{i \in R}(y_i - \bar y_R)^2 .$$</p>
+
+        <div class="env proposition" id="prop-split-sse">
+          <p>Let a node $R$ with $|R|$ points be split into $R_L$ and $R_R$. Then
+            $$|R|\cdot\Delta Q = \mathrm{SSE}(R) - \mathrm{SSE}(R_L) - \mathrm{SSE}(R_R) \;\geq\; 0,
+            \qquad \mathrm{SSE}(A) = \sum_{i \in A}(y_i - \bar y_A)^2 .$$
+            So the best split by variance reduction is the one that most decreases the training squared error, and no
+            split can increase it.</p>
+        </div>
+        <details class="proof" data-for="prop-split-sse">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: impurity times size is the SSE.</strong> By definition $|A|\,Q(A) = \mathrm{SSE}(A)$, so
+              $$|R|\cdot\Delta Q = |R|\,Q(R) - |R_L|\,Q(R_L) - |R_R|\,Q(R_R) = \mathrm{SSE}(R) - \mathrm{SSE}(R_L) - \mathrm{SSE}(R_R) .$$</p>
+            <p><strong>Step 2: non-negative.</strong> Split the parent's sum into the two children. In each child, the
+              parent mean $\bar y_R$ is just some constant, and the child mean is the best constant
+              (<a class="ref" href="#prop-leaf-value"></a>):
+              $$\mathrm{SSE}(R) = \sum_{i \in R_L}(y_i - \bar y_R)^2 + \sum_{i \in R_R}(y_i - \bar y_R)^2
+              \;\geq\; \sum_{i \in R_L}(y_i - \bar y_{R_L})^2 + \sum_{i \in R_R}(y_i - \bar y_{R_R})^2 ,$$
+              where $\bar y_{R_L}$ and $\bar y_{R_R}$ are the child means. The right-hand side is
+              $\mathrm{SSE}(R_L) + \mathrm{SSE}(R_R)$.</p>
+          </div>
+        </details>
+
+        <figure class="viz viz--wide" data-viz="tree-split" id="fig-tree-split">
+          <div class="viz__stage"></div>
+          <figcaption>One split of a regression tree on the fuel consumption data of
+            <a href="07-knn.html">Chapter 7</a>. Each side of the threshold is predicted by its mean; the dotted segments
+            are the residuals. Right: the total training error after the split for every threshold; the ring marks the
+            best one.
+            <strong>Try:</strong> (1) move $t$ and watch the SSE; at the extremes one side is empty and the error is that
+            of no split (dashed); (2) press <em>Best split</em>: the tree separates low speeds, where consumption is high,
+            from the rest; (3) notice that the SSE curve is flat between consecutive data points, which is why only
+            midpoints need to be tried.</figcaption>
+        </figure>
+
+        <h3 id="split-classification">Classification: Gini and entropy</h3>
+        <p>For classification, the impurity is a function of the class proportions $\pi_c = \hat\pi_{mc}$ of the node:</p>
+
+        <div class="env definition" id="def-impurities">
+          <ul>
+            <li><strong>Gini impurity:</strong> $G = \sum_{c=1}^K \pi_c(1 - \pi_c) = 1 - \sum_{c=1}^K \pi_c^2$.</li>
+            <li><strong>Entropy:</strong> $H = -\sum_{c=1}^K \pi_c\log_2\pi_c$ (with $0\log 0 = 0$), the quantity behind
+              the cross-entropy loss of <a href="04-logistic-regression.html">Chapter 4</a>.</li>
+            <li><strong>Misclassification rate:</strong> $E = 1 - \max_c \pi_c$.</li>
+          </ul>
+          <p>The decrease of Gini or entropy is called the <strong>information gain</strong> of the split.</p>
+        </div>
+
+        <div class="env proposition" id="prop-impurity-range">
+          <p>Gini impurity is $0$ if and only if the node is pure (one class only), and it is largest, equal to
+            $1 - \frac1K$, when all classes are equally frequent. The same holds for entropy, with maximum $\log_2 K$.</p>
+        </div>
+        <details class="proof" data-for="prop-impurity-range">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: zero.</strong> Each term $\pi_c(1 - \pi_c)$ is non-negative, and it is zero only if
+              $\pi_c \in \{0, 1\}$. All terms vanish exactly when one $\pi_c = 1$.</p>
+            <p><strong>Step 2: maximum.</strong> By the Cauchy–Schwarz inequality applied to $(\pi_1, \dots, \pi_K)$ and
+              $(1, \dots, 1)$,
+              $$1 = \Big(\sum_{c=1}^K \pi_c\cdot 1\Big)^2 \leq K\sum_{c=1}^K \pi_c^2
+              \quad\Longrightarrow\quad G = 1 - \sum_c\pi_c^2 \leq 1 - \frac1K ,$$
+              with equality when all $\pi_c$ are equal. (For entropy, the bound $\log_2 K$ follows from
+              $\mathrm{KL}(\pi \,\|\, \text{uniform}) \geq 0$, as in Chapter 4.)</p>
+          </div>
+        </details>
+
+        <div class="env proposition" id="prop-gain-positive">
+          <p>The Gini gain and the entropy gain of any split are non-negative.</p>
+        </div>
+        <details class="proof" data-for="prop-gain-positive">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: the parent is a mixture of its children.</strong> Let $w_L = n_L/n$ and $w_R = n_R/n$ be
+              the fractions of the parent's $n$ points sent left and right, and $\boldsymbol\pi^L, \boldsymbol\pi^R$ the
+              children's class proportions. Counting the points of class $c$,
+              $$\boldsymbol\pi = w_L\,\boldsymbol\pi^L + w_R\,\boldsymbol\pi^R .$$</p>
+            <p><strong>Step 2: both impurities are concave.</strong> $G(\boldsymbol\pi) = 1 - \sum_c \pi_c^2$ is a sum of
+              concave functions $-\pi_c^2$ (plus a constant), and $H$ is a sum of $-\pi_c\log\pi_c$, also concave (second
+              derivative $-1/\pi_c$).</p>
+            <p><strong>Step 3: Jensen's inequality.</strong> For a concave $I$ and weights $w_L + w_R = 1$,
+              $$I(\boldsymbol\pi) = I\big(w_L\boldsymbol\pi^L + w_R\boldsymbol\pi^R\big) \geq w_L\,I(\boldsymbol\pi^L) + w_R\,I(\boldsymbol\pi^R),$$
+              which says exactly $\Delta I \geq 0$.</p>
+          </div>
+        </details>
+
+        <div class="env example" id="ex-gini-vs-error">
+          <p><strong>Why not use the misclassification rate?</strong> A node has 400 points of each class. Compare
+            split A, into $(300, 100)$ and $(100, 300)$, with split B, into $(200, 400)$ and $(200, 0)$.</p>
+          <p><strong>Step 1: misclassification.</strong> Split A misclassifies $100 + 100 = 200$ points; split B
+            misclassifies $200 + 0 = 200$ points. Both have error $25\%$: the criterion cannot tell them apart.</p>
+          <p><strong>Step 2: Gini.</strong> Parent: $G = 1 - 0.5^2 - 0.5^2 = 0.5$.
+            Split A: each child has $G = 1 - 0.75^2 - 0.25^2 = 0.375$, so the weighted impurity is $0.375$.
+            Split B: the left child has $G = 1 - (\frac13)^2 - (\frac23)^2 = \frac49 \approx 0.444$ and weight
+            $\frac{600}{800}$; the right child is pure. Weighted impurity: $0.75 \times 0.444 = 0.333$.</p>
+          <p><strong>Step 3: conclusion.</strong> Gini prefers split B, which creates a pure node that needs no further
+            splitting. Gini and entropy reward purity more than the error rate does (they are strictly concave), which
+            makes the greedy growth work better. They usually give very similar trees; Gini is the default in
+            scikit-learn.</p>
+        </div>
+
+        <h3 id="greedy">Growing a tree greedily</h3>
+        <p>Finding the tree with the smallest training error among all trees of a given size is computationally
+          intractable (NP-hard). Trees are therefore grown <strong>greedily, top-down</strong> (recursive binary
+          splitting):</p>
+
+        <div class="callout intuition">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+          <p class="callout__title">Recursive binary splitting</p>
+          <div class="callout__body">
+            <ol>
+              <li>Start with one node containing all training points.</li>
+              <li>For the current node, for every feature $j$ and every threshold $t$ (midpoints between consecutive
+                distinct values of $x_j$ in the node), compute the impurity decrease.</li>
+              <li>Split with the best pair $(j^\ast, t^\ast)$, sending each point left or right.</li>
+              <li>Repeat on each child until a stopping rule holds: maximum depth reached, too few points to split,
+                node pure, or no split decreases the impurity enough.</li>
+            </ol>
+          </div>
+        </div>
+        <p>Sorting each feature once per node gives a cost of order $p\,n\log n$ per level of the tree, so growing a tree
+          is fast. But the procedure is <em>myopic</em>: a split that looks useless now (for example on the XOR
+          pattern) may be essential later, and the final tree need not be the best possible one.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="complexity">Overfitting, depth and pruning</h2>
+        <p>Splitting further never increases the training error (<a class="ref" href="#prop-split-sse"></a>,
+          <a class="ref" href="#prop-gain-positive"></a>). If we keep going until every leaf is pure, the training error
+          is zero, as for 1-NN. A tree of depth $d$ has up to $2^d$ leaves, so depth is a direct measure of
+          complexity:</p>
+        <ul>
+          <li><strong>shallow trees</strong> (few large regions): coarse approximations, high bias, low variance;</li>
+          <li><strong>deep trees</strong> (many small regions, few points per leaf): low bias but high variance. Moving
+            a few training points can change an early split, and then the whole tree below it changes.</li>
+        </ul>
+
+        <figure class="viz viz--wide" data-viz="tree-grow" id="fig-tree-grow">
+          <div class="viz__stage"></div>
+          <figcaption>Growing a classification tree. The shading shows the class proportions in each leaf. The test error
+            uses new data from the same distribution.
+            <strong>Try:</strong> (1) depth 1 and 2 on the tumours (standardised features): one or two questions
+            already classify most points, and the rules can be read below; (2) increase the depth: the training error goes to zero while the test
+            error rises again, with tiny regions around single points; (3) raise the minimum leaf size: deep trees stop
+            overfitting; (4) the diagonal boundary: the tree approximates a slanted line by a staircase and needs many
+            leaves to do it; (5) compare Gini and entropy: the trees are almost the same.</figcaption>
+        </figure>
+
+        <h3 id="prepruning">Pre-pruning: stop early</h3>
+        <p>The simplest regularisation constrains the growth:</p>
+        <ul>
+          <li><strong>maximum depth</strong> (a depth-1 tree is a <em>stump</em>);</li>
+          <li><strong>minimum number of points per leaf</strong>, so that no prediction rests on one or two points;</li>
+          <li><strong>minimum impurity decrease</strong> for a split to be made.</li>
+        </ul>
+        <p>Like $\lambda$ in ridge regression or $k$ in k-NN, these hyperparameters are chosen by cross-validation.</p>
+
+        <h3 id="pruning">Post-pruning: cost-complexity</h3>
+        <p>Stopping early can miss a useful split that comes after a useless one. Instead, grow a large tree $T_0$, then
+          cut it back. For a tree $T$ with $|T|$ leaves and training error $R(T)$ (the total squared error, or number of
+          misclassifications, over the leaves), define the <strong>cost-complexity</strong>
+          $$C_\alpha(T) = R(T) + \alpha\,|T|, \qquad \alpha \geq 0 .$$
+          The penalty $\alpha$ is a price per leaf, as $\lambda$ was a price for large coefficients in
+          <a href="03-regularization.html">Chapter 3</a>. For each $\alpha$ we keep the subtree of $T_0$ with the smallest
+          $C_\alpha$. Which branches go first?</p>
+
+        <div class="env proposition" id="prop-weakest-link">
+          <p>Let $t$ be an internal node of $T$, $T_t$ the branch below it (with $|T_t|$ leaves), $R(T_t)$ the training
+            error of its leaves and $R(t)$ the training error if $t$ were a single leaf. Replacing the branch by a leaf
+            does not increase $C_\alpha$ if and only if
+            $$\alpha \;\geq\; g(t) = \frac{R(t) - R(T_t)}{|T_t| - 1} .$$</p>
+        </div>
+        <details class="proof" data-for="prop-weakest-link">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: what changes.</strong> Only the part of the tree below $t$ changes. Keeping the branch
+              contributes $R(T_t) + \alpha|T_t|$ to $C_\alpha$; collapsing it into one leaf contributes $R(t) + \alpha$.</p>
+            <p><strong>Step 2: compare.</strong> Collapsing is at least as good when
+              $$R(t) + \alpha \leq R(T_t) + \alpha\,|T_t|
+              \iff R(t) - R(T_t) \leq \alpha\big(|T_t| - 1\big)
+              \iff \alpha \geq \frac{R(t) - R(T_t)}{|T_t| - 1},$$
+              using $|T_t| \geq 2$ for an internal node.</p>
+          </div>
+        </details>
+        <p>$g(t)$ is the decrease of training error per extra leaf that the branch buys. <strong>Weakest-link
+          pruning</strong> repeatedly collapses the node with the smallest $g(t)$, producing a nested sequence of subtrees
+          $T_0 \supset T_1 \supset \dots \supset \{\text{root}\}$ as $\alpha$ increases. Cross-validation then chooses
+          $\alpha$ (in scikit-learn, the parameter <code>ccp_alpha</code>).</p>
+
+        <h3 id="interpretability">Interpretability and limitations</h3>
+        <p>A small tree is a short list of if–then rules, easy to communicate and to check against domain knowledge
+          (see the rules printed in <a class="ref" href="#fig-tree-grow"></a>). But:</p>
+        <ul>
+          <li><strong>instability</strong>: trees have high variance, and a different sample can give a very different
+            tree (and different rules);</li>
+          <li><strong>axis-aligned splits</strong>: a boundary like $x_1 + x_2 = 0$ is approximated by a staircase;</li>
+          <li><strong>piecewise-constant predictions</strong>: rough, and constant outside the range of the training data;</li>
+          <li>a deep tree with hundreds of leaves is no longer interpretable.</li>
+        </ul>
+        <p>The rest of the chapter fixes the first problem, at the cost of the interpretability of a single tree, by
+          combining many trees.</p>
+
+        <div class="code" data-lang="python">
+<pre><code>from sklearn.tree import DecisionTreeClassifier, export_text
+
+tree = DecisionTreeClassifier(max_depth=3, min_samples_leaf=5, criterion="gini").fit(X_train, y_train)
+print(export_text(tree, feature_names=list(feature_names)))   # the tree as rules
+print(tree.score(X_test, y_test))</code></pre>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="bagging">Ensembles I: averaging trees</h2>
+        <p>Deep trees have low bias and high variance. Averaging reduces variance, provided the averaged predictors are
+          not too similar.</p>
+
+        <div class="env proposition" id="prop-avg-variance">
+          <p>Let $\hat f^{(1)}, \dots, \hat f^{(B)}$ be predictions at a point, each with variance $\tau^2$, with pairwise
+            correlation $\rho$. Their average has variance
+            $$\Var\Big(\frac1B\sum_{b=1}^B \hat f^{(b)}\Big) = \rho\,\tau^2 + \frac{1 - \rho}{B}\,\tau^2 .$$</p>
+        </div>
+        <details class="proof" data-for="prop-avg-variance">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: expand the variance of the sum.</strong>
+              $$\Var\Big(\sum_{b=1}^B \hat f^{(b)}\Big) = \sum_{b=1}^B \Var\big(\hat f^{(b)}\big) + \sum_{b \neq b'} \Cov\big(\hat f^{(b)}, \hat f^{(b')}\big)
+              = B\tau^2 + B(B - 1)\,\rho\tau^2 .$$</p>
+            <p><strong>Step 2: divide by $B^2$.</strong>
+              $$\frac{B\tau^2 + B(B - 1)\rho\tau^2}{B^2} = \frac{\tau^2}{B} + \rho\tau^2 - \frac{\rho\tau^2}{B}
+              = \rho\tau^2 + \frac{1 - \rho}{B}\,\tau^2 .$$</p>
+          </div>
+        </details>
+        <p>The second term vanishes as $B$ grows, but the first one does not: <strong>averaging can only remove the
+          uncorrelated part of the variance</strong>. To gain a lot, the trees must be both individually flexible and
+          weakly correlated.</p>
+
+        <h3 id="bootstrap">The bootstrap and bagging</h3>
+        <p>We have only one training set. The <strong>bootstrap</strong> creates new ones by resampling it: a bootstrap
+          sample $\mathcal D^{(b)}$ consists of $n$ points drawn <em>with replacement</em> from the $n$ training points.
+          Some points appear several times, others not at all.</p>
+
+        <div class="env proposition" id="prop-oob-fraction">
+          <p>The probability that a given training point is left out of a bootstrap sample is
+            $$\Big(1 - \frac1n\Big)^n \;\xrightarrow[n \to \infty]{}\; e^{-1} \approx 0.368 .$$
+            So each bootstrap sample contains about $63\%$ of the distinct training points.</p>
+        </div>
+        <details class="proof" data-for="prop-oob-fraction">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1.</strong> Each of the $n$ independent draws misses the given point with probability
+              $1 - \frac1n$, so all $n$ draws miss it with probability $(1 - \frac1n)^n$.</p>
+            <p><strong>Step 2.</strong> $\log(1 - \frac1n)^n = n\log(1 - \frac1n) = n\big(-\frac1n - \frac{1}{2n^2} - \dots\big)
+              \to -1$, so $(1 - \frac1n)^n \to e^{-1}$. (Already for $n = 100$ the value is $0.366$.)</p>
+          </div>
+        </details>
+
+        <div class="env definition" id="def-bagging">
+          <p><strong>Bagging</strong> (bootstrap aggregating): draw $B$ bootstrap samples, grow a deep tree
+            $\hat f^{(b)}$ on each, and average,
+            $$\hat f_{\text{bag}}(\bx) = \frac1B\sum_{b=1}^B \hat f^{(b)}(\bx),$$
+            averaging the predicted class probabilities (or taking a majority vote) for classification.</p>
+        </div>
+
+        <p><strong>Out-of-bag (OOB) error.</strong> Each training point is left out of about $37\%$ of the bootstrap
+          samples, so roughly $0.37B$ trees never saw it. Averaging only those trees gives an honest prediction for that
+          point:
+          $$\hat f_{\text{OOB}}(\bx_i) = \frac{1}{|\mathcal B_i|}\sum_{b \in \mathcal B_i}\hat f^{(b)}(\bx_i), \qquad
+          \mathcal B_i = \{b : i \notin \mathcal D^{(b)}\}.$$
+          The average loss of these predictions, the OOB error, estimates the test error for free, without a validation
+          set.</p>
+
+        <h3 id="random-forests">Random forests: decorrelating the trees</h3>
+        <p>Bagged trees are often strongly correlated: if one feature is very predictive, almost every tree splits on it
+          first, and the trees look alike. By <a class="ref" href="#prop-avg-variance"></a>, a large $\rho$ limits what
+          averaging can achieve. <strong>Random forests</strong> add a second source of randomness.</p>
+
+        <div class="env definition" id="def-random-forest">
+          <p>A <strong>random forest</strong> is bagging of deep trees in which, at <em>every split</em>, only a random
+            subset of $m$ of the $p$ features is considered (drawn anew at each node). Common defaults are
+            $m = \sqrt p$ for classification and $m = p/3$ for regression; $m = p$ gives plain bagging.</p>
+        </div>
+        <p>Strong features are now absent from many splits, so different trees use different structures: $\rho$ drops,
+          while each tree stays flexible. Random forests need little tuning (the number of trees, $m$, and the leaf size),
+          handle mixed features, and are robust; they are a strong default for tabular data. Adding trees does not cause
+          overfitting: it only reduces the variance term of <a class="ref" href="#prop-avg-variance"></a> and stabilises
+          after a few hundred trees.</p>
+
+        <figure class="viz viz--wide" data-viz="tree-forest" id="fig-tree-forest">
+          <div class="viz__stage"></div>
+          <figcaption>From one tree to a forest on the two moons. Each tree is grown to full depth on a bootstrap sample.
+            With two features, the random forest considers a single random feature at each split.
+            <strong>Try:</strong> (1) $B = 1$: one deep tree, blocky and overfitted; (2) increase $B$: the averaged
+            probability becomes smooth and the test error drops well below that of a single tree; (3) the out-of-bag
+            error follows the test error closely without using any test data; (4) beyond a hundred or so trees the curves
+            are flat: more trees cost time but do not overfit; (5) switch to the random forest: with only two features
+            there is little to decorrelate, so it does about as well as bagging here. Its advantage appears when there are
+            many features and a few dominant ones.</figcaption>
+        </figure>
+
+        <h3 id="importance">Variable importance</h3>
+        <p>A forest of hundreds of trees cannot be read as rules, but it can tell us which features matter.</p>
+        <ul>
+          <li><strong>Impurity importance:</strong> for each feature $j$, add up the impurity decreases (weighted by the
+            number of points) of all splits on $j$, over all trees, and normalise. It is cheap, but biased towards
+            features with many possible split points.</li>
+          <li><strong>Permutation importance:</strong> randomly shuffle the values of feature $j$ (on OOB or validation
+            data), which breaks its link with the target, and measure how much the error increases. It applies to any
+            model. With strongly correlated features both measures can be misleading, since one feature can stand in for
+            another.</li>
+        </ul>
+
+        <div class="code" data-lang="python">
+<pre><code>from sklearn.ensemble import RandomForestClassifier
+from sklearn.inspection import permutation_importance
+
+rf = RandomForestClassifier(n_estimators=500, max_features="sqrt", oob_score=True, random_state=0)
+rf.fit(X_train, y_train)
+print(rf.oob_score_)                       # out-of-bag accuracy
+print(rf.feature_importances_)             # impurity importance
+print(permutation_importance(rf, X_test, y_test, n_repeats=10).importances_mean)</code></pre>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="boosting">Ensembles II: boosting</h2>
+        <p>Bagging and random forests grow deep trees <em>independently</em> and average them, which reduces variance.
+          <strong>Boosting</strong> grows small trees <em>sequentially</em>, each one correcting the errors of the
+          current ensemble, which mainly reduces bias. The model is an additive expansion
+          $$f_M(\bx) = f_0 + \sum_{m=1}^M \nu\,h_m(\bx),$$
+          where each $h_m$ is a shallow tree (a "weak learner") and $0 \lt \nu \leq 1$ is a learning rate.</p>
+
+        <h3 id="boosting-residuals">Regression: fitting the residuals</h3>
+        <p>With the squared loss $L(y, f) = \frac12(y - f)^2$, the derivative with respect to the prediction is
+          $$\frac{\partial L(y_i, f)}{\partial f}\Big|_{f = f_{m-1}(\bx_i)} = -\big(y_i - f_{m-1}(\bx_i)\big),$$
+          so the <em>negative gradient</em> at each training point is the current residual
+          $r_i^{(m)} = y_i - f_{m-1}(\bx_i)$. Boosting fits the next tree to these residuals.</p>
+
+        <div class="callout intuition">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+          <p class="callout__title">Gradient boosting for regression (squared loss)</p>
+          <div class="callout__body">
+            <ol>
+              <li>Start with a constant: $f_0(\bx) = \bar y$.</li>
+              <li>For $m = 1, \dots, M$:
+                <ol type="a">
+                  <li>compute the residuals $r_i^{(m)} = y_i - f_{m-1}(\bx_i)$;</li>
+                  <li>fit a small regression tree $h_m$ to the data $(\bx_i, r_i^{(m)})$;</li>
+                  <li>update $f_m = f_{m-1} + \nu\,h_m$.</li>
+                </ol>
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="env proposition" id="prop-boost-decrease">
+          <p>Let $\mathbf r = (r_1, \dots, r_n)$ be the current residuals and $\mathbf h = (h_m(\bx_1), \dots, h_m(\bx_n))$
+            the fitted values of a regression tree fitted to them (leaf means of the residuals). For $0 \lt \nu \leq 1$,
+            the new training error is
+            $$\sum_{i=1}^n \big(r_i - \nu h_i\big)^2 = \sum_{i=1}^n r_i^2 - \nu(2 - \nu)\sum_{i=1}^n h_i^2 \;\leq\; \sum_{i=1}^n r_i^2 .$$
+            Each stage decreases the training error, by more when the tree captures more of the residuals.</p>
+        </div>
+        <details class="proof" data-for="prop-boost-decrease">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: expand.</strong>
+              $$\sum_i (r_i - \nu h_i)^2 = \sum_i r_i^2 - 2\nu\sum_i r_i h_i + \nu^2\sum_i h_i^2 .$$</p>
+            <p><strong>Step 2: the cross term.</strong> In leaf $\ell$ of the tree, $h_i = \bar r_\ell$ for every point of
+              the leaf, so
+              $$\sum_{i \in \ell} r_i h_i = \bar r_\ell\sum_{i \in \ell} r_i = n_\ell\,\bar r_\ell^{\,2} = \sum_{i \in \ell} h_i^2 .$$
+              Summing over the leaves, $\sum_i r_i h_i = \sum_i h_i^2$.</p>
+            <p><strong>Step 3: combine.</strong>
+              $\sum_i (r_i - \nu h_i)^2 = \sum_i r_i^2 - (2\nu - \nu^2)\sum_i h_i^2$, and $2\nu - \nu^2 = \nu(2 - \nu) > 0$
+              for $0 \lt \nu \leq 1$.</p>
+          </div>
+        </details>
+        <p>The training error therefore keeps decreasing as trees are added, and eventually the model fits the noise:
+          unlike a random forest, <strong>boosting can overfit when $M$ is too large</strong>.</p>
+
+        <figure class="viz viz--wide" data-viz="tree-boost" id="fig-tree-boost">
+          <div class="viz__stage"></div>
+          <figcaption>Gradient boosting on the fuel consumption data. Each stage adds $\nu$ times a small tree fitted to the
+            current residuals; the last tree added (before scaling by $\nu$) is drawn at the bottom.
+            <strong>Try:</strong> (1) with stumps and $\nu = 0.1$, step $M$ from 1 to 20: each stump adds one small step,
+            and the fit slowly takes the U shape; (2) increase $M$ to 300: the training error keeps falling, the test error
+            reaches its minimum and then creeps up; (3) $\nu = 1$: the minimum comes after very few trees and overfitting
+            is fast; smaller $\nu$ needs more trees but is more forgiving; (4) deeper trees learn faster and overfit
+            sooner.</figcaption>
+        </figure>
+
+        <h3 id="gradient-boosting">Gradient boosting for any loss</h3>
+        <p>The same recipe works for any differentiable loss. At stage $m$, compute the <strong>pseudo-residuals</strong>
+          $$r_i^{(m)} = -\frac{\partial L(y_i, f)}{\partial f}\Big|_{f = f_{m-1}(\bx_i)} ,$$
+          fit a regression tree $h_m$ to them, and add $\nu\,h_m$ (optionally choosing the step by a line search,
+          $\gamma_m = \argmin_\gamma \sum_i L(y_i, f_{m-1}(\bx_i) + \gamma h_m(\bx_i))$). This is
+          <strong>gradient descent in function space</strong>: the vector of predictions
+          $(f(\bx_1), \dots, f(\bx_n))$ moves along the negative gradient of the training loss, and the tree generalises
+          the step to new inputs.</p>
+
+        <div class="env proposition" id="prop-logistic-pseudo">
+          <p>For binary classification with $y \in \{0, 1\}$, let $f$ be a log-odds and $p = \sigma(f)$. For the
+            cross-entropy loss $L(y, f) = -y\log\sigma(f) - (1 - y)\log(1 - \sigma(f))$, the pseudo-residuals are
+            $$r_i = y_i - \sigma\big(f_{m-1}(\bx_i)\big) = y_i - p_i ,$$
+            the observed label minus the current predicted probability.</p>
+        </div>
+        <details class="proof" data-for="prop-logistic-pseudo">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1.</strong> Use $\sigma'(f) = \sigma(f)(1 - \sigma(f))$ (Chapter 4), so
+              $\frac{d}{df}\log\sigma(f) = 1 - \sigma(f)$ and $\frac{d}{df}\log(1 - \sigma(f)) = -\sigma(f)$.</p>
+            <p><strong>Step 2.</strong>
+              $$\frac{\partial L}{\partial f} = -y\big(1 - \sigma(f)\big) + (1 - y)\,\sigma(f) = \sigma(f) - y .$$
+              The negative gradient is $y - \sigma(f)$. This is the same "predicted minus observed" gradient as in
+              logistic regression.</p>
+          </div>
+        </details>
+
+        <h3 id="boosting-regularisation">Regularising boosting</h3>
+        <ul>
+          <li><strong>Learning rate (shrinkage) $\nu$:</strong> small values ($0.01$ to $0.1$) make each step cautious;
+            they need more trees but generalise better.</li>
+          <li><strong>Number of trees $M$:</strong> too few underfit, too many overfit. Choose it by monitoring a
+            validation set and stopping when the error stops improving (<em>early stopping</em>).</li>
+          <li><strong>Tree depth:</strong> shallow trees (depth 1 to 6). Depth $d$ allows interactions between up to $d$
+            features.</li>
+          <li><strong>Subsampling:</strong> fit each tree on a random fraction of the rows (stochastic gradient boosting),
+            which adds randomness, reduces variance and speeds up training.</li>
+        </ul>
+
+        <div class="code" data-lang="python">
+<pre><code>from sklearn.ensemble import HistGradientBoostingClassifier
+
+gb = HistGradientBoostingClassifier(learning_rate=0.05, max_iter=1000, max_depth=3,
+                                    early_stopping=True, validation_fraction=0.1, random_state=0)
+gb.fit(X_train, y_train)
+print(gb.n_iter_, gb.score(X_test, y_test))   # trees actually used, test accuracy</code></pre>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="practice">Random forests or boosting? Practical guidance</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col"></th><th scope="col">Random forest</th><th scope="col">Gradient boosting</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Trees</th><td>deep, grown independently (in parallel)</td><td>shallow, grown sequentially</td></tr>
+              <tr><th scope="row">Main effect</th><td>reduces variance</td><td>reduces bias (and variance with shrinkage)</td></tr>
+              <tr><th scope="row">More trees</th><td>never hurts, curve flattens</td><td>can overfit: use early stopping</td></tr>
+              <tr><th scope="row">Tuning</th><td>little; robust defaults</td><td>learning rate, $M$, depth: needs care</td></tr>
+              <tr><th scope="row">Accuracy</th><td>strong baseline</td><td>often the best on tabular data when tuned</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>A reasonable workflow for a new tabular problem:</p>
+        <ol>
+          <li>fit a regularised linear or logistic regression as an interpretable baseline;</li>
+          <li>fit a random forest with default settings and check its OOB or validation error;</li>
+          <li>look at the variable importances;</li>
+          <li>if more accuracy is needed, tune gradient boosting with a small learning rate and early stopping;</li>
+          <li>compare all models on the same held-out test set, once, at the end.</li>
+        </ol>
+        <p>Trees are less suited to images, sound or text, where neural networks (Chapter 10) exploit the structure of the data, and to problems where a linear effect must be estimated and explained.
+          Single trees extrapolate as constants outside the training range.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-gini-hand">
+          <p>A node contains 6 points of class A and 4 of class B. A candidate split sends $(5\text{ A}, 1\text{ B})$ to the
+            left and $(1\text{ A}, 3\text{ B})$ to the right. Compute the Gini impurity and the entropy of the parent and of
+            the children, and the two information gains.</p>
+        </div>
+
+        <div class="env exercise" id="exo-reg-split">
+          <p>One feature: $x = 1, 2, 3, 4, 5, 6$ with outputs $y = 1, 1, 2, 6, 7, 7$. Find the best first split of a
+            regression tree (try the thresholds $1.5, 2.5, \dots, 5.5$), the two leaf values, and the decrease in SSE.</p>
+        </div>
+
+        <div class="env exercise" id="exo-misclass">
+          <p>Verify the numbers of <a class="ref" href="#ex-gini-vs-error"></a> with entropy instead of Gini. Which split
+            does entropy prefer?</p>
+        </div>
+
+        <div class="env exercise" id="exo-leaves">
+          <p>(a) What is the largest number of leaves of a binary tree of depth $d$? (b) How many numbers are needed to
+            describe a regression tree with $M$ leaves (features, thresholds, leaf values)? (c) Why does a fully grown
+            tree have zero training error when all inputs are distinct?</p>
+        </div>
+
+        <div class="env exercise" id="exo-prune">
+          <p>An internal node $t$ has a training SSE of $50$ as a single leaf. Its branch $T_t$ has 4 leaves with total SSE
+            $38$. Another node $t'$ has SSE $20$ as a leaf, and its branch has 2 leaves with SSE $14$. Compute $g(t)$ and
+            $g(t')$. Which node is pruned first as $\alpha$ increases, and for which values of $\alpha$ are both pruned?</p>
+        </div>
+
+        <div class="env exercise" id="exo-units-tree">
+          <p>A colleague standardises all features before fitting a random forest. Does it change the forest? What about
+            k-NN, and lasso regression? Justify with <a class="ref" href="#prop-monotone"></a>.</p>
+        </div>
+
+        <div class="env exercise" id="exo-bootstrap">
+          <p>Compute the probability that a given point is left out of a bootstrap sample for $n = 10$ and $n = 1000$.
+            What is the expected number of <em>distinct</em> points in a bootstrap sample of size $n$?</p>
+        </div>
+
+        <div class="env exercise" id="exo-correlation">
+          <p>Trees have variance $\tau^2 = 1$ at a point. Using <a class="ref" href="#prop-avg-variance"></a>, compute the
+            variance of the average of $B = 10$, $100$ and infinitely many trees when $\rho = 0.8$ (bagging) and
+            $\rho = 0.3$ (random forest). What does this say about the role of feature subsampling?</p>
+        </div>
+
+        <div class="env exercise" id="exo-boost-hand">
+          <p>Data $(x, y)$: $(1, 1)$, $(2, 3)$, $(3, 2)$, $(4, 6)$. Start from $f_0 = \bar y$. Compute the residuals, fit a
+            stump (one split, leaf means), and give $f_1$ for $\nu = 0.5$. Check that the training SSE decreases by
+            $\nu(2 - \nu)\sum_i h_i^2$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-rf-vs-gb">
+          <p>Explain why adding trees to a random forest does not lead to overfitting, while adding trees in gradient boosting
+            can. Which hyperparameters would you tune for each, and how?</p>
+        </div>
+
+        <div class="env exercise" id="exo-diagonal">
+          <p>Two classes are separated by the line $x_1 = x_2$ in the unit square. Sketch how a tree with axis-aligned splits
+            approximates this boundary. Roughly how does the number of leaves grow if we want the staircase to stay within
+            a distance $\varepsilon$ of the line? Which transformation of the features would make one split enough?</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>A tree partitions the input space into boxes by tests $x_j \leq t$ and predicts the leaf mean or majority
+              class, the best constants for the training data. Trees are insensitive to monotone feature transformations.</li>
+            <li>Splits are chosen greedily to maximise the impurity decrease: variance (= SSE decrease) for regression,
+              Gini or entropy for classification; both gains are non-negative.</li>
+            <li>Depth controls complexity. Regularise with maximum depth, minimum leaf size, or cost-complexity pruning
+              $R(T) + \alpha|T|$, with $\alpha$ chosen by cross-validation.</li>
+            <li>Averaging $B$ predictors with correlation $\rho$ leaves variance $\rho\tau^2 + (1 - \rho)\tau^2/B$. Bagging
+              averages bootstrap trees; random forests also subsample features to lower $\rho$. The OOB error estimates the
+              test error for free.</li>
+            <li>Gradient boosting adds small trees fitted to the negative gradient (residuals, or $y - p$ for
+              classification). Tune $\nu$, $M$ (early stopping) and depth.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-prob">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-prob">Probabilistic view: likelihood behind the criteria</h2>
+          <p class="extra__intro">The splitting criteria and the boosting losses can be read as maximum likelihood for
+            simple probability models.</p>
+
+          <h3 id="extra-entropy-likelihood">Entropy splits maximise a likelihood</h3>
+          <p>Model a classification tree probabilistically: inside leaf $m$, labels are independent draws from a
+            categorical distribution with probabilities $q_{m1}, \dots, q_{mK}$. Let $n_{mc}$ be the number of training
+            points of class $c$ in leaf $m$.</p>
+
+          <div class="env proposition" id="prop-tree-mle">
+            <p>The maximum-likelihood estimates are the leaf proportions $\hat q_{mc} = \hat\pi_{mc} = n_{mc}/n_m$, and the
+              maximised log-likelihood is
+              $$\max_q \log\mathcal L = \sum_m\sum_c n_{mc}\log\hat\pi_{mc} = -\sum_m n_m\,H_e(\hat{\boldsymbol\pi}_m),$$
+              where $H_e$ is the entropy with natural logarithms. So the entropy decrease of a split, weighted by the node
+              size, is exactly the increase of the maximised log-likelihood.</p>
+          </div>
+          <details class="proof" data-for="prop-tree-mle">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: the likelihood separates over leaves.</strong>
+                $\log\mathcal L = \sum_m\sum_c n_{mc}\log q_{mc}$, and each leaf can be maximised separately subject to
+                $\sum_c q_{mc} = 1$.</p>
+              <p><strong>Step 2: one leaf.</strong> With $\hat\pi_c = n_{mc}/n_m$, for any $q$,
+                $$\sum_c n_{mc}\log q_c - \sum_c n_{mc}\log\hat\pi_c = -n_m\sum_c\hat\pi_c\log\frac{\hat\pi_c}{q_c}
+                = -n_m\,\mathrm{KL}(\hat{\boldsymbol\pi}\,\|\,\mathbf q) \leq 0,$$
+                with equality if and only if $\mathbf q = \hat{\boldsymbol\pi}$ (Chapter 4, extra section).</p>
+              <p><strong>Step 3: the maximum.</strong>
+                $\sum_c n_{mc}\log\hat\pi_{mc} = n_m\sum_c\hat\pi_{mc}\log\hat\pi_{mc} = -n_m H_e(\hat{\boldsymbol\pi}_m)$.</p>
+            </div>
+          </details>
+          <p>Similarly, a regression tree with Gaussian noise of common variance in every leaf has a log-likelihood that is a
+            decreasing function of the total SSE, so variance reduction is maximum likelihood too. Gini has its own
+            interpretation: $\sum_c\pi_c(1 - \pi_c)$ is the probability that two labels drawn at random from the node
+            differ, i.e. the error rate of a rule that guesses a label at random according to the node's proportions.</p>
+
+          <h3 id="extra-boosting-logodds">What boosting estimates</h3>
+          <div class="env proposition" id="prop-logodds-minimiser">
+            <p>For a fixed $\bx$ with $p = \P(y = 1 \mid \bx)$, the expected cross-entropy
+              $\E\big[L(y, f) \mid \bx\big] = -p\log\sigma(f) - (1 - p)\log(1 - \sigma(f))$ is minimised at
+              $$f^\ast(\bx) = \log\frac{p}{1 - p},$$
+              the log-odds. So boosted trees with this loss estimate the log-odds, and $\sigma(f_M(\bx))$ estimates the
+              probability $\P(y = 1 \mid \bx)$.</p>
+          </div>
+          <details class="proof" data-for="prop-logodds-minimiser">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: derivative.</strong> As in <a class="ref" href="#prop-logistic-pseudo"></a>, with $y$
+                replaced by its expectation $p$:
+                $$\frac{d}{df}\E[L \mid \bx] = \sigma(f) - p .$$</p>
+              <p><strong>Step 2: stationary point.</strong> $\sigma(f) = p \iff f = \log\frac{p}{1 - p}$. The second
+                derivative $\sigma(f)(1 - \sigma(f)) > 0$, so it is the minimum.</p>
+            </div>
+          </details>
+          <p>Logistic regression assumes the log-odds are linear in $\bx$; gradient boosting builds them as a sum of trees,
+            which can represent non-linear effects and interactions.</p>
+
+          <div class="env exercise" id="exo-gini-prob">
+            <p>Show that $\sum_c\pi_c(1 - \pi_c) = \P(Y \neq Y')$ when $Y, Y'$ are independent labels drawn from the
+              proportions $\boldsymbol\pi$ of a node.</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

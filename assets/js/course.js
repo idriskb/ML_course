@@ -46,7 +46,7 @@ window.COURSE = {
     { num: "7", slug: "07-knn", part: "Module 3 · Nonlinear & non-parametric models", status: "ready", sessions: "14",
       title: "k-nearest neighbours",
       summary: "Distance-based prediction for regression and classification; model complexity and the curse of dimensionality." },
-    { num: "8", slug: "08-trees", part: "Module 3 · Nonlinear & non-parametric models", status: "planned", sessions: "16–17",
+    { num: "8", slug: "08-trees", part: "Module 3 · Nonlinear & non-parametric models", status: "ready", sessions: "16–17",
       title: "Tree-based methods",
       summary: "Decision trees, splitting criteria and pruning; bagging, random forests and gradient boosting." },
     { num: "9", slug: "09-kernels", part: "Module 3 · Nonlinear & non-parametric models", status: "planned", sessions: "19–20",

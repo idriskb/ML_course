@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How to read these notes — Machine Learning</title>
+  <meta name="description" content="Notation, conventions and a tour of the building blocks used throughout the Machine Learning course notes.">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/gradient-descent.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="00-style-guide">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>How to read these notes</h1>
+          <p class="lede">These notes combine rigorous mathematics with interactive experiments. This chapter
+            fixes the notation and shows every building block you will meet, using least squares and gradient
+            descent as a running example.</p>
+          <ul class="meta" aria-label="Chapter details">
+            <li><span class="chip">≈ 20 min read</span></li>
+            <li><span class="chip">Prerequisites: linear algebra, multivariable calculus</span></li>
+          </ul>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>Read and use the notation adopted throughout the course.</li>
+            <li>Navigate definitions, theorems and proofs, and expand proofs only when you need them.</li>
+            <li>Follow a derivation step by step and reproduce it on paper.</li>
+            <li>Use interactive figures to build intuition before (or after) the formal argument.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="notation">Notation</h2>
+        <p>Scalars are lowercase italic ($x$, $\eta$), vectors are lowercase bold ($\bx$, $\bw$) and matrices
+          are uppercase bold ($\bX$). All vectors are column vectors.</p>
+
+        <div class="table-wrap">
+          <table>
+            <caption>Notation used throughout the course</caption>
+            <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th></tr></thead>
+            <tbody>
+              <tr><td>$n$, $d$</td><td>number of samples, number of features</td></tr>
+              <tr><td>$\bx_i \in \R^d$, $y_i \in \R$</td><td>$i$-th input and its target</td></tr>
+              <tr><td>$\bX \in \R^{n \times d}$</td><td>design matrix, whose $i$-th row is $\bx_i\T$</td></tr>
+              <tr><td>$\by \in \R^n$</td><td>vector of targets</td></tr>
+              <tr><td>$\norm{\bv}$</td><td>Euclidean norm $\sqrt{\bv\T\bv}$</td></tr>
+              <tr><td>$\nabla f$, $\nabla^2 f$</td><td>gradient and Hessian of $f$</td></tr>
+              <tr><td>$\E[\cdot]$, $\Var(\cdot)$</td><td>expectation and variance</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="environments">Definitions, theorems and proofs</h2>
+        <p>Definitions, lemmas, theorems, examples and exercises share a single counter within each chapter,
+          so <em>Theorem 0.3</em> always comes after <em>Lemma 0.2</em>. Proofs are collapsed by default: try the
+          statement yourself first, then open the proof. Use <strong>Expand all proofs</strong> in the right-hand
+          panel when revising.</p>
+
+        <div class="env definition" id="def-erm" data-name="Empirical risk">
+          <p>Let $(\bx_1, y_1), \dots, (\bx_n, y_n)$ be a training sample and $\ell : \R \times \R \to [0, \infty)$
+            a loss function. The <strong>empirical risk</strong> of a predictor $h : \R^d \to \R$ is
+            $$\hat R_n(h) = \frac{1}{n} \sum_{i=1}^{n} \ell\big(h(\bx_i), y_i\big).$$</p>
+        </div>
+
+        <p>For linear predictors $h_{\bw}(\bx) = \bw\T\bx$ and the squared loss $\ell(\hat y, y) = (\hat y - y)^2$,
+          minimising the empirical risk amounts to minimising
+          $$J(\bw) = \norm{\by - \bX\bw}^2.$$</p>
+
+        <div class="env lemma" id="lem-gram" data-name="Gram matrix">
+          <p>For any $\bX \in \R^{n \times d}$ the matrix $\bX\T\bX$ is positive semidefinite. It is positive
+            definite if and only if $\bX$ has full column rank $d$.</p>
+        </div>
+        <details class="proof" data-for="lem-gram">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>For every $\bv \in \R^d$ we have $\bv\T\bX\T\bX\bv = \norm{\bX\bv}^2 \geq 0$, so $\bX\T\bX$ is
+              positive semidefinite. Equality holds if and only if $\bX\bv = \mathbf{0}$. Hence $\bv\T\bX\T\bX\bv > 0$
+              for every $\bv \neq \mathbf{0}$ exactly when the kernel of $\bX$ is trivial, that is, when $\bX$
+              has full column rank.</p>
+          </div>
+        </details>
+
+        <div class="env theorem" id="thm-ols" data-name="Least-squares estimator">
+          <p>Assume $\bX \in \R^{n \times d}$ has full column rank. Then $J(\bw) = \norm{\by - \bX\bw}^2$ has a unique
+            minimiser
+            $$\hatw = (\bX\T\bX)^{-1}\bX\T\by.$$</p>
+        </div>
+        <details class="proof" data-for="thm-ols">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>The function $J$ is a quadratic with Hessian $\nabla^2 J(\bw) = 2\bX\T\bX$, which is positive definite
+              by <a class="ref" href="#lem-gram"></a>. Hence $J$ is strictly convex and has at most one minimiser.
+              Since $J$ is differentiable and convex, $\bw$ minimises $J$ if and only if $\nabla J(\bw) = \mathbf{0}$.
+              As derived in <a class="ref" href="#derivations"></a>, this condition is equivalent to the
+              <em>normal equations</em> $\bX\T\bX\bw = \bX\T\by$. Because $\bX\T\bX$ is invertible, they have the
+              unique solution $\hatw = (\bX\T\bX)^{-1}\bX\T\by$.</p>
+          </div>
+        </details>
+
+        <div class="env remark">
+          <p>If $\bX$ is rank deficient (for instance when $d > n$), the minimiser is not unique. A canonical
+            choice is the minimum-norm solution $\hatw = \bX^{+}\by$, where $\bX^{+}$ is the Moore–Penrose
+            pseudoinverse. We return to this in the chapter on regularisation.</p>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="derivations">Step-by-step derivations</h2>
+        <p>Longer computations are revealed one step at a time. Try to predict the next line before you
+          press <strong>Next step</strong>.</p>
+
+        <div class="derivation" data-title="Deriving the normal equations">
+          <ol class="derivation__steps">
+            <li class="step">
+              <p class="step__why">Expand the squared norm.</p>
+              $$J(\bw) = (\by - \bX\bw)\T(\by - \bX\bw) = \by\T\by - 2\bw\T\bX\T\by + \bw\T\bX\T\bX\bw.$$
+            </li>
+            <li class="step">
+              <p class="step__why">Differentiate term by term, using $\nabla_{\bw}(\bw\T\mathbf{a}) = \mathbf{a}$ and
+                $\nabla_{\bw}(\bw\T\mathbf{A}\bw) = (\mathbf{A} + \mathbf{A}\T)\bw$ with $\mathbf{A} = \bX\T\bX$ symmetric.</p>
+              $$\nabla J(\bw) = -2\bX\T\by + 2\bX\T\bX\bw.$$
+            </li>
+            <li class="step">
+              <p class="step__why">Set the gradient to zero.</p>
+              $$\bX\T\bX\bw = \bX\T\by.$$
+            </li>
+            <li class="step">
+              <p class="step__why">If $\bX\T\bX$ is invertible, multiply on the left by its inverse.</p>
+              $$\hatw = (\bX\T\bX)^{-1}\bX\T\by.$$
+            </li>
+          </ol>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="interactive">Interactive figures</h2>
+        <p>Closed-form solutions are the exception. Most models are fitted iteratively, typically by
+          <strong>gradient descent</strong>: starting from $x_0$, repeat
+          $$x_{k+1} = x_k - \eta\, \nabla f(x_k), \tag{0.1}$$
+          where $\eta > 0$ is the <em>learning rate</em>. The figure below runs (0.1) on the non-convex function
+          $f(x) = \tfrac14 x^4 - x^2 + 0.3x$, which has two local minima.</p>
+
+        <figure class="viz" data-viz="gradient-descent" id="fig-gd">
+          <div class="viz__stage"></div>
+          <figcaption>Gradient descent on $f(x) = \tfrac14 x^4 - x^2 + 0.3x$. Change the learning rate and the
+            starting point, then press <em>Step</em> or <em>Run</em>.</figcaption>
+        </figure>
+
+        <div class="callout intuition">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+          <p class="callout__title">Intuition</p>
+          <div class="callout__body">
+            <p>The gradient points uphill, so each step moves downhill. The learning rate sets how far you trust
+              this local, linear picture of $f$. Where $f$ curves sharply, a long step overshoots the valley.</p>
+          </div>
+        </div>
+
+        <p>The next result makes "not too large" precise. A differentiable function $f$ is
+          <em>$L$-smooth</em> if $\norm{\nabla f(\bx) - \nabla f(\by)} \leq L \norm{\bx - \by}$ for all $\bx, \by$.</p>
+
+        <div class="env proposition" id="prop-descent" data-name="Descent lemma">
+          <p>Let $f : \R^d \to \R$ be $L$-smooth and $0 \lt \eta \leq 1/L$. Then for every $\bx$,
+            $$f\big(\bx - \eta \nabla f(\bx)\big) \leq f(\bx) - \frac{\eta}{2}\norm{\nabla f(\bx)}^2.$$</p>
+        </div>
+        <details class="proof" data-for="prop-descent">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>$L$-smoothness implies the quadratic upper bound
+              $f(\by) \leq f(\bx) + \nabla f(\bx)\T(\by - \bx) + \tfrac{L}{2}\norm{\by - \bx}^2$.
+              Take $\by = \bx - \eta\nabla f(\bx)$ and write $\mathbf{g} = \nabla f(\bx)$:
+              $$f(\by) \leq f(\bx) - \eta\norm{\mathbf{g}}^2 + \frac{L\eta^2}{2}\norm{\mathbf{g}}^2
+              = f(\bx) - \eta\Big(1 - \frac{L\eta}{2}\Big)\norm{\mathbf{g}}^2.$$
+              Since $L\eta \leq 1$, we have $1 - L\eta/2 \geq 1/2$, which gives the claim.</p>
+          </div>
+        </details>
+
+        <div class="env example" id="ex-gd">
+          <p>For the function in <a class="ref" href="#fig-gd"></a>, $f''(x) = 3x^2 - 2$, so on $[-2.5, 2.5]$ we have
+            $|f''| \leq 16.75$. While the iterates stay in this interval, <a class="ref" href="#prop-descent"></a>
+            guarantees a decrease at every step for $\eta \leq 1/16.75 \approx 0.06$. Starting from $x_0 = 2.2$
+            with $\eta = 0.06$, the iterates descend smoothly into the <em>local</em> minimum near $x \approx 1.33$.
+            With $\eta = 0.5$, the first step jumps over the barrier into the other basin, and the iterates end up
+            bouncing between two points instead of settling at the minimum. Try both in the figure.</p>
+        </div>
+
+        <div class="callout pitfall">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>
+          <p class="callout__title">Common pitfall</p>
+          <div class="callout__body">
+            <p>A smaller loss after one step does not mean the method converges to the <em>global</em> minimum.
+              On non-convex functions, the starting point decides which basin you end up in.</p>
+          </div>
+        </div>
+
+        <figure class="numbered" id="fig-static">
+          <div class="figure-placeholder">Static figure slot: images, SVG diagrams or plots exported from Python go here.</div>
+          <figcaption>A static figure. Figures are numbered automatically, like the interactive
+            <a class="ref" href="#fig-gd"></a>.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="code">Code</h2>
+        <p>Short snippets show how the mathematics turns into an implementation.</p>
+
+        <div class="code" data-lang="python">
+<pre><code>import numpy as np
+
+def gradient_descent(grad, x0, lr=0.1, steps=100):
+    """Iterate x_{k+1} = x_k - lr * grad(x_k)."""
+    x = np.asarray(x0, dtype=float)
+    for _ in range(steps):
+        x = x - lr * grad(x)
+    return x
+
+# Least squares: grad J(w) = 2 X^T (X w - y)
+X, y = np.random.randn(100, 3), np.random.randn(100)
+w_hat = gradient_descent(lambda w: 2 * X.T @ (X @ w - y), np.zeros(3), lr=1e-3, steps=5000)</code></pre>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-quadratic">
+          <p>Let $f(x) = \tfrac{a}{2}x^2$ with $a > 0$. Show that gradient descent (0.1) converges to $0$ from every
+            starting point if and only if $0 \lt \eta \lt 2/a$. What happens for $\eta = 2/a$?</p>
+        </div>
+        <details class="solution" data-for="exo-quadratic">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p>Here $f'(x) = ax$, so $x_{k+1} = (1 - \eta a)\,x_k$ and $x_k = (1 - \eta a)^k x_0$. This tends to $0$
+              for every $x_0$ if and only if $|1 - \eta a| \lt 1$, that is, $0 \lt \eta \lt 2/a$. For $\eta = 2/a$
+              we get $x_k = (-1)^k x_0$: the iterates oscillate forever between $x_0$ and $-x_0$.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-hessian">
+          <p>Compute the Hessian of $J(\bw) = \norm{\by - \bX\bw}^2$ and use it to give a second proof that every
+            solution of the normal equations minimises $J$, even when $\bX$ is rank deficient.</p>
+        </div>
+        <details class="solution" data-for="exo-hessian">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p>From the derivation, $\nabla^2 J(\bw) = 2\bX\T\bX$, which is positive semidefinite by
+              <a class="ref" href="#lem-gram"></a>. So $J$ is convex, and for a differentiable convex function every
+              stationary point is a global minimiser. The stationary points are exactly the solutions of
+              $\bX\T\bX\bw = \bX\T\by$.</p>
+          </div>
+        </details>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>Least squares has the closed form $\hatw = (\bX\T\bX)^{-1}\bX\T\by$ when $\bX$ has full column rank.</li>
+            <li>Gradient descent decreases an $L$-smooth objective at every step if $\eta \leq 1/L$.</li>
+            <li>On non-convex problems, both the learning rate and the starting point matter.</li>
+          </ul>
+        </section>
+
+        <h2 id="references" class="unnumbered">References</h2>
+        <ol class="references">
+          <li>T. Hastie, R. Tibshirani, J. Friedman. <em>The Elements of Statistical Learning</em>, 2nd ed. Springer, 2009.</li>
+          <li>C. M. Bishop. <em>Pattern Recognition and Machine Learning</em>. Springer, 2006.</li>
+          <li>S. Shalev-Shwartz, S. Ben-David. <em>Understanding Machine Learning: From Theory to Algorithms</em>. Cambridge University Press, 2014.</li>
+          <li>S. Boyd, L. Vandenberghe. <em>Convex Optimization</em>. Cambridge University Press, 2004.</li>
+        </ol>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

@@ -1,0 +1,655 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Introduction &amp; the learning problem — Machine Learning</title>
+  <meta name="description" content="What machine learning is, its main paradigms, and the formal learning problem: data, models, loss, risk, overfitting and capacity.">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/poly-fit.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="01-learning-problem">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Introduction &amp; the learning problem</h1>
+          <p class="lede">What it means for a program to learn from data, the main kinds of learning problems, and
+            the mathematical set-up shared by every method in this course: data, a model, a loss, and an evaluation
+            on data the model has never seen.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>Describe a machine learning problem in terms of its task, data, model and performance measure.</li>
+            <li>Tell supervised from unsupervised learning, and regression from classification.</li>
+            <li>Define the hypothesis space, the loss, the risk and the empirical risk, and state the empirical risk
+              minimisation principle.</li>
+            <li>Explain, with the training and test errors, what capacity, overfitting and generalisation mean.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="what-is-ml">What is machine learning?</h2>
+
+        <p>Finding patterns in data has been central to science from the start. In the late 16th century Tycho Brahe
+          spent two decades recording very precise planetary positions. From these observations Johannes Kepler
+          inferred his empirical laws of planetary motion, which later became the foundation of Newton's theory of
+          gravitation. Collecting data, finding regularities and turning them into predictive rules is the same
+          process that underlies modern machine learning. The difference is that the rules are now found by
+          algorithms, and the data can be far too large and complex for a human to inspect.</p>
+
+        <div class="env definition" id="def-ml-patterns" data-name="Machine learning, pattern view">
+          <p>Machine learning is the study of algorithms and models that discover and exploit patterns in data, in
+            order to make predictions or decisions under uncertainty.</p>
+        </div>
+
+        <p>A second, more operational definition makes the ingredients of a learning problem explicit.</p>
+
+        <div class="env definition" id="def-ml-tep" data-name="Learning, operational view">
+          <p>A computer program <em>learns</em> from experience $E$ with respect to a class of tasks $T$ and a
+            performance measure $P$ if its performance at tasks in $T$, as measured by $P$, improves with
+            experience $E$.</p>
+        </div>
+
+        <div class="env example" id="ex-spam" data-name="Spam filtering">
+          <p>The <strong>task</strong> $T$ is to classify each incoming e-mail as <em>spam</em> or <em>not
+            spam</em>. The <strong>experience</strong> $E$ is a collection of past e-mails that users have already
+            labelled. The <strong>performance</strong> $P$ is, for instance, the proportion of new e-mails that are
+            classified correctly. Nobody writes the rules by hand. The program infers which words, phrases or
+            senders separate spam from legitimate mail.</p>
+        </div>
+
+        <p><a class="ref" href="#def-ml-tep"></a> may read like a tongue twister, but its value is that it names the
+          four components found in every machine learning problem:</p>
+        <ol>
+          <li><strong>Model</strong> (the program): the family of mathematical functions that can produce
+            predictions.</li>
+          <li><strong>Data</strong> (the experience): the examples the model learns from.</li>
+          <li><strong>Objective</strong> (the task): what exactly we want to achieve, written as a quantity to
+            optimise.</li>
+          <li><strong>Evaluation</strong> (the performance): a quantitative measure of success on new data.</li>
+        </ol>
+        <p>Together, these give a working definition: <em>machine learning develops mathematical models and
+          algorithms that improve at a task, as measured by a well-defined criterion, by finding and exploiting
+          patterns in data.</em></p>
+
+        <h3 id="ai-ml-dl">Artificial intelligence, machine learning and deep learning</h3>
+        <p>These three terms are often used as synonyms, but they have different scopes
+          (<a class="ref" href="#fig-ai-ml-dl"></a>).</p>
+        <ul>
+          <li><strong>Artificial intelligence (AI)</strong> is the broadest term: systems that show behaviour we
+            associate with intelligence, such as reasoning, planning, perception or language. Classical AI includes
+            rule-based expert systems and search algorithms, many of which do not learn from data at all.</li>
+          <li><strong>Machine learning (ML)</strong> is the part of AI in which behaviour is learned from data
+            instead of being programmed as explicit rules. Linear and logistic regression, decision trees and
+            kernel methods are all machine learning. Today it is the dominant way of building AI systems.</li>
+          <li><strong>Deep learning (DL)</strong> is the part of ML that uses neural networks with many layers. These
+            networks learn useful representations directly from raw inputs (pixels, audio, text) instead of relying
+            on hand-crafted features.</li>
+        </ul>
+
+        <figure class="numbered diagram diagram--narrow" id="fig-ai-ml-dl">
+          <svg viewBox="0 0 520 250" role="img" aria-label="Three nested ellipses. The outer one is artificial intelligence, inside it machine learning, and inside that deep learning.">
+            <ellipse class="d-panel" cx="260" cy="125" rx="250" ry="118"/>
+            <ellipse class="d-a-stroke" stroke-width="2.5" cx="300" cy="138" rx="178" ry="88"/>
+            <ellipse class="d-b-stroke" stroke-width="2.5" cx="338" cy="150" rx="100" ry="52"/>
+            <text class="d-text" x="40" y="128" font-weight="700">AI</text>
+            <text class="d-text" x="150" y="140" font-weight="700">ML</text>
+            <text class="d-text" x="338" y="148" font-weight="700" text-anchor="middle">Deep</text>
+            <text class="d-text" x="338" y="166" font-weight="700" text-anchor="middle">learning</text>
+          </svg>
+          <figcaption>Deep learning is a subset of machine learning, which is a subset of artificial intelligence.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="why-ml">Why machine learning matters</h2>
+        <p>Early scientists worked with small, carefully collected datasets. Today data are produced at a scale where
+          hand-made rules no longer work.</p>
+        <ul>
+          <li><strong>The internet.</strong> The web holds billions of pages, and search engines answer billions of
+            queries every day. Social networks connect hundreds of millions of users through hundreds of billions of
+            links.</li>
+          <li><strong>Economics and finance.</strong> Markets execute millions of trades per second. Payment systems
+            process billions of transactions per day, and online shops record billions of user interactions.</li>
+        </ul>
+        <p>Such data are <strong>large</strong>, <strong>high-dimensional</strong>, <strong>heterogeneous</strong>
+          and <strong>noisy</strong>. To use them we need models that can capture non-linear structure, cope with
+          many interacting variables, and run at scale. Machine learning provides those models. Its reach shows in
+          both research and the labour market: publications that mention machine learning have grown roughly
+          exponentially over recent decades, and so has demand for people with these skills.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="paradigms">The main paradigms of machine learning</h2>
+        <p>Learning problems are usually grouped by what information is available during training.
+          <a class="ref" href="#fig-paradigms"></a> sketches the four settings we study in this course.</p>
+
+        <figure class="numbered diagram" id="fig-paradigms">
+          <svg viewBox="0 0 880 210" role="img" aria-label="Four small panels. Regression: points with a fitted line. Classification: circles and triangles separated by a dashed line. Clustering: unlabelled grey points forming three groups. Dimensionality reduction: points scattered around a line onto which they are projected.">
+            <rect class="d-panel" x="10" y="10" width="200" height="160" rx="8"/>
+            <text class="d-label" x="110.0" y="192" text-anchor="middle">Regression</text>
+            <circle class="d-a" cx="66.0" cy="125.0" r="4"/>
+            <circle class="d-a" cx="127.5" cy="83.2" r="4"/>
+            <circle class="d-a" cx="131.1" cy="76.5" r="4"/>
+            <circle class="d-a" cx="166.7" cy="57.5" r="4"/>
+            <circle class="d-a" cx="69.6" cy="109.0" r="4"/>
+            <circle class="d-a" cx="105.0" cy="56.0" r="4"/>
+            <circle class="d-a" cx="166.5" cy="74.2" r="4"/>
+            <circle class="d-a" cx="51.3" cy="120.5" r="4"/>
+            <circle class="d-a" cx="132.7" cy="68.1" r="4"/>
+            <circle class="d-a" cx="150.5" cy="77.4" r="4"/>
+            <circle class="d-a" cx="138.8" cy="56.5" r="4"/>
+            <circle class="d-a" cx="125.3" cy="74.0" r="4"/>
+            <circle class="d-a" cx="76.6" cy="86.7" r="4"/>
+            <circle class="d-a" cx="105.4" cy="88.2" r="4"/>
+            <circle class="d-a" cx="146.8" cy="56.6" r="4"/>
+            <circle class="d-a" cx="180.7" cy="62.6" r="4"/>
+            <line class="d-b-stroke" stroke-width="2.5" x1="20.0" y1="140.4" x2="200.0" y2="39.6"/>
+            <rect class="d-panel" x="230" y="10" width="200" height="160" rx="8"/>
+            <text class="d-label" x="330.0" y="192" text-anchor="middle">Classification</text>
+            <path class="d-b" d="M312.4,44.6 L317.0,53.1 L307.8,53.1 Z"/>
+            <path class="d-b" d="M320.7,26.5 L325.3,35.0 L316.1,35.0 Z"/>
+            <circle class="d-a" cx="268.8" cy="128.0" r="4"/>
+            <path class="d-b" d="M408.2,93.6 L412.8,102.1 L403.6,102.1 Z"/>
+            <path class="d-b" d="M344.2,30.7 L348.8,39.2 L339.6,39.2 Z"/>
+            <path class="d-b" d="M360.6,27.3 L365.2,35.8 L356.0,35.8 Z"/>
+            <path class="d-b" d="M389.9,19.0 L394.5,27.5 L385.3,27.5 Z"/>
+            <circle class="d-a" cx="358.8" cy="135.3" r="4"/>
+            <path class="d-b" d="M390.6,22.6 L395.2,31.1 L386.0,31.1 Z"/>
+            <path class="d-b" d="M398.0,75.7 L402.6,84.2 L393.4,84.2 Z"/>
+            <path class="d-b" d="M385.7,75.1 L390.3,83.6 L381.1,83.6 Z"/>
+            <circle class="d-a" cx="293.9" cy="148.7" r="4"/>
+            <path class="d-b" d="M389.5,19.2 L394.1,27.7 L384.9,27.7 Z"/>
+            <circle class="d-a" cx="315.0" cy="136.9" r="4"/>
+            <circle class="d-a" cx="349.2" cy="151.2" r="4"/>
+            <path class="d-b" d="M394.0,20.4 L398.6,28.9 L389.4,28.9 Z"/>
+            <path class="d-b" d="M330.9,18.0 L335.5,26.5 L326.3,26.5 Z"/>
+            <circle class="d-a" cx="298.0" cy="146.9" r="4"/>
+            <circle class="d-a" cx="346.8" cy="153.0" r="4"/>
+            <circle class="d-a" cx="279.2" cy="102.4" r="4"/>
+            <circle class="d-a" cx="348.6" cy="136.2" r="4"/>
+            <path class="d-b" d="M298.7,23.4 L303.3,31.9 L294.1,31.9 Z"/>
+            <line class="d-ink" stroke-width="2" stroke-dasharray="6 5" x1="234.0" y1="13.2" x2="426.0" y2="166.8"/>
+            <rect class="d-panel" x="450" y="10" width="200" height="160" rx="8"/>
+            <text class="d-label" x="550.0" y="192" text-anchor="middle">Clustering</text>
+            <circle class="d-muted" stroke-width="1.5" stroke-dasharray="4 4" cx="504.0" cy="58.0" r="34"/>
+            <circle class="d-muted" stroke-width="1.75" cx="512.9" cy="64.0" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="493.3" cy="59.2" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="494.9" cy="68.2" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="496.6" cy="64.1" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="517.8" cy="62.8" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="503.9" cy="58.6" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="504.9" cy="47.3" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="467.7" cy="62.3" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.5" stroke-dasharray="4 4" cx="594.0" cy="54.8" r="34"/>
+            <circle class="d-muted" stroke-width="1.75" cx="580.2" cy="58.6" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="593.1" cy="55.2" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="608.7" cy="53.2" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="606.2" cy="50.5" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="579.6" cy="67.8" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="591.3" cy="51.7" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="593.9" cy="55.0" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="596.7" cy="53.8" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.5" stroke-dasharray="4 4" cx="550.0" cy="126.8" r="34"/>
+            <circle class="d-muted" stroke-width="1.75" cx="545.4" cy="135.0" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="547.7" cy="126.2" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="545.3" cy="129.5" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="545.4" cy="117.0" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="543.4" cy="120.5" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="545.2" cy="122.7" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="552.5" cy="142.4" r="3.6"/>
+            <circle class="d-muted" stroke-width="1.75" cx="549.7" cy="129.5" r="3.6"/>
+            <rect class="d-panel" x="670" y="10" width="200" height="160" rx="8"/>
+            <text class="d-label" x="770.0" y="192" text-anchor="middle">Dimensionality reduction</text>
+            <line class="d-b-stroke" stroke-width="2.5" x1="693.7" y1="128.2" x2="846.3" y2="51.8"/>
+            <line class="d-muted" stroke-width="1" x1="743.5" y1="99.7" x2="745.5" y2="102.2"/>
+            <circle class="d-a" cx="743.5" cy="99.7" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="725.0" y1="92.4" x2="736.3" y2="106.8"/>
+            <circle class="d-a" cx="725.0" cy="92.4" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="738.7" y1="121.7" x2="729.7" y2="110.1"/>
+            <circle class="d-a" cx="738.7" cy="121.7" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="714.8" y1="110.7" x2="718.7" y2="115.7"/>
+            <circle class="d-a" cx="714.8" cy="110.7" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="753.1" y1="109.2" x2="747.1" y2="101.5"/>
+            <circle class="d-a" cx="753.1" cy="109.2" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="751.7" y1="80.6" x2="762.1" y2="94.0"/>
+            <circle class="d-a" cx="751.7" cy="80.6" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="813.0" y1="63.5" x2="815.8" y2="67.1"/>
+            <circle class="d-a" cx="813.0" cy="63.5" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="784.3" y1="73.9" x2="789.4" y2="80.3"/>
+            <circle class="d-a" cx="784.3" cy="73.9" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="823.9" y1="70.7" x2="819.6" y2="65.2"/>
+            <circle class="d-a" cx="823.9" cy="70.7" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="719.8" y1="112.7" x2="721.1" y2="114.4"/>
+            <circle class="d-a" cx="719.8" cy="112.7" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="769.6" y1="82.7" x2="773.8" y2="88.1"/>
+            <circle class="d-a" cx="769.6" cy="82.7" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="802.9" y1="54.4" x2="813.6" y2="68.2"/>
+            <circle class="d-a" cx="802.9" cy="54.4" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="731.3" y1="113.0" x2="729.2" y2="110.4"/>
+            <circle class="d-a" cx="731.3" cy="113.0" r="4"/>
+            <line class="d-muted" stroke-width="1" x1="776.9" y1="66.3" x2="788.3" y2="80.9"/>
+            <circle class="d-a" cx="776.9" cy="66.3" r="4"/>
+          </svg>
+          <figcaption>The four problems of this course. In supervised learning (left two panels) every point
+            carries a label: a number in regression, a class in classification. In unsupervised learning (right two
+            panels) there are no labels, and we look for groups or for a low-dimensional description.</figcaption>
+        </figure>
+
+        <h3 id="supervised">Supervised learning</h3>
+        <p>In <strong>supervised learning</strong> we observe input–output pairs $(\bx_i, y_i)$ and want a rule
+          that predicts $y$ from $\bx$ and works well on new examples. The central questions are how to represent
+          the rule, how to fit it to data, and how to check that it generalises.</p>
+        <ul>
+          <li><strong>Regression:</strong> the target $y$ is a real number. Our running example is predicting the
+            sale price of a house from features such as its living area, its overall quality or the year it was
+            built (the <em>house prices</em> dataset).</li>
+          <li><strong>Classification:</strong> the target $y$ takes a finite number of values. Our running example
+            is deciding whether a breast tumour is <em>malignant</em> or <em>benign</em> from measurements made on a
+            biopsy image (the <em>breast cancer</em> dataset).</li>
+        </ul>
+
+        <h3 id="unsupervised">Unsupervised learning</h3>
+        <p>In <strong>unsupervised learning</strong> there is no target, only inputs $\bx_i$. The goal is to find
+          structure in the data.</p>
+        <ul>
+          <li><strong>Dimensionality reduction:</strong> high-dimensional data often lie close to a
+            lower-dimensional subspace. Finding it helps with visualisation, compression and as a preprocessing step
+            for other methods.</li>
+          <li><strong>Clustering:</strong> find groups of similar observations, for example customer segments.</li>
+        </ul>
+
+        <h3 id="other-paradigms">Other paradigms</h3>
+        <p>We will not study these in detail, but the tools of this course are their foundations.</p>
+        <ul>
+          <li><strong>Semi-supervised learning</strong> uses many unlabelled examples to improve a model when labels
+            are scarce.</li>
+          <li><strong>Self-supervised learning</strong> creates its own prediction tasks from the data, for example
+            predicting a hidden word from its context, in order to learn useful representations.</li>
+          <li><strong>Generative AI</strong> learns to produce new, realistic samples (text, images) that resemble the
+            training data.</li>
+          <li><strong>Reinforcement learning</strong> studies agents that learn which actions to take by interacting
+            with an environment and receiving rewards.</li>
+        </ul>
+
+        <div class="table-wrap">
+          <table>
+            <caption>Roadmap of the course: which methods address which problem</caption>
+            <thead><tr><th scope="col">Problem</th><th scope="col">Methods in this course</th><th scope="col">Lab dataset</th></tr></thead>
+            <tbody>
+              <tr><td>Regression</td><td>Linear regression, ridge and lasso, k-NN, trees, kernel ridge, neural networks</td><td>House prices</td></tr>
+              <tr><td>Classification</td><td>Logistic regression, k-NN, trees and ensembles, kernel methods, neural networks</td><td>Breast cancer; two moons</td></tr>
+              <tr><td>Dimensionality reduction</td><td>PCA, kernel PCA, autoencoders</td><td>Breast cancer</td></tr>
+              <tr><td>Clustering</td><td>k-means</td><td>Synthetic blobs</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="formal">The learning problem, formally</h2>
+        <p>We now make the four components precise. The same set-up will be reused in every chapter.</p>
+
+        <h3 id="formal-data">Data</h3>
+        <p>Let $\mathcal X$ be the input space (usually $\mathcal X = \R^p$, with $p$ features) and $\mathcal Y$ the
+          output space ($\R$ for regression, a finite set such as $\{0, 1\}$ for classification). We assume there is
+          an <em>unknown</em> probability distribution $P$ on $\mathcal X \times \mathcal Y$ that generates the data,
+          and that we observe $n$ independent draws from it:</p>
+        $$\mathcal D = \{(\bx_1, y_1), \dots, (\bx_n, y_n)\}, \qquad (\bx_i, y_i) \overset{\text{i.i.d.}}{\sim} P.$$
+        <p>We want a <strong>predictor</strong> $f : \mathcal X \to \mathcal Y$ that performs well on <em>new</em>
+          pairs $(\bx, y)$ drawn from the same distribution $P$, not only on the pairs in $\mathcal D$.</p>
+
+        <h3 id="formal-hypothesis">Hypothesis space</h3>
+        <div class="env definition" id="def-hypothesis">
+          <p>A <strong>hypothesis space</strong> (or model class) is a set of candidate predictors
+            $\mathcal H \subseteq \{f : \mathcal X \to \mathcal Y\}$. It is usually parametrised by a vector
+            $\theta \in \Theta \subseteq \R^k$:
+            $$\mathcal H = \{ f_\theta : \theta \in \Theta \}.$$</p>
+        </div>
+        <p>The choice of $\mathcal H$ decides which patterns the model can represent. Straight lines can only
+          capture simple trends. High-degree polynomials, trees or neural networks can express much more complicated
+          relationships.</p>
+
+        <h3 id="formal-loss">Loss and risk</h3>
+        <div class="env definition" id="def-loss">
+          <p>A <strong>loss function</strong> $\ell : \mathcal Y \times \mathcal Y \to [0, \infty)$ measures the cost
+            $\ell(\hat y, y)$ of predicting $\hat y$ when the true value is $y$. Standard examples are</p>
+          <ul>
+            <li>the <strong>squared loss</strong> $\ell(\hat y, y) = (\hat y - y)^2$ and the <strong>absolute
+              loss</strong> $\ell(\hat y, y) = |\hat y - y|$, for regression;</li>
+            <li>the <strong>0–1 loss</strong> $\ell(\hat y, y) = \mathbf 1\{\hat y \neq y\}$, which is $1$ for a
+              mistake and $0$ for a correct prediction, for classification.</li>
+          </ul>
+        </div>
+
+        <div class="env definition" id="def-risk">
+          <p>The <strong>risk</strong> (or expected loss, or generalisation error) of a predictor $f$ is its average
+            loss on a new pair drawn from $P$:
+            $$R(f) = \E_{(\bx, y) \sim P}\big[\ell(f(\bx), y)\big] = \int \ell(f(\bx), y)\, dP(\bx, y).$$
+            The <strong>empirical risk</strong> (or training error) is its average loss on the data:
+            $$\hat R_n(f) = \frac1n \sum_{i=1}^n \ell(f(\bx_i), y_i).$$</p>
+        </div>
+
+        <p>With the 0–1 loss, $R(f)$ is the probability that $f$ makes a mistake and $\hat R_n(f)$ is the fraction of
+          training points it misclassifies. With the squared loss, $\hat R_n(f)$ is the <em>mean squared error</em>
+          (MSE) on the training set.</p>
+
+        <p>We would like to minimise $R(f)$, but we cannot even compute it because $P$ is unknown. What we can compute
+          is $\hat R_n(f)$. The next result says that it is a sensible stand-in, at least for a predictor fixed in
+          advance.</p>
+
+        <div class="env proposition" id="prop-unbiased">
+          <p>Let $f$ be a predictor chosen <em>independently of the data</em> $\mathcal D$. Then
+            $$\E\big[\hat R_n(f)\big] = R(f), \qquad \Var\big(\hat R_n(f)\big) = \frac{\sigma_f^2}{n},$$
+            where $\sigma_f^2 = \Var\big(\ell(f(\bx), y)\big)$ for $(\bx, y) \sim P$. In particular, if $\sigma_f^2$
+            is finite, $\hat R_n(f) \to R(f)$ in probability as $n \to \infty$.</p>
+        </div>
+        <details class="proof" data-for="prop-unbiased">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Write $L_i = \ell(f(\bx_i), y_i)$. Because $f$ does not depend on the data and the pairs are
+              i.i.d., the $L_i$ are i.i.d. with mean $\E[L_i] = R(f)$ and variance $\sigma_f^2$. By linearity of
+              expectation, $\E[\hat R_n(f)] = \frac1n \sum_i \E[L_i] = R(f)$. By independence,
+              $\Var(\hat R_n(f)) = \frac1{n^2} \sum_i \Var(L_i) = \sigma_f^2 / n$. Chebyshev's inequality gives, for
+              every $\varepsilon > 0$,
+              $\P\big(|\hat R_n(f) - R(f)| \geq \varepsilon\big) \leq \sigma_f^2 / (n \varepsilon^2) \to 0.$</p>
+          </div>
+        </details>
+
+        <h3 id="formal-erm">Empirical risk minimisation</h3>
+        <p>Once a hypothesis space and a loss are fixed, learning becomes an optimisation problem.</p>
+        <div class="env definition" id="def-erm" data-name="Empirical risk minimisation">
+          <p>The <strong>empirical risk minimiser</strong> over $\mathcal H = \{f_\theta\}$ is
+            $$\hat\theta \in \argmin_{\theta \in \Theta} \hat R_n(f_\theta) = \argmin_{\theta \in \Theta}\
+            \frac1n \sum_{i=1}^n \ell\big(f_\theta(\bx_i), y_i\big), \qquad \hat f = f_{\hat\theta}.$$</p>
+        </div>
+        <p>This problem is solved in closed form when possible (linear regression, <a href="02-linear-regression.html">Chapter 2</a>)
+          and numerically otherwise, typically by gradient descent.</p>
+
+        <div class="callout pitfall">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>
+          <p class="callout__title">The training error is optimistic</p>
+          <div class="callout__body">
+            <p><a class="ref" href="#prop-unbiased"></a> needs $f$ to be chosen <em>before</em> seeing the data. The
+              fitted predictor $\hat f$ is chosen precisely because it makes $\hat R_n$ small on these particular
+              points, so in general $\E[\hat R_n(\hat f)] \leq \E[R(\hat f)]$: the training error underestimates the
+              true error. To estimate $R(\hat f)$ honestly we need data that were <em>not</em> used for fitting.</p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="in-action">The learning problem in action: polynomial regression</h2>
+        <p>We now go through the four components on a small regression problem where we know the truth, so that we
+          can see exactly what goes wrong. The inputs are $x \in [0, 1]$ and the outputs are generated as
+          $$y = \sin(2\pi x) + \varepsilon, \qquad \varepsilon \sim \mathcal N(0, 0.25^2),$$
+          so the data follow a smooth curve plus random noise. We observe only $n = 15$ such points.</p>
+
+        <h3 id="poly-model">Model: polynomials of degree $d$</h3>
+        <p>For each degree $d$ consider the hypothesis space
+          $$\mathcal H_d = \big\{ f_\theta(x) = \theta_0 + \theta_1 x + \dots + \theta_d x^d \big\}
+          = \big\{ f_\theta(x) = \theta\T \phi_d(x) \big\}, \qquad \phi_d(x) = (1, x, x^2, \dots, x^d)\T.$$
+          The model is non-linear in $x$ but <em>linear in the parameters</em> $\theta \in \R^{d+1}$. Once we
+          replace $x$ by the feature vector $\phi_d(x)$, polynomial regression is just linear regression, and the
+          minimiser of the squared loss has a closed form (<a href="02-linear-regression.html">Chapter 2</a>).</p>
+
+        <h3 id="poly-loss">Objective: mean squared error</h3>
+        <p>We fit $\theta$ by minimising the training MSE,
+          $$\mathrm{MSE}_{\text{train}}(\theta; d) = \frac{1}{n} \sum_{i=1}^{n} \big(y_i - \theta\T \phi_d(x_i)\big)^2.$$</p>
+
+        <h3 id="poly-eval">Evaluation: training and test error</h3>
+        <p>To measure generalisation we keep a <strong>test set</strong>: data drawn from the same distribution but
+          <em>never used for fitting</em>. For each degree $d$ we</p>
+        <ol>
+          <li>fit $\hat\theta_d$ by minimising the training MSE;</li>
+          <li>report the training error $\mathrm{MSE}_{\text{train}}(\hat\theta_d; d)$ and the test error
+            $\mathrm{MSE}_{\text{test}}(\hat\theta_d; d)$.</li>
+        </ol>
+        <p>By the same argument as in <a class="ref" href="#prop-unbiased"></a>, applied to the test points, the test
+          error is an unbiased estimate of the risk $R(\hat f)$, because $\hat f$ was chosen without looking at them.
+          In practice we only have one dataset, so we split it at random, typically into 80% for training and 20% for
+          testing.</p>
+
+        <figure class="viz viz--wide" data-viz="poly-fit" id="fig-poly-fit">
+          <div class="viz__stage"></div>
+          <figcaption>Polynomial regression of increasing degree on $n = 15$ noisy samples of
+            $\sin(2\pi x)$. Move the slider and watch both panels. The training error (squares) keeps decreasing,
+            while the test error (circles, computed on 300 fresh points) first decreases and then increases.
+            Draw a new training sample to see how unstable the high-degree fits are.</figcaption>
+        </figure>
+
+        <p>Two facts that you can see in <a class="ref" href="#fig-poly-fit"></a> are in fact theorems.</p>
+
+        <div class="env proposition" id="prop-nested">
+          <p>If $\mathcal H \subseteq \mathcal H'$, then
+            $\min_{f \in \mathcal H'} \hat R_n(f) \leq \min_{f \in \mathcal H} \hat R_n(f)$ (assuming both minima
+            exist). In particular, since $\mathcal H_0 \subseteq \mathcal H_1 \subseteq \mathcal H_2 \subseteq
+            \cdots$, the training error of the fitted polynomial is non-increasing in the degree $d$.</p>
+        </div>
+        <details class="proof" data-for="prop-nested">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Let $\hat f$ minimise $\hat R_n$ over $\mathcal H$. Since $\hat f \in \mathcal H'$ too,
+              $\min_{f \in \mathcal H'} \hat R_n(f) \leq \hat R_n(\hat f) = \min_{f \in \mathcal H} \hat R_n(f)$. A
+              polynomial of degree at most $d$ is also one of degree at most $d+1$ (take $\theta_{d+1} = 0$), so
+              $\mathcal H_d \subseteq \mathcal H_{d+1}$.</p>
+          </div>
+        </details>
+
+        <div class="env proposition" id="prop-interpolation">
+          <p>Let $x_1, \dots, x_n$ be distinct. For any targets $y_1, \dots, y_n$ there is a polynomial of degree
+            $d = n - 1$ that passes through all the points, so its training MSE is exactly $0$.</p>
+        </div>
+        <details class="proof" data-for="prop-interpolation">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>The conditions $f_\theta(x_i) = y_i$ for $i = 1, \dots, n$ form the linear system $V\theta = y$ with
+              the square Vandermonde matrix $V_{ij} = x_i^{\,j-1}$, $1 \leq i, j \leq n$. Its determinant is
+              $\det V = \prod_{1 \leq i \lt j \leq n} (x_j - x_i)$, which is non-zero because the $x_i$ are
+              distinct. Hence $V$ is invertible and $\theta = V^{-1} y$ interpolates the data.</p>
+          </div>
+        </details>
+
+        <p>So with $n = 15$ points, the degree-14 polynomial fits the training data perfectly, noise included. That
+          is clearly not what we want: the noise is, by definition, the part we cannot predict.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="capacity">Capacity, overfitting and generalisation</h2>
+        <p>The example illustrates three ideas that run through the whole course.</p>
+
+        <div class="env definition" id="def-capacity">
+          <p>The <strong>capacity</strong> of a hypothesis space is, informally, how complex the functions it
+            contains can be. A model <strong>underfits</strong> when its capacity is too low to capture the signal,
+            so both training and test errors are high. It <strong>overfits</strong> when it fits the training data,
+            noise included, much better than new data: the training error is low but the test error is high. A
+            model <strong>generalises</strong> well when its test error is close to its training error and both are
+            low.</p>
+        </div>
+
+        <ul>
+          <li><strong>Capacity.</strong> As $d$ grows, $\mathcal H_d$ becomes richer. Degree 1 only gives straight
+            lines; higher degrees can bend and oscillate.</li>
+          <li><strong>Overfitting.</strong> By <a class="ref" href="#prop-nested"></a> the training error always
+            decreases with $d$, and by <a class="ref" href="#prop-interpolation"></a> it reaches $0$. The
+            wiggles of a high-degree fit are not real structure, only the noise of this particular sample. Draw a
+            new sample in <a class="ref" href="#fig-poly-fit"></a> and they change completely.</li>
+          <li><strong>Generalisation.</strong> The test error is <strong>U-shaped</strong>. It decreases while extra
+            capacity helps to capture the signal, reaches a minimum at a moderate degree, then increases again as
+            the model starts fitting noise.</li>
+        </ul>
+
+        <div class="callout intuition">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+          <p class="callout__title">Intuition</p>
+          <div class="callout__body">
+            <p>A simple model makes the same systematic mistake on every sample (it is <em>biased</em>). A very
+              flexible model has no systematic mistake, but its fit changes a lot from one sample to the next (it has
+              high <em>variance</em>). The best model balances the two. <a href="03-regularization.html">Chapter 3</a>
+              turns this into the bias–variance decomposition.</p>
+          </div>
+        </div>
+
+        <div class="callout pitfall">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>
+          <p class="callout__title">Do not choose the model with the test set</p>
+          <div class="callout__body">
+            <p>If you try many degrees and keep the one with the smallest test error, the test set has been used to
+              make a choice, and its error is no longer an honest estimate of the risk. Model choices should be made
+              on a separate <em>validation</em> set or by <em>cross-validation</em>, and the test set used once at
+              the end. Both are introduced in <a href="03-regularization.html">Chapter 3</a>.</p>
+          </div>
+        </div>
+
+        <p>Every machine learning problem in this course has the same structure: choose a hypothesis space
+          (capacity), fit it to training data (optimisation), and evaluate it on unseen data (generalisation). The
+          following chapters add the tools to do this well: <em>regularisation</em> to control capacity without
+          changing the model class, <em>cross-validation</em> to choose hyperparameters, and richer model classes for
+          non-linear problems.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-tep">
+          <p>For each problem, identify the task $T$, the experience $E$ and a performance measure $P$, and say
+            whether it is regression, classification, clustering or dimensionality reduction. (a) Predicting
+            tomorrow's electricity demand of a city. (b) Grouping the customers of an online shop by purchase
+            behaviour. (c) Deciding from a biopsy image whether a tumour is malignant. (d) Summarising 30 measurements
+            per patient by 2 numbers that can be plotted.</p>
+        </div>
+
+        <div class="env exercise" id="exo-01-risk">
+          <p>Show that, for the 0–1 loss, $R(f) = \P\big(f(\bx) \neq y\big)$ and that $\hat R_n(f)$ is the proportion
+            of misclassified training points. What are the smallest and largest possible values of each?</p>
+        </div>
+
+        <div class="env exercise" id="exo-constant">
+          <p>Let $\mathcal H_0$ be the constant predictors $f(x) = c$ with $c \in \R$. Show that the empirical risk
+            minimiser for the squared loss is the sample mean $\hat c = \bar y = \frac1n \sum_i y_i$, and that for
+            the absolute loss it is any sample median.</p>
+        </div>
+
+        <div class="env exercise" id="exo-optimism">
+          <p>Let $\hat f$ be the degree-$(n-1)$ interpolating polynomial of
+            <a class="ref" href="#prop-interpolation"></a>, fitted on data with noise $y_i = g(x_i) + \varepsilon_i$,
+            $\Var(\varepsilon_i) = \sigma^2 > 0$. What is its training MSE? Use this to explain why
+            $\hat R_n(\hat f)$ cannot be an unbiased estimate of $R(\hat f)$ in general. Which hypothesis of
+            <a class="ref" href="#prop-unbiased"></a> fails?</p>
+        </div>
+
+        <div class="env exercise" id="exo-explore">
+          <p>In <a class="ref" href="#fig-poly-fit"></a>, draw ten different training samples and note the degree
+            with the lowest test error each time. Is it always the same? How do the fits of degree 1 and degree 12
+            change from one sample to the next? Relate your observations to the words <em>bias</em> and
+            <em>variance</em>.</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>A learning problem has four parts: a model (hypothesis space), data, an objective (loss), and an
+              evaluation on unseen data.</li>
+            <li>Supervised learning predicts a label (regression: real number; classification: category).
+              Unsupervised learning finds structure without labels (clustering, dimensionality reduction).</li>
+            <li>We want a small risk $R(f)$, but we can only compute the empirical risk $\hat R_n(f)$. Empirical risk
+              minimisation fits the model by minimising $\hat R_n$.</li>
+            <li>The training error always decreases as capacity grows and can reach zero. The test error is U-shaped.
+              Overfitting means a low training error but a high test error.</li>
+            <li>The test set must never be used to fit or to choose the model.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-bayes">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-bayes">Probabilistic view: the best possible predictor</h2>
+          <p class="extra__intro">This section looks at the learning problem through the data-generating
+            distribution $P$. It explains what the ideal predictor is and why even it makes errors.</p>
+
+          <p>Suppose for a moment that we knew $P$. Which predictor would minimise the risk over <em>all</em>
+            functions? The answer depends on the loss.</p>
+
+          <div class="env theorem" id="thm-regression-function" data-name="Regression function">
+            <p>For the squared loss, the risk is minimised by the conditional mean
+              $$f^*(\bx) = \E[\,y \mid \bx\,].$$
+              Moreover, for every predictor $f$,
+              $$R(f) = \underbrace{\E\big[(y - f^*(\bx))^2\big]}_{R(f^*)\ \text{(irreducible error)}}
+              + \E\big[(f^*(\bx) - f(\bx))^2\big].$$</p>
+          </div>
+          <details class="proof" data-for="thm-regression-function">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p>Add and subtract $f^*(\bx)$:
+                $$(y - f(\bx))^2 = (y - f^*(\bx))^2 + 2\,(y - f^*(\bx))(f^*(\bx) - f(\bx)) + (f^*(\bx) - f(\bx))^2.$$
+                Take expectations. For the middle term, condition on $\bx$: the factor $f^*(\bx) - f(\bx)$ is fixed
+                given $\bx$, and $\E[y - f^*(\bx) \mid \bx] = \E[y \mid \bx] - f^*(\bx) = 0$. By the tower property
+                the middle term has expectation $0$, which gives the decomposition. The second term is non-negative
+                and is $0$ for $f = f^*$, so $f^*$ minimises $R$.</p>
+            </div>
+          </details>
+
+          <p>If the data are generated as $y = g(\bx) + \varepsilon$ with $\E[\varepsilon \mid \bx] = 0$ and
+            $\Var(\varepsilon \mid \bx) = \sigma^2$, then $f^* = g$ and $R(f^*) = \sigma^2$. In
+            <a class="ref" href="#fig-poly-fit"></a>, $\sigma^2 = 0.0625$: no predictor can have a test MSE much
+            below this value, however clever it is. A test error far below $\sigma^2$ would be a sign of a bug.</p>
+
+          <div class="env theorem" id="thm-bayes-classifier" data-name="Bayes classifier">
+            <p>For the 0–1 loss with $\mathcal Y = \{1, \dots, K\}$, the risk is minimised by
+              $$f^*(\bx) = \argmax_{k} \ \P(y = k \mid \bx),$$
+              and its risk is $R(f^*) = 1 - \E\big[\max_k \P(y = k \mid \bx)\big]$.</p>
+          </div>
+          <details class="proof" data-for="thm-bayes-classifier">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p>Conditioning on $\bx$, the risk of any classifier $f$ is
+                $R(f) = \E\big[\P(y \neq f(\bx) \mid \bx)\big] = \E\big[1 - \P(y = f(\bx) \mid \bx)\big]$.
+                For each $\bx$, the quantity inside is smallest when $f(\bx)$ is the class with the largest
+                conditional probability. Choosing it for every $\bx$ minimises the integrand pointwise, hence the
+                expectation.</p>
+            </div>
+          </details>
+
+          <p>Both results say the same thing: <em>learning is estimating the conditional distribution of $y$ given
+            $\bx$</em>, or at least its mean or its mode. Later chapters develop this view. Least squares turns out to
+            be maximum likelihood under Gaussian noise (Chapter 2, extra material), and logistic regression is a
+            direct model of $\P(y = 1 \mid \bx)$ (Chapter 4).</p>
+
+          <div class="env exercise" id="exo-median">
+            <p>Show that for the absolute loss $\ell(\hat y, y) = |\hat y - y|$ the risk is minimised by any
+              conditional median of $y$ given $\bx$.</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

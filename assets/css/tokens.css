@@ -1,0 +1,59 @@
+/* ==========================================================================
+   Design tokens (base layer): colours and fonts.
+   Components never reference these directly — they go through the
+   semantic layer in main.css.
+   ========================================================================== */
+:root {
+  /* Font families */
+  --typography-fontfamilies-primary: "Montserrat";
+  --typography-fontfamilies-secondary: "PT Serif";
+
+  /* Font weights */
+  --typography-fontweights-regular: 400;
+  --typography-fontweights-medium: 500;
+  --typography-fontweights-semibold: 600;
+  --typography-fontweights-bold: 700;
+  --typography-fontweights-extrabold: 800;
+
+  /* Corporate */
+  --color-primary-oceanblue: #000066;
+  --color-primary-seablue: #47BFFF;
+  --color-secondary-marineblue: #0032A0;
+  --color-secondary-marineblue2: #0000A0;
+  --color-secondary-electricblue: #0000DB;
+  --color-secondary-lightblue: #BDE8FF;
+
+  /* Greys */
+  --color-grey-ieblack: #0F0F0F;
+  --color-grey-darkgrey: #434445;
+  --color-grey-middlegrey: #888A8C;
+  --color-grey-lightgrey: #BFC1C3;
+  --color-grey-softgrey: #F8F8F8;
+  --color-grey-iewhite: #F4F4F4;
+  --color-grey-white: #FFFFFF;
+
+  /* Schools */
+  --color-school-business: #0097DC;
+  --color-school-law: #D90011;
+  --color-school-archdesign: #921AD4;
+  --color-school-snt: #6DC201;
+  --color-school-sntdark: #1F3700;
+  --color-school-spega: #60080F;
+  --color-school-humanities: #FF5C00;
+
+  /* Semantic / status */
+  --color-semantic-winered: #7E1103;
+  --color-semantic-tangerine: #FF7B31;
+  --color-semantic-lemonyellow: #FBCA1E;
+  --color-semantic-accept: #23CE6B;
+  --color-semantic-alert: #F31233;
+  --color-semantic-iceblue: #E6F7FF;
+  --color-semantic-alumniblue: #1B1A43;
+  --color-semantic-midnight: #23207E;
+
+  /* Site extension: dark-theme neutrals (not part of the base palette;
+     derived from Alumni Blue for comfortable night reading) */
+  --color-ext-night: #0E0E26;
+  --color-ext-night-surface: #17173A;
+  --color-ext-night-border: #3A3A66;
+}

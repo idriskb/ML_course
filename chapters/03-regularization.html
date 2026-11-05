@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Model performance &amp; regularization — Machine Learning</title>
+  <meta name="description" content="Training, validation and test error; the bias–variance trade-off; ridge, lasso and elastic net; cross-validation and model selection.">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/bias-variance.js"></script>
+  <script defer src="../assets/js/viz/reg-geometry.js"></script>
+  <script defer src="../assets/js/viz/ridge-cv.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="03-regularization">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Model performance &amp; regularization</h1>
+          <p class="lede">How do we know a model will work on new data, and how do we stop it from fitting noise? This
+            chapter splits the data honestly, decomposes the test error into bias and variance, controls capacity with
+            ridge and lasso penalties, and chooses the amount of regularisation by cross-validation.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>Explain the roles of the training, validation and test sets, and avoid data leakage.</li>
+            <li>Derive the bias–variance decomposition of the expected test error and use it to diagnose underfitting
+              and overfitting.</li>
+            <li>Define ridge, lasso and elastic net, derive the ridge solution, and explain geometrically why the lasso
+              produces exact zeros.</li>
+            <li>Choose hyperparameters such as $\lambda$ with $K$-fold cross-validation.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="splits">Training, validation and test performance</h2>
+        <p>In <a href="01-learning-problem.html#capacity">Chapter 1</a> we saw that the training error is an
+          optimistic estimate of the true error: the model was chosen to make it small. Measuring performance
+          honestly requires data the model has not seen. Most models also have settings that are <em>not</em> learned
+          by minimising the training loss: the degree of a polynomial, the strength $\lambda$ of a penalty, the number
+          of neighbours $k$. These are <strong>hyperparameters</strong>, and choosing them is a second, separate use
+          of data.</p>
+
+        <div class="env definition" id="def-splits" data-name="Three-way split">
+          <p>The available data are split at random into three disjoint parts:</p>
+          <ul>
+            <li>the <strong>training set</strong>, used to fit the parameters $\theta$ for a given value of the
+              hyperparameters;</li>
+            <li>the <strong>validation set</strong>, used to compare hyperparameter values and choose one;</li>
+            <li>the <strong>test set</strong>, used <em>once</em>, at the very end, to estimate the error of the final
+              model.</li>
+          </ul>
+          <p>The errors measured on these sets are the training, validation and test errors. The difference between
+            test and training error is the <strong>generalisation gap</strong>.</p>
+        </div>
+
+        <p>Typical proportions are 60/20/20 or 70/15/15. Once the hyperparameters are chosen, the model is usually
+          refitted on training plus validation data before the final test evaluation.</p>
+
+        <div class="callout pitfall">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>
+          <p class="callout__title">Data leakage</p>
+          <div class="callout__body">
+            <p>Any information from the validation or test data that reaches the fitting step makes the evaluation
+              optimistic. A classic mistake is to standardise features with the mean and standard deviation of the
+              <em>whole</em> dataset before splitting. Compute these statistics on the training set only and apply
+              them unchanged to the other sets. In scikit-learn, a <code>Pipeline</code> does this automatically.</p>
+          </div>
+        </div>
+
+        <h3 id="diagnosis">Reading training and test errors</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>Diagnosing a model from its errors</caption>
+            <thead><tr><th scope="col">Training error</th><th scope="col">Test error</th><th scope="col">Diagnosis</th><th scope="col">What to try</th></tr></thead>
+            <tbody>
+              <tr><td>High</td><td>High (close to training)</td><td>Underfitting</td><td>More capacity: more features, higher degree, less regularisation</td></tr>
+              <tr><td>Low</td><td>Much higher</td><td>Overfitting</td><td>Less capacity, more regularisation, more data</td></tr>
+              <tr><td>Low</td><td>Low (close to training)</td><td>Good generalisation</td><td>Report the test error and stop</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="bias-variance">The bias–variance trade-off</h2>
+        <p>Why is the test error U-shaped in model complexity? To answer, think of the training set $\mathcal D$ as
+          random. Each draw of $\mathcal D$ gives a different fitted model $\hat f = \hat f_{\mathcal D}$, so
+          $\hat f(\bx)$ is a random variable. We study its average error.</p>
+
+        <p><strong>Set-up.</strong> The data follow $y = f^*(\bx) + \varepsilon$, with $\E[\varepsilon \mid \bx] = 0$ and
+          $\Var(\varepsilon \mid \bx) = \sigma^2$. Fix a test input $\bx$ and let $y = f^*(\bx) + \varepsilon$ be its
+          (random) label, independent of the training set. Write
+          $$\bar f(\bx) = \E_{\mathcal D}\big[\hat f(\bx)\big]$$
+          for the prediction at $\bx$ averaged over all possible training sets.</p>
+
+        <div class="env theorem" id="thm-bias-variance" data-name="Bias–variance decomposition">
+          <p>The expected squared error at $\bx$, averaged over training sets and over the noise, is
+            $$\E_{\mathcal D, \varepsilon}\big[(y - \hat f(\bx))^2\big]
+            = \underbrace{\big(\bar f(\bx) - f^*(\bx)\big)^2}_{\text{bias}^2}
+            + \underbrace{\E_{\mathcal D}\big[(\hat f(\bx) - \bar f(\bx))^2\big]}_{\text{variance}}
+            + \underbrace{\sigma^2}_{\text{noise}}.$$</p>
+        </div>
+        <details class="proof" data-for="thm-bias-variance">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>The input $\bx$ is fixed throughout, so we drop it from the notation and write
+              $\hat f = \hat f(\bx)$, $\bar f = \bar f(\bx)$ and $f^* = f^*(\bx)$. Only two things are random: the
+              training set $\mathcal D$, which determines $\hat f$, and the test noise $\varepsilon$. They are
+              independent.</p>
+
+            <p><strong>Step 1: separate the noise.</strong> Since $y = f^* + \varepsilon$,
+              $$y - \hat f = \varepsilon + (f^* - \hat f).$$
+              Square and take expectations:
+              $$\E\big[(y - \hat f)^2\big]
+              = \underbrace{\E[\varepsilon^2]}_{=\ \sigma^2}
+              + 2\,\underbrace{\E\big[\varepsilon\,(f^* - \hat f)\big]}_{=\ 0}
+              + \E\big[(\hat f - f^*)^2\big].$$
+              The middle term vanishes because $\varepsilon$ is independent of $\hat f$ and has mean zero:
+              $\E[\varepsilon\,(f^* - \hat f)] = \E[\varepsilon]\cdot\E[f^* - \hat f] = 0$. Hence
+              $$\E\big[(y - \hat f)^2\big] = \sigma^2 + \E_{\mathcal D}\big[(\hat f - f^*)^2\big]. \tag{1}$$</p>
+
+            <p><strong>Step 2: split the estimation error.</strong> Insert the average prediction $\bar f$:
+              $$\hat f - f^* = (\hat f - \bar f) + (\bar f - f^*).$$
+              The second bracket is a fixed number: it does not depend on $\mathcal D$. Square and take
+              $\E_{\mathcal D}$:
+              $$\E_{\mathcal D}\big[(\hat f - f^*)^2\big]
+              = \E_{\mathcal D}\big[(\hat f - \bar f)^2\big]
+              + 2\,(\bar f - f^*)\,\underbrace{\E_{\mathcal D}\big[\hat f - \bar f\big]}_{=\ 0}
+              + (\bar f - f^*)^2.$$
+              The middle term vanishes because $\E_{\mathcal D}[\hat f] = \bar f$ by definition. Hence
+              $$\E_{\mathcal D}\big[(\hat f - f^*)^2\big] = \underbrace{(\bar f - f^*)^2}_{\text{bias}^2} + \underbrace{\E_{\mathcal D}\big[(\hat f - \bar f)^2\big]}_{\text{variance}}. \tag{2}$$</p>
+
+            <p><strong>Step 3: combine.</strong> Substituting (2) into (1) gives the decomposition.</p>
+          </div>
+        </details>
+
+        <p>Averaging over a random test input $\bx$ gives the same decomposition for the expected test MSE:
+          $\text{test MSE} = \E_{\bx}[\text{bias}^2] + \E_{\bx}[\text{variance}] + \sigma^2$.</p>
+        <ul>
+          <li><strong>Bias</strong> is the systematic error: how far the <em>average</em> model is from the truth.
+            High bias means the model class is too simple (underfitting).</li>
+          <li><strong>Variance</strong> measures how much the fitted model changes from one training set to another.
+            High variance means the model is too sensitive to the particular sample (overfitting).</li>
+          <li><strong>Noise</strong> $\sigma^2$ is the irreducible error. No model can remove it.</li>
+        </ul>
+
+        <figure class="viz viz--wide" data-viz="bias-variance" id="fig-bias-variance">
+          <div class="viz__stage"></div>
+          <figcaption>The bias–variance trade-off, computed rather than sketched. We draw 200 independent training
+            sets from $y = \sin(2\pi x) + \varepsilon$, each with the same 20 equally spaced inputs and fresh noise,
+            and fit a polynomial of degree $d$ to each. Left:
+            20 of the fits (thin), their average $\bar f$ (thick) and the truth (dashed). Right: bias², variance and
+            their sum plus $\sigma^2$, averaged over $x$. Low degrees: all fits agree but are wrong (bias). High
+            degrees: right on average but wildly different from one another (variance).</figcaption>
+        </figure>
+
+        <p>Increasing capacity typically lowers the bias and raises the variance, so their sum is minimised at an
+          intermediate complexity. The same pattern holds for every family in this course: the number of neighbours
+          in k-NN (<a href="07-knn.html">Chapter 7</a>), the depth of a tree (<a href="08-trees.html">Chapter 8</a>),
+          the width of a kernel (<a href="09-kernels.html">Chapter 9</a>). The rest of this chapter shows how to
+          control capacity continuously with a penalty, and how to choose its strength.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="regularization">Regularisation</h2>
+        <p>Choosing the polynomial degree controls capacity in discrete jumps. <strong>Regularisation</strong> gives a
+          continuous dial: keep a flexible model, but add to the training loss a penalty that discourages complex
+          parameter values,
+          $$\min_\theta\ \underbrace{\frac1n\sum_{i=1}^n \big(y_i - \bx_i\T\theta\big)^2}_{\text{fit}}
+          \ +\ \lambda\, \underbrace{\Omega(\theta)}_{\text{complexity}}, \qquad \lambda \geq 0.$$
+          The hyperparameter $\lambda$ sets the exchange rate between fitting the data and keeping $\theta$ simple. At
+          $\lambda = 0$ we recover least squares; as $\lambda \to \infty$ the penalty wins and $\theta \to 0$.</p>
+        <p>Regularisation is especially useful when least squares is unstable: many features, features that are highly
+          correlated, or more features than observations ($p > n$), where $\bX\T\bX$ is singular
+          (<a href="02-linear-regression.html#normal-equations">Chapter 2</a>).</p>
+
+        <div class="callout pitfall">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>
+          <p class="callout__title">Two conventions to respect</p>
+          <div class="callout__body">
+            <p><strong>Do not penalise the intercept.</strong> Shifting all prices by a constant should shift the
+              intercept, not be fought by the penalty. <strong>Standardise the features first.</strong> The penalty
+              treats all coefficients alike, but a coefficient's size depends on the units of its feature (area in m²
+              or in cm² changes $\theta_j$ by a factor $10^4$). In what follows we assume the features are
+              standardised and $\by$ is centred, so the intercept is $\bar y$ and we can drop it from $\theta$.</p>
+          </div>
+        </div>
+
+        <h3 id="ridge">Ridge regression (L2)</h3>
+        <div class="env definition" id="def-ridge">
+          <p><strong>Ridge regression</strong> penalises the squared Euclidean norm of the coefficients:
+            $$\hat\theta_{\text{ridge}} = \argmin_{\theta \in \R^p}\ \frac1n\norm{\by - \bX\theta}^2 + \lambda\norm{\theta}_2^2,
+            \qquad \norm{\theta}_2^2 = \sum_{j=1}^p \theta_j^2.$$</p>
+        </div>
+
+        <div class="env theorem" id="thm-ridge">
+          <p>For every $\lambda > 0$ the ridge problem has a unique solution,
+            $$\hat\theta_{\text{ridge}} = \big(\bX\T\bX + n\lambda I\big)^{-1}\bX\T\by,$$
+            even when $\bX$ does not have full column rank (for example when $p > n$).</p>
+        </div>
+        <details class="proof" data-for="thm-ridge">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Let $J(\theta) = \frac1n\norm{\by - \bX\theta}^2 + \lambda\norm{\theta}^2$ and write
+              $A = \bX\T\bX + n\lambda I$.</p>
+
+            <p><strong>Step 1: gradient and Hessian.</strong> The first term was differentiated in Chapter 2, and
+              $\nabla\big(\lambda\norm{\theta}^2\big) = 2\lambda\theta$. So
+              $$\nabla J(\theta) = -\frac2n\bX\T(\by - \bX\theta) + 2\lambda\theta = \frac2n\big(A\theta - \bX\T\by\big),
+              \qquad \nabla^2 J(\theta) = \frac2n A.$$</p>
+
+            <p><strong>Step 2: $A$ is positive definite.</strong> For every $\mathbf v \neq 0$,
+              $$\mathbf v\T A\,\mathbf v = \underbrace{\norm{\bX\mathbf v}^2}_{\geq\ 0} + \underbrace{n\lambda\norm{\mathbf v}^2}_{>\ 0} > 0.$$
+              This holds whatever the rank of $\bX$, because $\lambda > 0$. Consequently $A$ is invertible, and $J$ is
+              strictly convex (its Hessian is positive definite).</p>
+
+            <p><strong>Step 3: conclude.</strong> A strictly convex differentiable function has at most one stationary
+              point, and that point is its global minimiser. Setting the gradient to zero,
+              $$\nabla J(\theta) = 0 \iff A\theta = \bX\T\by \iff \theta = A^{-1}\bX\T\by = \big(\bX\T\bX + n\lambda I\big)^{-1}\bX\T\by.$$</p>
+          </div>
+        </details>
+
+        <p>Adding $n\lambda$ to the diagonal is what gives ridge its name: it adds a "ridge" to $\bX\T\bX$ that
+          lifts its small eigenvalues away from zero. The directions in which the data carry little information,
+          which are the ones that make least squares unstable, are exactly the ones that ridge shrinks most.</p>
+
+        <h3 id="lasso">Lasso regression (L1)</h3>
+        <div class="env definition" id="def-lasso">
+          <p>The <strong>lasso</strong> (least absolute shrinkage and selection operator) penalises the L1 norm:
+            $$\hat\theta_{\text{lasso}} = \argmin_{\theta \in \R^p}\ \frac1n\norm{\by - \bX\theta}^2 + \lambda\norm{\theta}_1,
+            \qquad \norm{\theta}_1 = \sum_{j=1}^p |\theta_j|.$$</p>
+        </div>
+        <p>The objective is convex but not differentiable where some $\theta_j = 0$, and there is no closed-form
+          solution in general. It is solved numerically, typically by <em>coordinate descent</em>, which updates one
+          coefficient at a time (this is what scikit-learn does). The decisive property of the lasso is that it sets
+          some coefficients <strong>exactly</strong> to zero, so it performs feature selection. The cleanest way to
+          see the difference from ridge is a special case in which both can be solved by hand.</p>
+
+        <div class="env proposition" id="prop-orthonormal" data-name="Shrinkage versus thresholding">
+          <p>Suppose the features are orthogonal with $\bX\T\bX = nI$, and let $\hat\theta = \frac1n\bX\T\by$ be the
+            least-squares solution. Then, coordinate by coordinate,
+            $$\hat\theta_{\text{ridge}, j} = \frac{\hat\theta_j}{1 + \lambda}, \qquad
+            \hat\theta_{\text{lasso}, j} = \operatorname{sign}(\hat\theta_j)\,\Big(|\hat\theta_j| - \frac\lambda2\Big)_+,$$
+            where $(u)_+ = \max(u, 0)$. Ridge shrinks every coefficient by the same factor and never reaches zero.
+            The lasso subtracts a constant and sets every coefficient with $|\hat\theta_j| \leq \lambda/2$ exactly to
+            zero (<strong>soft thresholding</strong>).</p>
+        </div>
+        <details class="proof" data-for="prop-orthonormal">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: the problem separates.</strong> Expand the loss using $\bX\T\bX = nI$ and
+              $\bX\T\by = n\hat\theta$:
+              $$\begin{aligned}
+              \frac1n\norm{\by - \bX\theta}^2
+              &= \frac1n\norm{\by}^2 - \frac2n\,\theta\T\bX\T\by + \frac1n\,\theta\T\bX\T\bX\theta \\
+              &= \frac1n\norm{\by}^2 - 2\,\theta\T\hat\theta + \norm{\theta}^2 \\
+              &= \norm{\theta - \hat\theta}^2 + \text{const}.
+              \end{aligned}$$
+              Both $\norm{\theta - \hat\theta}^2$ and the penalties are sums over coordinates, so each coordinate can
+              be minimised on its own. Fix $j$ and write $a = \hat\theta_j$.</p>
+
+            <p><strong>Step 2: ridge.</strong> Minimise $r(t) = (t - a)^2 + \lambda t^2$:
+              $$r'(t) = 2(t - a) + 2\lambda t = 0 \iff t = \frac{a}{1 + \lambda}.$$</p>
+
+            <p><strong>Step 3: lasso.</strong> Minimise $g(t) = (t - a)^2 + \lambda|t|$. Assume $a \geq 0$ (the case
+              $a \lt 0$ is symmetric). A negative $t$ is never optimal: $-t$ has the same penalty and is closer to $a$.
+              On $t > 0$,
+              $$g'(t) = 2(t - a) + \lambda = 0 \iff t = a - \frac\lambda2 .$$</p>
+              <ul>
+                <li>If $a > \lambda/2$, this point is positive and it is the minimiser.</li>
+                <li>If $a \leq \lambda/2$, then $g'(t) > 0$ for all $t > 0$, so $g$ is increasing and the minimum is at
+                  $t = 0$.</li>
+              </ul>
+              <p>Both cases are summarised by $t = (a - \lambda/2)_+$, which with the sign restored is the stated
+              formula.</p>
+          </div>
+        </details>
+
+        <h3 id="elastic-net">Elastic net</h3>
+        <p>Ridge handles groups of correlated features gracefully by spreading the weight among them. The lasso
+          selects features, but among highly correlated ones it tends to pick one arbitrarily. The <strong>elastic
+          net</strong> combines the two penalties:
+          $$\hat\theta_{\text{EN}} = \argmin_\theta\ \frac1n\norm{\by - \bX\theta}^2
+          + \lambda\Big(\alpha\norm{\theta}_1 + (1 - \alpha)\norm{\theta}_2^2\Big), \qquad \alpha \in [0, 1].$$
+          $\alpha = 0$ gives ridge, $\alpha = 1$ the lasso, and intermediate values give sparse solutions that keep
+          correlated features together.</p>
+
+        <h3 id="reg-geometry">The geometry of L1 and L2</h3>
+        <p>The penalised problem has an equivalent <strong>constrained</strong> form: for every $\lambda$ there is a
+          budget $t$ such that the same $\hat\theta$ solves
+          $$\min_\theta\ \frac1n\norm{\by - \bX\theta}^2 \quad \text{subject to} \quad \Omega(\theta) \leq t,$$
+          with a smaller $t$ corresponding to a larger $\lambda$. (This follows from Lagrange duality for convex
+          problems.) In two dimensions we can draw it. The loss has elliptical contours centred at the least-squares
+          solution. The constraint region is a disc for ridge and a diamond for the lasso. The solution is the point
+          where the smallest ellipse touches the region.</p>
+
+        <figure class="viz" data-viz="reg-geometry" id="fig-reg-geometry">
+          <div class="viz__stage"></div>
+          <figcaption>Ridge and lasso as constrained least squares. The solution (filled circle) is where the
+            smallest loss contour (thick) touches the constraint region. The dashed curve is the path of the solution
+            as the budget $t$ grows from $0$. <strong>Try:</strong> with the lasso, shrink $t$ and watch the solution
+            hit the $\theta_1$ axis; then switch to ridge with the same settings.</figcaption>
+        </figure>
+
+        <p>The diamond has <em>corners</em> on the axes, and a corner sticks out towards the ellipses. For a wide range
+          of positions of the least-squares solution, the first contact happens at a corner, where one coordinate is
+          exactly zero. The disc has no corners. Its boundary is smooth, and the contact point generically has both
+          coordinates non-zero. In high dimensions the L1 ball has many corners and edges, which is why the lasso
+          returns sparse solutions so often.</p>
+
+        <h3 id="reg-bias-variance">Regularisation and the bias–variance trade-off</h3>
+        <p>Regularisation deliberately introduces bias: coefficients are pulled towards zero. In exchange it reduces
+          variance. The surprising fact is that the exchange is always favourable at first.</p>
+
+        <div class="env proposition" id="prop-shrinkage">
+          <p>Let $\hat\theta$ be an unbiased estimator of a number $\theta \neq 0$ with variance $v > 0$, and consider
+            the shrunk estimator $\hat\theta_\lambda = \hat\theta/(1 + \lambda)$, as in ridge
+            (<a class="ref" href="#prop-orthonormal"></a>). Its mean squared error is
+            $$\E\big[(\hat\theta_\lambda - \theta)^2\big] = \underbrace{\Big(\frac{\lambda}{1 + \lambda}\Big)^2\theta^2}_{\text{bias}^2}
+            + \underbrace{\frac{v}{(1 + \lambda)^2}}_{\text{variance}},$$
+            which is strictly smaller than the error $v$ of $\hat\theta$ for every $0 \lt \lambda \lt 2v/(\theta^2 - v)$
+            (for every $\lambda > 0$ if $\theta^2 \leq v$). It is minimised at $\lambda^* = v/\theta^2$.</p>
+        </div>
+        <details class="proof" data-for="prop-shrinkage">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: bias and variance.</strong> By linearity,
+              $$\E[\hat\theta_\lambda] = \frac{\theta}{1 + \lambda}, \qquad
+              \text{bias} = \frac{\theta}{1 + \lambda} - \theta = -\frac{\lambda\,\theta}{1 + \lambda}, \qquad
+              \Var(\hat\theta_\lambda) = \frac{v}{(1 + \lambda)^2}.$$
+              The MSE is bias² plus variance (step 2 of the proof of <a class="ref" href="#thm-bias-variance"></a>),
+              which gives the formula.</p>
+
+            <p><strong>Step 2: change variable.</strong> Let $s = \frac{1}{1 + \lambda} \in (0, 1]$, so that
+              $\frac{\lambda}{1 + \lambda} = 1 - s$. The MSE becomes the parabola
+              $$m(s) = (1 - s)^2\,\theta^2 + s^2\,v, \qquad m(1) = v \ \ (\text{no shrinkage}).$$</p>
+
+            <p><strong>Step 3: the optimum.</strong>
+              $$m'(s) = -2(1 - s)\,\theta^2 + 2s\,v = 0 \iff s^* = \frac{\theta^2}{\theta^2 + v} \lt 1
+              \iff \lambda^* = \frac{v}{\theta^2}.$$</p>
+
+            <p><strong>Step 4: when shrinkage helps.</strong> Let $s \lt 1$. Using $1 - s^2 = (1 - s)(1 + s)$ and dividing
+              by $1 - s > 0$,
+              $$\begin{aligned}
+              m(s) \lt v
+              &\iff (1 - s)^2\,\theta^2 \lt (1 - s)(1 + s)\,v \\
+              &\iff (1 - s)\,\theta^2 \lt (1 + s)\,v \\
+              &\iff s > \frac{\theta^2 - v}{\theta^2 + v}.
+              \end{aligned}$$
+              If $\theta^2 \leq v$ the right-hand side is $\leq 0$, so every $\lambda > 0$ helps. Otherwise, substituting
+              $s = 1/(1 + \lambda)$ gives $\lambda \lt 2v/(\theta^2 - v)$.</p>
+          </div>
+        </details>
+
+        <p>Small $\lambda$ gives low bias and high variance, and large $\lambda$ the reverse. The best $\lambda$
+          depends on unknown quantities (here $\theta$ and $v$), so in practice we estimate it from data, by
+          cross-validation.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="cross-validation">Cross-validation and model selection</h2>
+        <p>A single validation set wastes data and gives a noisy estimate, especially when $n$ is small.
+          Cross-validation reuses the data: every point is used for validation exactly once.</p>
+
+        <div class="env definition" id="def-kfold" data-name="K-fold cross-validation">
+          <p>Split the training data at random into $K$ folds $F_1, \dots, F_K$ of (nearly) equal size. For each
+            $k$, fit the model on all folds except $F_k$, giving $\hat f^{(-k)}$, and compute its error on $F_k$. The
+            cross-validation error is the average
+            $$\mathrm{CV}_K = \frac1K\sum_{k=1}^K \frac{1}{|F_k|}\sum_{i \in F_k}\big(y_i - \hat f^{(-k)}(\bx_i)\big)^2.$$
+            With $K = n$ (one point per fold) this is <strong>leave-one-out</strong> cross-validation.</p>
+        </div>
+
+        <figure class="numbered diagram" id="fig-kfold">
+          <svg viewBox="0 0 640 230" role="img" aria-label="Five rows, one per split. Each row has five blocks; in row k the k-th block is the validation fold and the other four are training folds. A separate block on the right is the test set, which is never used during cross-validation.">
+            <g>
+              <text class="d-label" x="10" y="37">Split 1</text><text class="d-label" x="10" y="71">Split 2</text>
+              <text class="d-label" x="10" y="105">Split 3</text><text class="d-label" x="10" y="139">Split 4</text>
+              <text class="d-label" x="10" y="173">Split 5</text>
+            </g>
+            <g>
+              <rect class="d-a" x="72"  y="20"  width="84" height="26" rx="4"/><rect class="d-panel" x="160" y="20"  width="84" height="26" rx="4"/><rect class="d-panel" x="248" y="20"  width="84" height="26" rx="4"/><rect class="d-panel" x="336" y="20"  width="84" height="26" rx="4"/><rect class="d-panel" x="424" y="20"  width="84" height="26" rx="4"/>
+              <rect class="d-panel" x="72"  y="54"  width="84" height="26" rx="4"/><rect class="d-a" x="160" y="54"  width="84" height="26" rx="4"/><rect class="d-panel" x="248" y="54"  width="84" height="26" rx="4"/><rect class="d-panel" x="336" y="54"  width="84" height="26" rx="4"/><rect class="d-panel" x="424" y="54"  width="84" height="26" rx="4"/>
+              <rect class="d-panel" x="72"  y="88"  width="84" height="26" rx="4"/><rect class="d-panel" x="160" y="88"  width="84" height="26" rx="4"/><rect class="d-a" x="248" y="88"  width="84" height="26" rx="4"/><rect class="d-panel" x="336" y="88"  width="84" height="26" rx="4"/><rect class="d-panel" x="424" y="88"  width="84" height="26" rx="4"/>
+              <rect class="d-panel" x="72"  y="122" width="84" height="26" rx="4"/><rect class="d-panel" x="160" y="122" width="84" height="26" rx="4"/><rect class="d-panel" x="248" y="122" width="84" height="26" rx="4"/><rect class="d-a" x="336" y="122" width="84" height="26" rx="4"/><rect class="d-panel" x="424" y="122" width="84" height="26" rx="4"/>
+              <rect class="d-panel" x="72"  y="156" width="84" height="26" rx="4"/><rect class="d-panel" x="160" y="156" width="84" height="26" rx="4"/><rect class="d-panel" x="248" y="156" width="84" height="26" rx="4"/><rect class="d-panel" x="336" y="156" width="84" height="26" rx="4"/><rect class="d-a" x="424" y="156" width="84" height="26" rx="4"/>
+            </g>
+            <rect class="d-b-stroke" stroke-width="2" stroke-dasharray="6 4" x="528" y="20" width="100" height="162" rx="6"/>
+            <text class="d-text" x="578" y="96" text-anchor="middle" font-weight="700">Test</text>
+            <text class="d-label" x="578" y="114" text-anchor="middle">never used</text>
+            <rect class="d-a" x="72" y="204" width="16" height="12" rx="2"/><text class="d-label" x="94" y="214">validation fold</text>
+            <rect class="d-panel" x="210" y="204" width="16" height="12" rx="2"/><text class="d-label" x="232" y="214">training folds</text>
+          </svg>
+          <figcaption>Five-fold cross-validation. Each split trains on four folds and validates on the fifth. The
+            validation errors of the five splits are averaged. The test set stays aside throughout.</figcaption>
+        </figure>
+
+        <p>To choose a hyperparameter such as $\lambda$:</p>
+        <ol>
+          <li>set aside a test set and do not touch it;</li>
+          <li>for each candidate $\lambda$ on a grid (usually logarithmic, e.g. $10^{-4}, 10^{-3}, \dots, 10^{2}$),
+            compute $\mathrm{CV}_K(\lambda)$ on the remaining data;</li>
+          <li>choose $\hat\lambda = \argmin_\lambda \mathrm{CV}_K(\lambda)$;</li>
+          <li>refit with $\hat\lambda$ on all the non-test data, and report its error on the test set.</li>
+        </ol>
+
+        <figure class="viz viz--wide" data-viz="ridge-cv" id="fig-ridge-cv">
+          <div class="viz__stage"></div>
+          <figcaption>Ridge regularisation of a degree-12 polynomial fitted to 20 points (polynomial features in an
+            orthogonal basis). At tiny $\lambda$ the fit wiggles through the noise. At large $\lambda$ it flattens
+            out. The 5-fold CV error (circles) is computed from the 20 training points only, yet it finds a good
+            $\lambda$. Tick "show the test error" to check, which in real life you are not allowed to do until the
+            very end.</figcaption>
+        </figure>
+
+        <p>Some practical points:</p>
+        <ul>
+          <li><strong>Choice of $K$.</strong> $K = 5$ or $10$ is standard. It costs $K$ fits per candidate value.
+            Leave-one-out uses the most data per fit but is expensive in general and its estimate can be very
+            variable.</li>
+          <li><strong>One-standard-error rule.</strong> The CV curve is itself noisy. A common choice is the
+            <em>simplest</em> model whose CV error is within one standard error of the minimum.</li>
+          <li><strong>Preprocessing inside the folds.</strong> Standardisation, feature selection and any other
+            data-dependent step must be refitted within each training fold, or the CV error leaks information.</li>
+          <li><strong>Structured data.</strong> Random folds assume i.i.d. data. For time series, validate on the
+            future. For grouped data, such as several houses from the same street, keep each group in one fold.</li>
+        </ul>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-diagnose">
+          <p>Define underfitting and overfitting. Classify each situation and justify: (a) high training error and
+            high test error; (b) very low training error but high test error; (c) good performance on both.</p>
+        </div>
+
+        <div class="env exercise" id="exo-tradeoff">
+          <p>Explain in your own words the bias–variance trade-off, and illustrate how increasing model complexity
+            affects bias and variance. Sketch training and test error against complexity, and explain why the test
+            error eventually rises although the training error keeps falling.</p>
+        </div>
+
+        <div class="env exercise" id="exo-orthonormal">
+          <p>Suppose $\bX\T\bX = nI$ and the least-squares coefficients are $\hat\theta = (3, -0.4, 1.2, 0.1)$. Compute
+            the ridge and lasso solutions for $\lambda = 1$. Which features does the lasso remove?</p>
+        </div>
+
+        <div class="env exercise" id="exo-correlated">
+          <p>Two features $x_1$ and $x_2$ are highly correlated. Explain how ridge and lasso behave differently in this
+            situation. Which produces sparse solutions? What does the elastic net do?</p>
+        </div>
+
+        <div class="env exercise" id="exo-choose-lambda">
+          <p>Describe a practical method to select $\lambda$ in ridge or lasso regression, and explain why it balances
+            bias and variance. Why must the test set not be used for this choice?</p>
+        </div>
+
+        <div class="env exercise" id="exo-reg-scaling">
+          <p>Why must features be standardised before ridge or lasso? What happens to the penalty on a feature
+            measured in very large units compared with the others?</p>
+        </div>
+
+        <div class="env exercise" id="exo-lambda-curve">
+          <p>Describe how bias, variance and expected test error behave as $\lambda$ increases from $0$ to a very
+            large value in ridge regression. Check your answer with <a class="ref" href="#fig-ridge-cv"></a>.</p>
+        </div>
+
+        <div class="env exercise" id="exo-geometry-l1">
+          <p>(a) Describe the constraint region of ridge and of the lasso in two dimensions. (b) Explain why the shape
+            of the lasso region produces coefficients that are exactly zero, while ridge coefficients rarely are. Use
+            <a class="ref" href="#fig-reg-geometry"></a> to find a position of the OLS solution for which even the lasso
+            keeps both coefficients non-zero.</p>
+        </div>
+
+        <div class="env exercise" id="exo-loocv">
+          <p>(Challenging) For least squares, let $H = \bX(\bX\T\bX)^{-1}\bX\T$ be the hat matrix of Chapter 2 and
+            $e_i$ the training residuals. Show that the leave-one-out residual is $e_i/(1 - H_{ii})$, so that
+            $$\mathrm{CV}_n = \frac1n\sum_{i=1}^n\Big(\frac{e_i}{1 - H_{ii}}\Big)^2$$
+            can be computed from a single fit. (Hint: the Sherman–Morrison formula.)</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>Fit on the training set, choose hyperparameters on validation data (or by cross-validation), and use
+              the test set once at the end. Fit all preprocessing on training data only.</li>
+            <li>Expected test error = bias² + variance + noise. Capacity trades bias for variance.</li>
+            <li>Ridge, $\hat\theta = (\bX\T\bX + n\lambda I)^{-1}\bX\T\by$, always exists and shrinks all
+              coefficients. The lasso sets some coefficients exactly to zero (soft thresholding).</li>
+            <li>The corners of the L1 ball explain the sparsity of the lasso. The elastic net mixes both penalties.</li>
+            <li>A little shrinkage always helps an unbiased estimator. How much is chosen by $K$-fold
+              cross-validation.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-bayes">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-bayes">Probabilistic view: regularisation as a prior</h2>
+          <p class="extra__intro">In Chapter 2 (extra) least squares appeared as maximum likelihood under Gaussian
+            noise. Here penalties appear as prior beliefs about the parameters.</p>
+
+          <p>In the Bayesian approach the parameters are random too. Before seeing data we express our beliefs in a
+            <strong>prior</strong> $p(\theta)$. After seeing data, Bayes' rule gives the <strong>posterior</strong>
+            $$p(\theta \mid \mathcal D) = \frac{p(\mathcal D \mid \theta)\,p(\theta)}{p(\mathcal D)} \ \propto\ p(\mathcal D \mid \theta)\,p(\theta).$$
+            The <strong>maximum a posteriori</strong> (MAP) estimate maximises the posterior, or equivalently
+            minimises $-\log p(\mathcal D \mid \theta) - \log p(\theta)$: a data-fit term plus a penalty.</p>
+
+          <div class="env theorem" id="thm-map">
+            <p>Assume the Gaussian noise model $y_i \mid \bx_i \sim \mathcal N(\bx_i\T\theta, \sigma^2)$ (independent).</p>
+            <ol>
+              <li>With independent Gaussian priors $\theta_j \sim \mathcal N(0, \tau^2)$, the MAP estimate is the ridge
+                estimate with $\lambda = \dfrac{\sigma^2}{n\tau^2}$.</li>
+              <li>With independent Laplace priors $p(\theta_j) = \frac{1}{2b}e^{-|\theta_j|/b}$, the MAP estimate is the
+                lasso estimate with $\lambda = \dfrac{2\sigma^2}{nb}$.</li>
+            </ol>
+          </div>
+          <details class="proof" data-for="thm-map">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p>Up to constants that do not depend on $\theta$,
+                $-\log p(\mathcal D \mid \theta) = \frac{1}{2\sigma^2}\norm{\by - \bX\theta}^2$.</p>
+              <p>(1) $-\log p(\theta) = \frac{1}{2\tau^2}\norm{\theta}_2^2 + \text{const}$. Multiply the sum by the
+                positive constant $2\sigma^2/n$, which does not change the minimiser:
+                $\frac1n\norm{\by - \bX\theta}^2 + \frac{\sigma^2}{n\tau^2}\norm{\theta}_2^2$.</p>
+              <p>(2) $-\log p(\theta) = \frac1b\norm{\theta}_1 + \text{const}$. Multiplying by $2\sigma^2/n$ gives
+                $\frac1n\norm{\by - \bX\theta}^2 + \frac{2\sigma^2}{nb}\norm{\theta}_1$.</p>
+            </div>
+          </details>
+
+          <p>The formulas make sense. A narrow prior (small $\tau$ or $b$: strong belief that coefficients are small)
+            means a large $\lambda$. A lot of data (large $n$) means a small $\lambda$: the data overrule the prior. The
+            Laplace density has a sharp peak at zero and heavier tails than the Gaussian. It says "most coefficients are
+            zero, a few may be large", which is what the lasso delivers.</p>
+
+          <div class="env proposition" id="prop-ridge-posterior">
+            <p>Under the Gaussian prior $\theta \sim \mathcal N(0, \tau^2 I)$, the posterior is Gaussian,
+              $\theta \mid \mathcal D \sim \mathcal N(\mu, \Sigma)$ with
+              $$\Sigma = \Big(\frac{1}{\sigma^2}\bX\T\bX + \frac{1}{\tau^2}I\Big)^{-1}, \qquad \mu = \frac{1}{\sigma^2}\Sigma\bX\T\by.$$
+              In particular the posterior mean $\mu$ equals the ridge estimate, and $\Sigma$ quantifies the uncertainty
+              about $\theta$ that remains after seeing the data.</p>
+          </div>
+          <details class="proof" data-for="prop-ridge-posterior">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p>The log-posterior is, up to a constant,
+                $-\frac{1}{2\sigma^2}\norm{\by - \bX\theta}^2 - \frac{1}{2\tau^2}\norm{\theta}^2
+                = -\frac12\theta\T\Sigma^{-1}\theta + \theta\T\frac{\bX\T\by}{\sigma^2} + \text{const}.$
+                Completing the square, this is $-\frac12(\theta - \mu)\T\Sigma^{-1}(\theta - \mu) + \text{const}$ with
+                $\Sigma^{-1}\mu = \bX\T\by/\sigma^2$, which is the log-density of $\mathcal N(\mu, \Sigma)$. Finally
+                $\mu = (\bX\T\bX + \frac{\sigma^2}{\tau^2}I)^{-1}\bX\T\by$, the ridge solution with
+                $n\lambda = \sigma^2/\tau^2$.</p>
+            </div>
+          </details>
+
+          <div class="env exercise" id="exo-map-limit">
+            <p>What happens to the MAP estimate of <a class="ref" href="#thm-map"></a> as $\tau \to \infty$ (a flat
+              prior)? And as $n \to \infty$ with $\tau$ fixed? Interpret both limits.</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

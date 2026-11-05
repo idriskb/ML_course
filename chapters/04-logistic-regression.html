@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Logistic regression — Machine Learning</title>
+  <meta name="description" content="Logistic regression: the sigmoid model, decision boundaries, Bernoulli likelihood and cross-entropy, gradient descent, softmax, and classification metrics including ROC and AUC.">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/lin-vs-logistic.js"></script>
+  <script defer src="../assets/js/viz/logistic-2d.js"></script>
+  <script defer src="../assets/js/viz/roc.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="04-logistic-regression">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Logistic regression</h1>
+          <p class="lede">Our first classifier. Instead of predicting a label directly, logistic regression predicts
+            the <em>probability</em> of each class with a linear score passed through the sigmoid. We derive its loss
+            from the Bernoulli likelihood, train it by gradient descent, extend it to many classes with the softmax,
+            and learn how to evaluate a classifier properly.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>Explain why linear regression is a poor classifier, and model classification as probability
+              prediction.</li>
+            <li>State the logistic regression model, interpret its coefficients as log-odds, and describe its decision
+              boundary.</li>
+            <li>Derive the cross-entropy loss from the Bernoulli likelihood, and compute its gradient and Hessian.</li>
+            <li>Extend the model to $K$ classes with the softmax function.</li>
+            <li>Evaluate a classifier with the confusion matrix, precision, recall, F1, the ROC curve and the AUC.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="motivation">Why linear regression fails for classification</h2>
+        <p>In classification the target takes finitely many values. We start with two classes, coded
+          $y \in \{0, 1\}$. Our running example is the <em>breast cancer</em> dataset of Lab 2: from measurements of
+          cell nuclei in a biopsy image, decide whether a tumour is <strong>malignant</strong> ($y = 1$) or
+          <strong>benign</strong> ($y = 0$).</p>
+        <p>A first idea is to reuse linear regression: fit $\hat y = \bx\T\theta$ to the 0/1 labels by least squares,
+          and predict "malignant" when $\hat y \geq 0.5$. This has three problems.</p>
+        <ol>
+          <li><strong>The outputs are not probabilities.</strong> $\bx\T\theta$ ranges over all of $\R$. A prediction of
+            $-0.7$ or $1.8$ has no meaning as a probability.</li>
+          <li><strong>The fit is pulled by easy points.</strong> Least squares penalises a very large tumour predicted
+            at $\hat y = 3$ as heavily as a mistake, although it is classified correctly with great confidence. Such
+            points tilt the line and move the threshold (<a class="ref" href="#fig-lin-vs-log"></a>).</li>
+          <li><strong>The loss does not match the data.</strong> Squared error is natural for real-valued noise
+            around a mean. Labels that are either $0$ or $1$ call for a different model of randomness.</li>
+        </ol>
+
+        <figure class="viz" data-viz="lin-vs-logistic" id="fig-lin-vs-log">
+          <div class="viz__stage"></div>
+          <figcaption>Least squares versus logistic regression on one feature, tumour size. Tick the box to add four
+            very large malignant tumours. They are the <em>easiest</em> cases, yet they drag the least-squares threshold
+            to the right and benign-looking malignant tumours start being missed. The logistic threshold hardly moves.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="probabilistic-prediction">Classification as probabilistic prediction</h2>
+        <p>Instead of predicting the label, we predict the <strong>probability</strong> that the label is $1$:
+          $$p(\bx) = \P(y = 1 \mid \bx), \qquad \P(y = 0 \mid \bx) = 1 - p(\bx).$$
+          A probability is more useful than a bare label. It says how confident the model is. It can be turned into a
+          decision with a threshold suited to the application, for example a low threshold for cancer screening where
+          missing a malignant tumour is costly. It can also be compared and ranked across patients. So we need a model
+          whose output always lies in $(0, 1)$.</p>
+
+        <div class="env definition" id="def-sigmoid">
+          <p>The <strong>logistic</strong> or <strong>sigmoid</strong> function is
+            $$\sigma(z) = \frac{1}{1 + e^{-z}}, \qquad z \in \R.$$</p>
+        </div>
+
+        <div class="env lemma" id="lem-sigmoid">
+          <p>The sigmoid has the following properties.</p>
+          <ol>
+            <li>$0 \lt \sigma(z) \lt 1$, $\sigma$ is strictly increasing, $\sigma(z) \to 0$ as $z \to -\infty$,
+              $\sigma(z) \to 1$ as $z \to \infty$, and $\sigma(0) = \frac12$.</li>
+            <li>Symmetry: $\sigma(-z) = 1 - \sigma(z)$.</li>
+            <li>Derivative: $\sigma'(z) = \sigma(z)\,\big(1 - \sigma(z)\big)$.</li>
+            <li>Inverse: if $p = \sigma(z)$ then $z = \log\dfrac{p}{1 - p}$, the <strong>log-odds</strong> or
+              <strong>logit</strong> of $p$.</li>
+          </ol>
+        </div>
+        <details class="proof" data-for="lem-sigmoid">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>(1)</strong> $e^{-z} > 0$, so $1 + e^{-z} > 1$ and $0 \lt \sigma(z) \lt 1$. As $z$ increases,
+              $e^{-z}$ decreases, so $\sigma$ increases. The limits follow from $e^{-z} \to \infty$ and $e^{-z} \to 0$,
+              and $\sigma(0) = \frac{1}{1 + 1} = \frac12$.</p>
+            <p><strong>(2)</strong> Multiply numerator and denominator by $e^{z}$:
+              $$1 - \sigma(z) = \frac{e^{-z}}{1 + e^{-z}} = \frac{1}{e^{z} + 1} = \sigma(-z).$$</p>
+            <p><strong>(3)</strong> By the chain rule,
+              $$\sigma'(z) = \frac{e^{-z}}{(1 + e^{-z})^2}
+              = \underbrace{\frac{1}{1 + e^{-z}}}_{\sigma(z)}\cdot\underbrace{\frac{e^{-z}}{1 + e^{-z}}}_{1 - \sigma(z)}.$$</p>
+            <p><strong>(4)</strong> From $p = \frac{1}{1 + e^{-z}}$ we get $e^{-z} = \frac{1}{p} - 1 = \frac{1 - p}{p}$,
+              so $z = \log\frac{p}{1 - p}$.</p>
+          </div>
+        </details>
+
+        <!-- ============================================================ -->
+        <h2 id="model">The logistic regression model</h2>
+
+        <div class="env definition" id="def-logreg" data-name="Logistic regression">
+          <p>With $\bx = (1, x_1, \dots, x_p)\T$ including the constant feature, logistic regression models
+            $$\P(y = 1 \mid \bx) = \sigma(\bx\T\theta) = \frac{1}{1 + e^{-\bx\T\theta}}, \qquad \theta \in \R^{p+1}.$$
+            The linear <strong>score</strong> $z = \bx\T\theta = \theta_0 + \theta_1 x_1 + \dots + \theta_p x_p$ is the
+            evidence in favour of class $1$, and $\sigma$ turns it into a probability.</p>
+        </div>
+
+        <p>By <a class="ref" href="#lem-sigmoid"></a>(4) the model can be written in a form that looks like linear
+          regression, but on the log-odds scale:
+          $$\log\frac{\P(y = 1 \mid \bx)}{\P(y = 0 \mid \bx)} = \theta_0 + \theta_1 x_1 + \dots + \theta_p x_p.$$
+          This gives the coefficients a precise meaning.</p>
+
+        <div class="env proposition" id="prop-odds">
+          <p>If feature $x_j$ increases by one unit while the other features stay fixed, the odds
+            $\P(y = 1 \mid \bx)/\P(y = 0 \mid \bx)$ are multiplied by $e^{\theta_j}$.</p>
+        </div>
+        <details class="proof" data-for="prop-odds">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>The odds equal $e^{\bx\T\theta}$. Replacing $x_j$ by $x_j + 1$ adds $\theta_j$ to the score, so the odds
+              become $e^{\bx\T\theta + \theta_j} = e^{\theta_j}\, e^{\bx\T\theta}$.</p>
+          </div>
+        </details>
+
+        <p>For example, $\theta_j = 0.7$ means each extra unit of $x_j$ roughly doubles the odds of malignancy
+          ($e^{0.7} \approx 2.01$). A negative $\theta_j$ decreases them, and $\theta_j = 0$ means $x_j$ has no effect.</p>
+
+        <h3 id="decision-boundary">Decision boundaries</h3>
+        <p>To make a decision we choose a threshold $\tau \in (0, 1)$ and predict
+          $\hat y = 1$ if $\sigma(\bx\T\theta) \geq \tau$. The default is $\tau = \frac12$.</p>
+
+        <div class="env proposition" id="prop-boundary">
+          <p>Write $\theta = (\theta_0, \mathbf w)$ with $\mathbf w = (\theta_1, \dots, \theta_p)$. The region where
+            logistic regression predicts class $1$ is the half-space
+            $$\big\{\bx : \theta_0 + \mathbf w\T\bx \geq \operatorname{logit}(\tau)\big\}, \qquad \operatorname{logit}(\tau) = \log\frac{\tau}{1 - \tau}.$$
+            In particular, for $\tau = \frac12$ the <strong>decision boundary</strong> is the hyperplane
+            $\theta_0 + \mathbf w\T\bx = 0$, and the score is proportional to the signed distance of $\bx$ to it:
+            $$\operatorname{dist}(\bx) = \frac{\theta_0 + \mathbf w\T\bx}{\norm{\mathbf w}}.$$</p>
+        </div>
+        <details class="proof" data-for="prop-boundary">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1.</strong> Since $\sigma$ is strictly increasing with inverse $\operatorname{logit}$,
+              $$\sigma(z) \geq \tau \iff z \geq \operatorname{logit}(\tau).$$
+              For $\tau = \frac12$, $\operatorname{logit}(\frac12) = \log 1 = 0$.</p>
+            <p><strong>Step 2.</strong> The vector $\mathbf w$ is normal to the hyperplane
+              $H = \{\theta_0 + \mathbf w\T\bx = 0\}$. Moving from a point of $H$ by $t$ along the unit normal
+              $\mathbf w/\norm{\mathbf w}$ changes the score by $t\norm{\mathbf w}$. Hence the score divided by
+              $\norm{\mathbf w}$ is the signed distance to $H$.</p>
+          </div>
+        </details>
+
+        <p>So logistic regression is a <strong>linear classifier</strong>: with one feature the boundary is a
+          threshold, with two a straight line, with more a hyperplane. Points far from the boundary get probabilities
+          close to $0$ or $1$. Points near it get probabilities near $\frac12$. A larger $\norm{\mathbf w}$ makes the
+          transition sharper. With two features, the boundary $\theta_0 + \theta_1 x_1 + \theta_2 x_2 = 0$ is the line
+          $$x_2 = -\frac{\theta_0}{\theta_2} - \frac{\theta_1}{\theta_2}\, x_1 .$$</p>
+
+        <div class="env definition" id="def-separable">
+          <p>A dataset is <strong>linearly separable</strong> if some hyperplane has all points of class $1$ strictly on
+            one side and all points of class $0$ strictly on the other: there is $\bar\theta$ with
+            $\bx_i\T\bar\theta > 0$ when $y_i = 1$ and $\bx_i\T\bar\theta \lt 0$ when $y_i = 0$.</p>
+        </div>
+
+        <div class="callout intuition">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+          <p class="callout__title">Curved boundaries with the same model</p>
+          <div class="callout__body">
+            <p>The boundary is linear <em>in the features</em>. Adding features such as $x_1^2$, $x_2^2$ and
+              $x_1 x_2$ gives a boundary that is a conic section in the original variables: an ellipse, a parabola or a
+              hyperbola. The loss and the algorithm stay exactly the same. For data such as the two moons of the later
+              labs we will need more flexible feature maps: kernels (<a href="09-kernels.html">Chapter 9</a>) and neural
+              networks (<a href="10-neural-networks.html">Chapter 10</a>).</p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="cross-entropy">The loss: Bernoulli likelihood and cross-entropy</h2>
+        <p>To fit $\theta$ we need a loss. Since the model outputs a probability, the natural criterion is
+          <strong>maximum likelihood</strong>: choose the $\theta$ under which the observed labels are most probable.
+          A binary label with $\P(y = 1) = p$ has a <strong>Bernoulli</strong> distribution, whose probability mass
+          function can be written in one line:
+          $$\P(y) = p^{\,y}(1 - p)^{1 - y}, \qquad y \in \{0, 1\}$$
+          (for $y = 1$ this gives $p$, for $y = 0$ it gives $1 - p$). Write $p_i = \sigma(\bx_i\T\theta)$ for the
+          predicted probability of example $i$.</p>
+
+        <div class="derivation" data-title="From the likelihood to the cross-entropy loss">
+          <ol class="derivation__steps">
+            <li class="step"><p class="step__why">Assume the labels are independent given the features. The
+              probability of all observed labels, as a function of $\theta$, is the likelihood.</p>
+              $$\mathcal L(\theta) = \prod_{i=1}^n p_i^{\,y_i}(1 - p_i)^{1 - y_i}.$$</li>
+            <li class="step"><p class="step__why">Take logarithms. The log is increasing, so it has the same
+              maximiser, and it turns the product into a sum.</p>
+              $$\log\mathcal L(\theta) = \sum_{i=1}^n \Big[y_i\log p_i + (1 - y_i)\log(1 - p_i)\Big].$$</li>
+            <li class="step"><p class="step__why">Maximising the log-likelihood is minimising its negative. Divide by
+              $n$ to get an average, as for the MSE.</p>
+              $$L(\theta) = -\frac1n\log\mathcal L(\theta) = \frac1n\sum_{i=1}^n \Big[-y_i\log p_i - (1 - y_i)\log(1 - p_i)\Big].$$</li>
+          </ol>
+        </div>
+
+        <div class="env definition" id="def-ce">
+          <p>The <strong>binary cross-entropy</strong> (or <strong>log-loss</strong>) of a predicted probability
+            $p$ for a label $y \in \{0, 1\}$ is
+            $$\ell(p, y) = -y\log p - (1 - y)\log(1 - p) =
+            \begin{cases} -\log p & \text{if } y = 1, \\ -\log(1 - p) & \text{if } y = 0. \end{cases}$$
+            Logistic regression minimises the average cross-entropy $L(\theta) = \frac1n\sum_i \ell(p_i, y_i)$.</p>
+        </div>
+
+        <p>The loss is $0$ only for a perfectly confident correct prediction, and it grows <em>without bound</em> as
+          a wrong prediction becomes confident. Predicting $p = 0.01$ for a malignant tumour costs $-\log 0.01 \approx
+          4.6$, while $p = 0.4$ costs only $0.92$. In terms of the score $z = \bx\T\theta$ and $s = 2y - 1 \in \{-1, +1\}$,
+          symmetry of $\sigma$ gives the compact form
+          $$\ell = \log\big(1 + e^{-s z}\big),$$
+          which is small when $s z \gg 0$ (correct side of the boundary, far from it) and roughly $-sz$, i.e. linear,
+          when $s z \ll 0$.</p>
+
+        <div class="callout pitfall">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>
+          <p class="callout__title">Why not the squared error $(y_i - p_i)^2$?</p>
+          <div class="callout__body">
+            <p>It can be used, but it is a poor choice. As a function of $\theta$ it is not convex, so gradient
+              descent can get stuck. Its penalty for a confident mistake is at most $1$, and its gradient almost
+              vanishes there (<a class="ref" href="#exo-mse-flat"></a>). The cross-entropy penalises confident mistakes
+              heavily and, as we show next, is convex.</p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="optimisation">Optimisation by gradient descent</h2>
+        <p>Unlike least squares, setting the gradient of $L$ to zero gives non-linear equations in $\theta$ with no
+          closed-form solution. We minimise $L$ numerically. The gradient turns out to be remarkably simple.</p>
+
+        <div class="env proposition" id="prop-logreg-grad">
+          <p>The gradient and Hessian of the average cross-entropy are
+            $$\nabla L(\theta) = \frac1n\sum_{i=1}^n (p_i - y_i)\,\bx_i = \frac1n\bX\T(\mathbf p - \by),
+            \qquad
+            \nabla^2 L(\theta) = \frac1n\sum_{i=1}^n p_i(1 - p_i)\,\bx_i\bx_i\T = \frac1n\bX\T S\bX,$$
+            where $\mathbf p = (p_1, \dots, p_n)\T$ and $S = \operatorname{diag}\big(p_i(1 - p_i)\big)$.</p>
+        </div>
+        <details class="proof" data-for="prop-logreg-grad">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Fix one example and drop the index $i$: $\ell = -y\log p - (1 - y)\log(1 - p)$ with $p = \sigma(z)$ and
+              $z = \bx\T\theta$. Apply the chain rule $\nabla_\theta\ell = \frac{d\ell}{dp}\cdot\frac{dp}{dz}\cdot\nabla_\theta z$.</p>
+            <p><strong>Step 1: derivative in $p$.</strong>
+              $$\frac{d\ell}{dp} = -\frac{y}{p} + \frac{1 - y}{1 - p} = \frac{p - y}{p(1 - p)}.$$</p>
+            <p><strong>Step 2: derivative of the sigmoid.</strong> By <a class="ref" href="#lem-sigmoid"></a>(3),
+              $\dfrac{dp}{dz} = p(1 - p)$. Also $\nabla_\theta z = \bx$.</p>
+            <p><strong>Step 3: multiply.</strong> The factors $p(1 - p)$ cancel:
+              $$\nabla_\theta\ell = \frac{p - y}{p(1 - p)}\cdot p(1 - p)\cdot\bx = (p - y)\,\bx.$$
+              Averaging over the examples gives $\nabla L$.</p>
+            <p><strong>Step 4: Hessian.</strong> Differentiate $(p - y)\,\bx$ once more. Only $p$ depends on $\theta$,
+              and $\nabla_\theta p = p(1 - p)\,\bx$, so
+              $$\nabla^2_\theta\ell = \bx\,\big(\nabla_\theta p\big)\T = p(1 - p)\,\bx\bx\T.$$
+              Averaging gives $\nabla^2 L$.</p>
+          </div>
+        </details>
+
+        <p>Compare with least squares, where $\nabla L = \frac2n\bX\T(\bX\theta - \by)$. In both cases the gradient
+          is <em>features times prediction errors</em>. Only the prediction has changed, from $\bX\theta$ to
+          $\sigma(\bX\theta)$.</p>
+
+        <div class="env theorem" id="thm-logreg-convex">
+          <p>The average cross-entropy $L(\theta)$ of logistic regression is convex. If $\bX$ has full column rank,
+            it is strictly convex, so it has at most one minimiser.</p>
+        </div>
+        <details class="proof" data-for="thm-logreg-convex">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>For every $\mathbf v$, using <a class="ref" href="#prop-logreg-grad"></a>,
+              $$\mathbf v\T\nabla^2 L(\theta)\,\mathbf v = \frac1n\sum_{i=1}^n \underbrace{p_i(1 - p_i)}_{>\ 0}\,\big(\bx_i\T\mathbf v\big)^2 \ \geq\ 0 .$$
+              So the Hessian is positive semidefinite everywhere and $L$ is convex. The sum is $0$ only if
+              $\bx_i\T\mathbf v = 0$ for all $i$, i.e. $\bX\mathbf v = 0$. With full column rank this forces
+              $\mathbf v = 0$, so the Hessian is positive definite and $L$ is strictly convex.</p>
+          </div>
+        </details>
+
+        <p>Convexity means there are no bad local minima: gradient descent with a suitable learning rate approaches
+          the lowest possible loss. The updates are those of <a href="02-linear-regression.html#gradient-descent">Chapter 2</a>
+          with the new gradient:
+          $$\theta^{(t+1)} = \theta^{(t)} - \frac{\eta}{n}\sum_{i=1}^n \big(p_i^{(t)} - y_i\big)\,\bx_i
+          \qquad\text{(gradient descent)},$$
+          $$\theta^{(t+1)} = \theta^{(t)} - \frac{\eta}{m}\sum_{i \in B_t} \big(p_i^{(t)} - y_i\big)\,\bx_i
+          \qquad\text{(mini-batch SGD, batch } B_t \text{ of size } m).$$</p>
+
+        <figure class="viz viz--wide" data-viz="logistic-2d" id="fig-logistic-2d">
+          <div class="viz__stage"></div>
+          <figcaption>Logistic regression trained by gradient descent on two tumour features (simulated).
+            The shading shows the predicted probability and the line is the decision boundary $p = 0.5$.
+            The loss is plotted on a log scale; the dashed line marks the starting loss $\log 2$.
+            <strong>Try:</strong> (1) run on overlapping data: the loss levels off and $\norm{\mathbf w}$ stabilises;
+            (2) switch to separable data with $\lambda = 0$: the accuracy reaches 100% but the loss keeps creeping
+            towards $0$ and $\norm{\mathbf w}$ keeps growing; (3) add a penalty $\lambda$ and run again;
+            (4) switch to <em>raw units</em> and set $\eta = 1$: the loss jumps far above its starting value and the
+            boundary swings wildly. Lower $\eta$ to $0.01$: it now decreases, but very slowly. Standardising the features
+            fixes both problems.</figcaption>
+        </figure>
+
+        <div class="env remark" id="rem-logreg-step">
+          <p><strong>How large can $\eta$ be?</strong> Since $p_i(1 - p_i) \leq \frac14$, the Hessian of
+            <a class="ref" href="#prop-logreg-grad"></a> is never more curved than
+            $$\nabla^2 L(\theta) \preceq \frac{1}{4n}\,\bX\T\bX
+            \qquad\Longrightarrow\qquad
+            \lambda_{\max}\big(\nabla^2 L\big) \leq \frac14\,\lambda_{\max}\Big(\tfrac1n\bX\T\bX\Big) =: M .$$
+            Exactly as for least squares in Chapter 2, a step $\eta \lt 2/M$ is guaranteed to decrease the loss,
+            and the starting point plays no role in this condition. In the figure, $\lambda_{\max}(\frac1n\bX\T\bX)$ is about $1.4$ for
+            standardised features (safe up to $\eta \approx 5.6$) but about $614$ in raw units (safe only up to
+            $\eta \approx 0.013$). In raw units the column of sizes ($\approx 14$) and of textures ($\approx 20$) dwarf
+            the intercept column of ones, so the loss is far more curved in some directions than others.
+            Too large a step then overshoots and the loss blows up, while a safe step makes very slow progress.
+            Standardising the features removes this imbalance.</p>
+        </div>
+
+        <h3 id="separable">Separable data and regularisation</h3>
+        <p>The second experiment in <a class="ref" href="#fig-logistic-2d"></a> is not a bug.</p>
+
+        <div class="env proposition" id="prop-separable">
+          <p>If the data are linearly separable, the cross-entropy $L$ has no minimiser: $\inf_\theta L(\theta) = 0$,
+            but $L(\theta) > 0$ for every $\theta$.</p>
+        </div>
+        <details class="proof" data-for="prop-separable">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: $L$ is never zero.</strong> Each term $\ell_i = \log(1 + e^{-s_i z_i})$ is strictly
+              positive because $1 + e^{-s_i z_i} > 1$. So $L(\theta) > 0$ for every $\theta$.</p>
+            <p><strong>Step 2: $L$ gets arbitrarily close to zero.</strong> Let $\bar\theta$ separate the data, so that
+              $s_i\,\bx_i\T\bar\theta > 0$ for every $i$ (with $s_i = 2y_i - 1$). Along the ray $\theta = c\,\bar\theta$,
+              $c > 0$,
+              $$L(c\bar\theta) = \frac1n\sum_{i=1}^n \log\Big(1 + e^{-c\, s_i \bx_i\T\bar\theta}\Big)
+              \ \xrightarrow[c \to \infty]{}\ \frac1n\sum_{i=1}^n \log(1 + 0) = 0,$$
+              since every exponent tends to $-\infty$.</p>
+            <p><strong>Step 3: conclude.</strong> The infimum is $0$ and it is never attained, so there is no
+              minimiser.</p>
+          </div>
+        </details>
+
+        <p>On separable data, scaling up a separating $\theta$ always lowers the loss. Gradient descent therefore sends
+          $\norm{\theta} \to \infty$, and the predicted probabilities become $0$ or $1$, which is overconfident. The
+          remedy is the one from <a href="03-regularization.html">Chapter 3</a>: add a penalty.
+          $$L_\lambda(\theta) = \frac1n\sum_{i=1}^n \ell(p_i, y_i) + \lambda\norm{\mathbf w}_2^2
+          \quad\text{(L2)}, \qquad
+          L_\lambda(\theta) = \frac1n\sum_{i=1}^n \ell(p_i, y_i) + \lambda\norm{\mathbf w}_1
+          \quad\text{(L1)}.$$
+          As before, the intercept is not penalised and the features should be standardised. With the L2 penalty,
+          $L_\lambda$ is strictly convex in $\mathbf w$ and tends to infinity as $\norm{\mathbf w} \to \infty$, so a
+          unique minimiser always exists. The L1 penalty again selects features. In scikit-learn,
+          <code>LogisticRegression</code> is L2-regularised by default, with <code>C</code> playing the role of
+          $1/\lambda$ (up to scaling).</p>
+
+        <!-- ============================================================ -->
+        <h2 id="softmax">More than two classes: the softmax</h2>
+        <p>Suppose $y \in \{1, \dots, K\}$, for example several tumour types. We give each class its own linear score
+          $z_k = \bx\T\theta_k$ and turn the $K$ scores into probabilities.</p>
+
+        <div class="env definition" id="def-softmax" data-name="Softmax regression">
+          <p>The <strong>softmax</strong> of scores $z = (z_1, \dots, z_K)$ is the probability vector
+            $$\operatorname{softmax}(z)_k = \frac{e^{z_k}}{\sum_{j=1}^K e^{z_j}}, \qquad k = 1, \dots, K.$$
+            <strong>Multinomial logistic regression</strong> (or softmax regression) models
+            $\P(y = k \mid \bx) = \operatorname{softmax}(\bx\T\theta_1, \dots, \bx\T\theta_K)_k$ and predicts the class
+            with the largest probability, i.e. the largest score.</p>
+        </div>
+
+        <div class="env lemma" id="lem-softmax">
+          <ol>
+            <li>The outputs are positive and sum to $1$.</li>
+            <li>Adding the same constant $c$ to all scores does not change the softmax. Hence one class can be used as a
+              reference with $\theta_K = 0$.</li>
+            <li>For $K = 2$, $\operatorname{softmax}(z)_1 = \sigma(z_1 - z_2)$: softmax regression reduces to logistic
+              regression with $\theta = \theta_1 - \theta_2$.</li>
+          </ol>
+        </div>
+        <details class="proof" data-for="lem-softmax">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>(1)</strong> Exponentials are positive, and the $K$ fractions share the same denominator, which
+              is the sum of their numerators.</p>
+            <p><strong>(2)</strong> $\dfrac{e^{z_k + c}}{\sum_j e^{z_j + c}} = \dfrac{e^{c}\,e^{z_k}}{e^{c}\sum_j e^{z_j}} = \operatorname{softmax}(z)_k$.
+              Subtracting $\theta_K$ from every $\theta_k$ subtracts $\bx\T\theta_K$ from every score, which changes
+              nothing and makes the last parameter vector $0$.</p>
+            <p><strong>(3)</strong> Divide numerator and denominator by $e^{z_1}$:
+              $$\frac{e^{z_1}}{e^{z_1} + e^{z_2}} = \frac{1}{1 + e^{-(z_1 - z_2)}} = \sigma(z_1 - z_2).$$</p>
+          </div>
+        </details>
+
+        <p>Training follows the binary case. The labels have a categorical distribution, and the negative
+          log-likelihood is the <strong>multiclass cross-entropy</strong>
+          $$L(\Theta) = -\frac1n\sum_{i=1}^n \log p_{i, y_i}
+          = -\frac1n\sum_{i=1}^n\sum_{k=1}^K \mathbf 1\{y_i = k\}\,\log p_{ik},
+          \qquad p_{ik} = \P(y_i = k \mid \bx_i).$$</p>
+
+        <div class="env proposition" id="prop-softmax-grad">
+          <p>The gradient of the multiclass cross-entropy with respect to $\theta_k$ is
+            $$\nabla_{\theta_k} L = \frac1n\sum_{i=1}^n \big(p_{ik} - \mathbf 1\{y_i = k\}\big)\,\bx_i,$$
+            "predicted minus observed", exactly as in the binary case.</p>
+        </div>
+        <details class="proof" data-for="prop-softmax-grad">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Fix one example with label $y$ and scores $z_j = \bx\T\theta_j$. Its loss is
+              $$\ell = -\log p_y = -z_y + \log\sum_{j=1}^K e^{z_j}.$$</p>
+            <p><strong>Step 1: derivative in the score $z_k$.</strong>
+              $$\frac{\partial\ell}{\partial z_k} = -\mathbf 1\{y = k\} + \frac{e^{z_k}}{\sum_j e^{z_j}} = p_k - \mathbf 1\{y = k\}.$$</p>
+            <p><strong>Step 2: chain rule.</strong> Only $z_k$ depends on $\theta_k$, and $\nabla_{\theta_k} z_k = \bx$, so
+              $\nabla_{\theta_k}\ell = (p_k - \mathbf 1\{y = k\})\,\bx$. Average over the examples.</p>
+          </div>
+        </details>
+
+        <p>The decision regions $\{\bx : \bx\T\theta_k \geq \bx\T\theta_j \text{ for all } j\}$ are intersections of
+          half-spaces, so a softmax classifier divides the feature space into convex polygonal regions. The softmax
+          with cross-entropy is also the standard final layer of neural network classifiers
+          (<a href="10-neural-networks.html">Chapter 10</a>).</p>
+
+        <!-- ============================================================ -->
+        <h2 id="metrics">Evaluating a classifier</h2>
+        <p>A classifier is evaluated on a test set by comparing its predictions with the true labels. We call class $1$
+          (malignant) <strong>positive</strong> and class $0$ (benign) <strong>negative</strong>.</p>
+
+        <h3 id="confusion-matrix">The confusion matrix</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>Confusion matrix of a binary classifier</caption>
+            <thead><tr><th scope="col"></th><th scope="col">Predicted negative</th><th scope="col">Predicted positive</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Actually negative</th><td><strong>TN</strong> true negatives</td><td><strong>FP</strong> false positives (type I error)</td></tr>
+              <tr><th scope="row">Actually positive</th><td><strong>FN</strong> false negatives (type II error)</td><td><strong>TP</strong> true positives</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="env definition" id="def-class-metrics" data-name="Classification metrics">
+          <ul>
+            <li><strong>Accuracy</strong> $= \dfrac{TP + TN}{TP + TN + FP + FN}$, the fraction of correct predictions.</li>
+            <li><strong>Precision</strong> $= \dfrac{TP}{TP + FP}$: of the tumours predicted malignant, the fraction that are.</li>
+            <li><strong>Recall</strong> (sensitivity, true positive rate) $= \dfrac{TP}{TP + FN}$: of the malignant tumours,
+              the fraction detected.</li>
+            <li><strong>False positive rate</strong> $= \dfrac{FP}{FP + TN}$, and <strong>specificity</strong>
+              $= 1 - \text{FPR} = \dfrac{TN}{TN + FP}$.</li>
+            <li><strong>F1-score</strong> $= 2\,\dfrac{\text{precision}\cdot\text{recall}}{\text{precision} + \text{recall}}$,
+              the harmonic mean of precision and recall.</li>
+          </ul>
+        </div>
+
+        <div class="env example" id="ex-metrics">
+          <p>On a test set of 143 tumours a classifier gives $TN = 85$, $FP = 5$, $FN = 10$, $TP = 43$. Then
+            accuracy $= 128/143 \approx 0.90$, precision $= 43/48 \approx 0.90$, recall $= 43/53 \approx 0.81$,
+            specificity $= 85/90 \approx 0.94$, and $F_1 \approx 0.85$. One malignant tumour in five is missed. In a
+            screening context that is the number to worry about, and accuracy hides it.</p>
+        </div>
+
+        <div class="callout pitfall">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>
+          <p class="callout__title">Accuracy on imbalanced data</p>
+          <div class="callout__body">
+            <p>If only 5% of patients have cancer, the useless rule "always predict benign" has 95% accuracy and 0%
+              recall. With imbalanced classes, report precision, recall and F1 (or the ROC curve) for the rare class.</p>
+          </div>
+        </div>
+
+        <h3 id="threshold">Choosing the threshold</h3>
+        <p>The metrics above depend on the threshold $\tau$. Lowering $\tau$ predicts "malignant" more often: recall
+          goes up, but so do false positives, so precision usually goes down. There is no universally right $\tau$. It
+          depends on the costs of the two kinds of error: screening favours high recall, while a spam filter favours
+          high precision (losing a real e-mail is worse than letting spam through).</p>
+
+        <h3 id="roc">The ROC curve and the AUC</h3>
+        <div class="env definition" id="def-roc">
+          <p>The <strong>ROC curve</strong> (receiver operating characteristic) of a classifier that outputs scores is
+            the curve of points $\big(\text{FPR}(\tau), \text{TPR}(\tau)\big)$ obtained as the threshold $\tau$ goes
+            from $+\infty$ (nothing predicted positive: point $(0, 0)$) to $-\infty$ (everything positive: point
+            $(1, 1)$). The <strong>AUC</strong> is the area under this curve.</p>
+        </div>
+        <p>A perfect classifier passes through the top-left corner $(0, 1)$ and has AUC $= 1$. A classifier that
+          guesses at random follows the diagonal, with AUC $= \frac12$. The AUC summarises performance over
+          <em>all</em> thresholds, and it has a direct interpretation.</p>
+
+        <div class="env proposition" id="prop-auc">
+          <p>Let a test set contain $P$ positives with scores $s^+_1, \dots, s^+_P$ and $N$ negatives with scores
+            $s^-_1, \dots, s^-_N$, all distinct. Then
+            $$\text{AUC} = \frac{1}{PN}\,\#\big\{(i, j) : s^+_i > s^-_j\big\},$$
+            the fraction of (positive, negative) pairs that the classifier ranks correctly. It estimates the
+            probability that a random malignant tumour gets a higher score than a random benign one.</p>
+        </div>
+        <details class="proof" data-for="prop-auc">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: the curve is a staircase.</strong> Sort all $P + N$ scores in decreasing order and lower
+              the threshold past them one at a time. Passing a positive increases TP by one, so the curve moves
+              <em>up</em> by $1/P$. Passing a negative increases FP by one, so it moves <em>right</em> by $1/N$.</p>
+            <p><strong>Step 2: area of one column.</strong> The area under a staircase is the sum of the areas of the
+              columns below its horizontal steps. The step created by negative $j$ has width $1/N$, and its height is the
+              TPR at that moment: the fraction of positives already passed, which is exactly the fraction with a higher
+              score,
+              $$\text{height}_j = \frac{1}{P}\,\#\{i : s^+_i > s^-_j\}.$$</p>
+            <p><strong>Step 3: add the columns.</strong>
+              $$\text{AUC} = \sum_{j=1}^N \frac1N\cdot\frac1P\,\#\{i : s^+_i > s^-_j\} = \frac{1}{PN}\,\#\{(i, j) : s^+_i > s^-_j\}.$$</p>
+          </div>
+        </details>
+
+        <figure class="viz viz--wide" data-viz="roc" id="fig-roc">
+          <div class="viz__stage"></div>
+          <figcaption>Threshold, confusion matrix and ROC curve for a simulated test set of 60 benign and 60 malignant
+            tumours. Moving $\tau$ moves the operating point along the ROC curve. The curve itself, and the AUC, do not
+            depend on $\tau$, only on how well the scores separate the classes. Lower the separation to $0$ to get a
+            random classifier.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-why-not-linear">
+          <p>Explain why linear regression is not suitable for binary classification. Describe one concrete problem
+            that occurs when a linear model is used to predict 0/1 labels.</p>
+        </div>
+
+        <div class="env exercise" id="exo-boundary-eq">
+          <p>For $\hat p = \sigma(\theta_0 + \theta_1 x_1 + \theta_2 x_2)$, derive the equation of the decision boundary
+            for the threshold $\tau = \frac12$, and then for a general $\tau$. What kind of curve is it?</p>
+        </div>
+
+        <div class="env exercise" id="exo-admission">
+          <p>A logistic regression predicts admission to a programme from an exam score $x_1$ and weekly study hours
+            $x_2$, with $\theta_0 = -10$, $\theta_1 = 0.05$, $\theta_2 = 0.1$. (a) Find the decision boundary and
+            describe which students are more likely to be admitted. (b) By what factor do the odds of admission change
+            for one more hour of study per week? (c) What is the predicted probability for a student with $x_1 = 120$,
+            $x_2 = 30$?</p>
+        </div>
+
+        <div class="env exercise" id="exo-grad-single">
+          <p>Show directly, without the chain-rule shortcut of <a class="ref" href="#prop-logreg-grad"></a>, that the
+            derivative of $\ell = \log(1 + e^{-sz})$ with respect to $z$ is $\sigma(z) - y$ (where $s = 2y - 1$).
+            Explain why this leads to an efficient gradient descent update.</p>
+        </div>
+
+        <div class="env exercise" id="exo-metrics-two">
+          <p>List two metrics for binary classification and explain what aspect of performance each measures. Why can
+            accuracy be misleading on a dataset where 95% of examples belong to one class? Suggest two better
+            metrics.</p>
+        </div>
+
+        <div class="env exercise" id="exo-auc-hand">
+          <p>Positives have scores $0.9, 0.7, 0.4$ and negatives $0.8, 0.3, 0.2, 0.1$. Draw the ROC curve and compute the
+            AUC in two ways: as an area, and by counting pairs (<a class="ref" href="#prop-auc"></a>).</p>
+        </div>
+
+        <div class="env exercise" id="exo-nonlinear">
+          <p>The data are not linearly separable in the original features. Explain how to modify logistic regression to
+            obtain a non-linear decision boundary without changing the loss. Give an example of a feature
+            transformation and the shape of the boundary it produces.</p>
+        </div>
+
+        <div class="env exercise" id="exo-mse-flat">
+          <p>Let $g(z) = (\sigma(z) - 1)^2$ be the squared error of a positive example as a function of its score.
+            Compute $g'(z)$ and show that $g'(z) \to 0$ as $z \to -\infty$: a confidently wrong prediction produces
+            almost no gradient. Compare with the cross-entropy $\log(1 + e^{-z})$, whose derivative tends to $-1$.
+            Show also that $g$ is not convex.</p>
+        </div>
+
+        <div class="env exercise" id="exo-mle-ce">
+          <p>For logistic regression with labels $y \in \{0, 1\}$: (a) write the likelihood of $n$ independent
+            observations; (b) show that maximising it is equivalent to minimising the cross-entropy; (c) explain
+            intuitively why this justifies cross-entropy as the training objective.</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>Logistic regression models $\P(y = 1 \mid \bx) = \sigma(\bx\T\theta)$, i.e. the log-odds are linear in
+              $\bx$. Coefficients act multiplicatively on the odds.</li>
+            <li>Its decision boundary is a hyperplane. Curved boundaries need non-linear features.</li>
+            <li>The loss is the cross-entropy, the negative log of the Bernoulli likelihood. It is convex, with gradient
+              $\frac1n\bX\T(\mathbf p - \by)$, and is minimised by (stochastic) gradient descent.</li>
+            <li>On separable data the unregularised optimum does not exist. Add an L2 or L1 penalty.</li>
+            <li>The softmax extends the model to $K$ classes with the same "predicted minus observed" gradient.</li>
+            <li>Evaluate with the confusion matrix, precision, recall and F1 at a chosen threshold, and with the ROC
+              curve and AUC across all thresholds.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-info">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-info">Probabilistic view: cross-entropy, information, and generative models</h2>
+          <p class="extra__intro">Two complementary perspectives. Information theory explains the name
+            "cross-entropy". Generative modelling explains when the logistic form is exactly right.</p>
+
+          <h3 id="extra-entropy">Entropy, cross-entropy and KL divergence</h3>
+          <p>For distributions $q$ and $p$ on a finite set, define
+            $$H(q) = -\sum_y q(y)\log q(y), \qquad
+            H(q, p) = -\sum_y q(y)\log p(y), \qquad
+            \mathrm{KL}(q\,\|\,p) = \sum_y q(y)\log\frac{q(y)}{p(y)}.$$
+            $H(q)$ is the <strong>entropy</strong>: the average number of bits (with $\log_2$) needed to encode samples
+            of $q$ with an optimal code. $H(q, p)$ is the <strong>cross-entropy</strong>: the average length when
+            samples of $q$ are encoded with a code optimised for $p$. The <strong>Kullback–Leibler divergence</strong>
+            is the extra cost of using the wrong code.</p>
+
+          <div class="env proposition" id="prop-kl">
+            <p>$H(q, p) = H(q) + \mathrm{KL}(q\,\|\,p)$ and $\mathrm{KL}(q\,\|\,p) \geq 0$, with equality if and only if
+              $p = q$. For a one-hot $q$ (all mass on the observed label $y_i$), $H(q) = 0$ and
+              $H(q, p) = -\log p(y_i)$, the cross-entropy loss of example $i$.</p>
+          </div>
+          <details class="proof" data-for="prop-kl">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: decomposition.</strong> Add and subtract $\sum_y q(y)\log q(y)$:
+                $$H(q, p) = -\sum_y q(y)\log q(y) + \sum_y q(y)\log\frac{q(y)}{p(y)} = H(q) + \mathrm{KL}(q\,\|\,p).$$</p>
+              <p><strong>Step 2: positivity.</strong> Use $\log u \leq u - 1$, with equality only at $u = 1$, applied to
+                $u = p(y)/q(y)$ (sum over $y$ with $q(y) > 0$):
+                $$-\mathrm{KL}(q\,\|\,p) = \sum_y q(y)\log\frac{p(y)}{q(y)} \leq \sum_y q(y)\Big(\frac{p(y)}{q(y)} - 1\Big) \leq 1 - 1 = 0.$$
+                Equality requires $p(y) = q(y)$ for all $y$.</p>
+              <p><strong>Step 3: one-hot labels.</strong> If $q(y_i) = 1$ and $q = 0$ elsewhere, then $H(q) = -1\cdot\log 1 = 0$
+                and $H(q, p) = -\log p(y_i)$.</p>
+            </div>
+          </details>
+          <p>So minimising the average cross-entropy minimises the average KL divergence between the observed labels and
+            the model's predicted distributions: it pushes the model's probabilities towards the truth.</p>
+
+          <h3 id="extra-generative">Discriminative versus generative classifiers</h3>
+          <p>Logistic regression is <strong>discriminative</strong>: it models $\P(y \mid \bx)$ directly and says nothing
+            about how the features are distributed. A <strong>generative</strong> classifier instead models the class
+            proportions $\pi_k = \P(y = k)$ and the class-conditional densities $p(\bx \mid y = k)$, then uses Bayes' rule.
+            The two views meet in a classical case.</p>
+
+          <div class="env proposition" id="prop-lda">
+            <p>Suppose $\bx \mid y = k \sim \mathcal N(\mu_k, \Sigma)$ for $k = 0, 1$, with the <em>same</em> covariance
+              $\Sigma$. Then
+              $$\P(y = 1 \mid \bx) = \sigma(\mathbf w\T\bx + b), \qquad \mathbf w = \Sigma^{-1}(\mu_1 - \mu_0),\quad
+              b = -\tfrac12\mu_1\T\Sigma^{-1}\mu_1 + \tfrac12\mu_0\T\Sigma^{-1}\mu_0 + \log\frac{\pi_1}{\pi_0}.$$
+              The posterior has exactly the logistic regression form.</p>
+          </div>
+          <details class="proof" data-for="prop-lda">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: Bayes' rule.</strong> With $f_k$ the Gaussian density of class $k$,
+                $$\P(y = 1 \mid \bx) = \frac{\pi_1 f_1(\bx)}{\pi_0 f_0(\bx) + \pi_1 f_1(\bx)} = \sigma(a(\bx)), \qquad
+                a(\bx) = \log\frac{\pi_1 f_1(\bx)}{\pi_0 f_0(\bx)}.$$</p>
+              <p><strong>Step 2: the quadratic terms cancel.</strong> The normalising constants are equal (same $\Sigma$),
+                so
+                $$\log\frac{f_1(\bx)}{f_0(\bx)} = -\tfrac12(\bx - \mu_1)\T\Sigma^{-1}(\bx - \mu_1) + \tfrac12(\bx - \mu_0)\T\Sigma^{-1}(\bx - \mu_0).$$
+                Expanding, the $\bx\T\Sigma^{-1}\bx$ terms cancel and
+                $$\log\frac{f_1(\bx)}{f_0(\bx)} = (\mu_1 - \mu_0)\T\Sigma^{-1}\bx - \tfrac12\mu_1\T\Sigma^{-1}\mu_1 + \tfrac12\mu_0\T\Sigma^{-1}\mu_0 .$$</p>
+              <p><strong>Step 3: conclude.</strong> Adding $\log(\pi_1/\pi_0)$ gives $a(\bx) = \mathbf w\T\bx + b$.</p>
+            </div>
+          </details>
+
+          <p>The generative route (here, <em>linear discriminant analysis</em>) estimates $\mu_0, \mu_1, \Sigma, \pi_k$ and
+            plugs them in. It is efficient when its Gaussian assumption holds, and it can generate new samples.
+            Logistic regression estimates $\mathbf w, b$ directly, so it remains valid whenever the log-odds are linear,
+            under weaker assumptions. With different covariances the quadratic terms no longer cancel and the boundary
+            becomes quadratic.</p>
+
+          <div class="env exercise" id="exo-bits">
+            <p>A model predicts $p = 0.8$ for a malignant tumour. What is its cross-entropy loss in bits? What would it be
+              for $p = 0.5$ and for $p = 0.99$?</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

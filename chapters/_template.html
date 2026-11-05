@@ -1,0 +1,97 @@
+<!doctype html>
+<!--
+  CHAPTER TEMPLATE
+  1. Copy to chapters/<slug>.html (e.g. 02-linear-regression.html)
+  2. Set data-chapter="<slug>" on <body> below
+  3. In assets/js/course.js, set that chapter's status to "ready"
+  Numbering (sections, theorems, figures), the sidebar, the table of
+  contents and prev/next links are generated automatically.
+  See chapters/00-style-guide.html for every component in use.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter — Machine Learning</title>
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <!-- Add the visualizations this chapter uses: -->
+  <!-- <script defer src="../assets/js/viz/my-viz.js"></script> -->
+</head>
+<body data-root="../" data-page="chapter" data-chapter="SLUG-HERE">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Chapter title</h1>
+          <p class="lede">One or two sentences on what this chapter is about and why it matters.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">Learning objectives</h2>
+          <ul>
+            <li>…</li>
+          </ul>
+        </section>
+
+        <h2 id="first-section">First section</h2>
+        <p>Inline math $\bw\T\bx$ and display math $$J(\bw) = \norm{\by - \bX\bw}^2.$$</p>
+
+        <!-- Environments: definition | theorem | lemma | proposition | corollary | example | exercise | remark -->
+        <div class="env theorem" id="thm-example" data-name="Optional name">
+          <p>Statement.</p>
+        </div>
+        <details class="proof" data-for="thm-example">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Argument. Cite results with <a class="ref" href="#thm-example"></a>.</p>
+          </div>
+        </details>
+
+        <!-- Derivation revealed step by step -->
+        <div class="derivation" data-title="Derivation title">
+          <ol class="derivation__steps">
+            <li class="step"><p class="step__why">Why this step.</p>$$a = b$$</li>
+            <li class="step"><p class="step__why">Why this step.</p>$$b = c$$</li>
+          </ol>
+        </div>
+
+        <!-- Interactive figure: mount point for assets/js/viz/<name>.js -->
+        <!--
+        <figure class="viz" data-viz="my-viz" id="fig-my-viz">
+          <div class="viz__stage"></div>
+          <figcaption>Caption.</figcaption>
+        </figure>
+        -->
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">Key takeaways</h2>
+          <ul>
+            <li>…</li>
+          </ul>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Linear regression — Machine Learning</title>
+  <meta name="description" content="Linear regression: least squares, normal equations and their geometry, gradient descent, stochastic gradient descent and regression metrics.">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/ls-fit.js"></script>
+  <script defer src="../assets/js/viz/gd-regression.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="02-linear-regression">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Linear regression</h1>
+          <p class="lede">The simplest supervised model, and the one on which every later idea is built. We fit
+            a linear function by least squares, solve it in closed form, see that the solution is an orthogonal
+            projection, and then solve it again with gradient descent, the algorithm used to train almost every
+            model in this course.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>State the linear model and its assumptions, and write it in matrix form with a design matrix.</li>
+            <li>Derive the normal equations, element by element and with matrix calculus, and solve them.</li>
+            <li>Interpret least squares as the orthogonal projection of $\by$ onto the column space of $\bX$.</li>
+            <li>Run gradient descent, stochastic and mini-batch gradient descent, and explain how the learning rate
+              and the batch size affect convergence.</li>
+            <li>Evaluate a regression model with MSE, RMSE, MAE and $R^2$.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="motivation">Motivation: predicting house prices</h2>
+        <p>A real estate agency wants to predict the sale price of a house before it goes on the market. For each
+          of $n$ houses sold in the past we know the price $y_i \in \R$ and $p$ measurable features
+          $x_{i1}, \dots, x_{ip}$: living area, number of rooms, year built, overall quality, and so on. This is the
+          <em>house prices</em> dataset of Lab 1.</p>
+        <p>To allow for an intercept we prepend a constant feature $x_{i0} = 1$ and collect everything in a vector</p>
+        $$\bx_i = (1, x_{i1}, \dots, x_{ip})\T \in \R^{p+1}.$$
+        <p>From now on $\bx_i$ always includes this leading $1$. Our goal is a function that predicts $y_i$ from
+          $\bx_i$ and works well on houses that are not in the dataset.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="model">The linear model and its assumptions</h2>
+
+        <div class="env definition" id="def-linear-model" data-name="Linear regression model">
+          <p>The linear regression model predicts
+            $$\hat y = f_\theta(\bx) = \theta_0 + \theta_1 x_1 + \dots + \theta_p x_p = \bx\T\theta,
+            \qquad \theta = (\theta_0, \theta_1, \dots, \theta_p)\T \in \R^{p+1}.$$
+            The numbers $\theta_j$ are the <strong>parameters</strong> (or coefficients, or weights) and $\theta_0$
+            is the <strong>intercept</strong>.</p>
+        </div>
+
+        <p>Choosing this model means making three assumptions about how features affect the price.</p>
+        <ol>
+          <li><strong>Proportional effects.</strong> Increasing $x_j$ by one unit changes the prediction by exactly
+            $\theta_j$, whatever the starting value of $x_j$.</li>
+          <li><strong>Additivity.</strong> The prediction is a sum of separate contributions $\theta_j x_j$ plus the
+            intercept. There are no interaction terms like $x_j x_k$ unless we add them explicitly as new
+            features.</li>
+          <li><strong>Context independence.</strong> The effect of one feature does not depend on the others: one extra
+            square metre adds $\theta_1$ to the price whatever the number of rooms.</li>
+        </ol>
+        <p>The observed prices do not lie exactly on any such function, so we write</p>
+        $$y_i = \bx_i\T \theta + \varepsilon_i,$$
+        <p>where the <strong>error</strong> $\varepsilon_i$ collects everything the model does not capture:
+          features we did not measure, the mood of the buyer, measurement noise. We will not need any assumption on
+          $\varepsilon_i$ to fit the model.</p>
+
+        <div class="callout intuition">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+          <p class="callout__title">"Linear" means linear in $\theta$</p>
+          <div class="callout__body">
+            <p>Nothing stops the features themselves from being non-linear functions of the raw inputs, such as
+              $x^2$, $\log x$ or $x_1 x_2$. The model stays linear in $\theta$ and everything in this chapter
+              applies. This is exactly what we did with polynomial regression in
+              <a href="01-learning-problem.html">Chapter 1</a>.</p>
+          </div>
+        </div>
+
+        <h3 id="matrix-form">Matrix form</h3>
+        <p>Stack the data into the <strong>design matrix</strong> $\bX$, whose rows are the $\bx_i\T$, and the
+          <strong>response vector</strong> $\by$:</p>
+        $$\bX = \begin{pmatrix} 1 & x_{11} & \cdots & x_{1p} \\ \vdots & \vdots & & \vdots \\ 1 & x_{n1} & \cdots & x_{np} \end{pmatrix}
+          \in \R^{n \times (p+1)}, \qquad
+          \by = \begin{pmatrix} y_1 \\ \vdots \\ y_n \end{pmatrix} \in \R^n.$$
+        <p>Then the vector of all predictions is simply $\hat\by = \bX\theta$.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="mse">The loss: mean squared error</h2>
+        <p>We want the predictions to be close to the observed prices. Following
+          <a href="01-learning-problem.html#formal">Chapter 1</a>, we measure closeness with the squared loss and
+          minimise the empirical risk.</p>
+        <div class="env definition" id="def-mse">
+          <p>The <strong>residual</strong> of house $i$ is $e_i(\theta) = y_i - \bx_i\T\theta$. The
+            <strong>mean squared error</strong> is
+            $$L(\theta) = \frac1n \sum_{i=1}^n \big(y_i - \bx_i\T\theta\big)^2 = \frac1n \norm{\by - \bX\theta}^2.$$</p>
+        </div>
+        <p>The factor $1/n$ does not change the minimiser, but it makes $L$ an average, comparable across datasets of
+          different sizes. Squaring makes all errors count positively and penalises large errors much more than small
+          ones. Try to find the best line by hand in <a class="ref" href="#fig-ls-fit"></a> before reading on.</p>
+
+        <figure class="viz" data-viz="ls-fit" id="fig-ls-fit">
+          <div class="viz__stage"></div>
+          <figcaption>Fit a line by hand. Each vertical segment is a residual $e_i$. Move the intercept and the slope
+            to make the MSE as small as you can, then compare with the least-squares solution. The data are 40
+            simulated houses shaped like the Ames house-price data used in Lab 1.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="normal-equations">Least squares and the normal equations</h2>
+        <p>$L$ is a quadratic function of $\theta$. We will show that it is convex, so any point where the gradient
+          vanishes is a global minimiser. Let us find those points, first one coordinate at a time.</p>
+
+        <div class="derivation" data-title="Normal equations, element by element">
+          <ol class="derivation__steps">
+            <li class="step"><p class="step__why">Write the loss with explicit sums.</p>
+              $$L(\theta) = \frac1n \sum_{i=1}^n \Big(y_i - \sum_{j=0}^p \theta_j x_{ij}\Big)^2.$$</li>
+            <li class="step"><p class="step__why">Differentiate with respect to $\theta_k$. Chain rule on each
+              square: the inner derivative is $\partial_{\theta_k}\big(y_i - \sum_j \theta_j x_{ij}\big) = -x_{ik}$.</p>
+              $$\frac{\partial L}{\partial \theta_k} = -\frac2n \sum_{i=1}^n x_{ik}\Big(y_i - \sum_{j=0}^p \theta_j x_{ij}\Big).$$</li>
+            <li class="step"><p class="step__why">Set the derivative to zero at the minimiser $\hat\theta$, for
+              every $k = 0, \dots, p$.</p>
+              $$\sum_{i=1}^n x_{ik}\Big(y_i - \sum_{j=0}^p \hat\theta_j x_{ij}\Big) = 0.$$</li>
+            <li class="step"><p class="step__why">Expand and swap the two sums. We get $p+1$ linear equations in the
+              $p+1$ unknowns $\hat\theta_0, \dots, \hat\theta_p$.</p>
+              $$\sum_{j=0}^p \Big(\sum_{i=1}^n x_{ik} x_{ij}\Big)\hat\theta_j = \sum_{i=1}^n x_{ik} y_i,
+              \qquad k = 0, \dots, p.$$</li>
+            <li class="step"><p class="step__why">Recognise matrix products: $\sum_i x_{ik}x_{ij} = (\bX\T\bX)_{kj}$
+              and $\sum_i x_{ik}y_i = (\bX\T\by)_k$.</p>
+              $$\bX\T\bX\,\hat\theta = \bX\T\by.$$</li>
+          </ol>
+        </div>
+
+        <p>The same result follows in a few lines from matrix calculus. We use three identities, valid for a constant
+          vector $\mathbf b$ and a constant matrix $A$:
+          $$\nabla_\theta\, c = 0, \qquad \nabla_\theta(\mathbf b\T\theta) = \mathbf b, \qquad
+          \nabla_\theta(\theta\T A \theta) = (A + A\T)\theta.$$</p>
+
+        <div class="derivation" data-title="Normal equations, matrix form">
+          <ol class="derivation__steps">
+            <li class="step"><p class="step__why">Expand the squared norm $\norm{\mathbf a}^2 = \mathbf a\T\mathbf a$,
+              using $\theta\T\bX\T\by = \by\T\bX\theta$ (a scalar equals its transpose).</p>
+              $$L(\theta) = \frac1n\big(\by\T\by - 2\,\by\T\bX\theta + \theta\T\bX\T\bX\theta\big).$$</li>
+            <li class="step"><p class="step__why">Differentiate term by term. $\bX\T\bX$ is symmetric, so the last
+              term gives $2\bX\T\bX\theta$.</p>
+              $$\nabla L(\theta) = \frac1n\big(-2\bX\T\by + 2\bX\T\bX\theta\big) = -\frac2n \bX\T(\by - \bX\theta).$$</li>
+            <li class="step"><p class="step__why">Set the gradient to zero.</p>
+              $$\bX\T\bX\,\hat\theta = \bX\T\by.$$</li>
+            <li class="step"><p class="step__why">Differentiate once more to get the Hessian, which does not depend
+              on $\theta$.</p>
+              $$\nabla^2 L(\theta) = \frac2n \bX\T\bX.$$</li>
+          </ol>
+        </div>
+
+        <div class="env lemma" id="lem-gram">
+          <p>For every matrix $\bX \in \R^{n \times q}$, the matrix $\bX\T\bX$ is symmetric positive semidefinite.
+            It is positive definite (hence invertible) if and only if $\bX$ has full column rank, that is, its
+            columns are linearly independent.</p>
+        </div>
+        <details class="proof" data-for="lem-gram">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Symmetry: $(\bX\T\bX)\T = \bX\T\bX$. For every $\mathbf v \in \R^q$,
+              $\mathbf v\T\bX\T\bX\mathbf v = \norm{\bX\mathbf v}^2 \geq 0$. Equality holds if and only if
+              $\bX\mathbf v = 0$. So $\mathbf v\T\bX\T\bX\mathbf v > 0$ for all $\mathbf v \neq 0$ exactly when the
+              only solution of $\bX\mathbf v = 0$ is $\mathbf v = 0$, that is, when the columns are independent.</p>
+          </div>
+        </details>
+
+        <div class="env theorem" id="thm-ols" data-name="Ordinary least squares">
+          <p>Every solution of the normal equations $\bX\T\bX\,\theta = \bX\T\by$ minimises $L$. If $\bX$ has full
+            column rank, the minimiser is unique and equals
+            $$\hat\theta = (\bX\T\bX)^{-1}\bX\T\by.$$
+            The prediction for a new house with features $\bx_*$ is $\hat y_* = \bx_*\T\hat\theta$.</p>
+        </div>
+        <details class="proof" data-for="thm-ols">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>The Hessian $\frac2n\bX\T\bX$ is positive semidefinite by <a class="ref" href="#lem-gram"></a>, so $L$
+              is convex. For a differentiable convex function every stationary point is a global minimiser, and the
+              stationary points are exactly the solutions of the normal equations. If $\bX$ has full column rank,
+              $\bX\T\bX$ is invertible and the normal equations have the single solution
+              $(\bX\T\bX)^{-1}\bX\T\by$.</p>
+            <p>(A proof without calculus is given in <a class="ref" href="#thm-projection"></a>.)</p>
+          </div>
+        </details>
+
+        <div class="env remark" id="rem-rank">
+          <p>Full column rank fails when one feature is an exact linear combination of others (for example, area in
+            m² and area in ft²), or when there are more parameters than data points ($p + 1 > n$). Then there are
+            infinitely many minimisers. A standard choice is the minimum-norm solution $\hat\theta = \bX^{+}\by$,
+            where $\bX^{+}$ is the Moore–Penrose pseudo-inverse. A better fix is <em>regularisation</em>, the topic
+            of <a href="03-regularization.html">Chapter 3</a>. When features are only <em>nearly</em> collinear,
+            $\bX\T\bX$ is invertible but ill-conditioned and $\hat\theta$ becomes very sensitive to the data.</p>
+        </div>
+
+        <div class="env example" id="ex-simple-ols" data-name="Simple linear regression">
+          <p>With a single feature ($p = 1$) the normal equations can be solved by hand. Writing
+            $\bar x = \frac1n\sum_i x_i$ and $\bar y = \frac1n\sum_i y_i$, they give
+            $$\hat\theta_1 = \frac{\sum_{i}(x_i - \bar x)(y_i - \bar y)}{\sum_i (x_i - \bar x)^2},
+            \qquad \hat\theta_0 = \bar y - \hat\theta_1 \bar x.$$
+            The slope is the sample covariance of $x$ and $y$ divided by the sample variance of $x$, and the line
+            always passes through the point of means $(\bar x, \bar y)$. You derive this in
+            <a class="ref" href="#exo-simple"></a>.</p>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="geometry">The geometry of least squares</h2>
+        <p>Look at $\by$ and the columns of $\bX$ as vectors in $\R^n$, one coordinate per house. As $\theta$ ranges
+          over $\R^{p+1}$, the predictions $\bX\theta$ sweep out the <strong>column space</strong>
+          $\operatorname{col}(\bX) = \{\bX\theta : \theta \in \R^{p+1}\}$, a subspace of dimension at most $p + 1$.
+          Minimising $\norm{\by - \bX\theta}$ means finding the point of this subspace closest to $\by$. Elementary
+          geometry says this is the foot of the perpendicular (<a class="ref" href="#fig-projection"></a>).</p>
+
+        <figure class="numbered diagram diagram--narrow" id="fig-projection">
+          <svg viewBox="0 0 500 260" role="img" aria-label="A plane representing the column space of X. The vector y rises out of the plane; its orthogonal projection y-hat lies in the plane, and the residual e joins y-hat to y at a right angle to the plane.">
+            <path class="d-panel" d="M30 225 L350 225 L470 135 L150 135 Z"/>
+            <text class="d-label" x="402" y="214">col(X)</text>
+            <line class="d-ink" stroke-width="2.5" x1="110" y1="195" x2="320" y2="40"/>
+            <path class="d-ink" stroke-width="2.5" d="M320 40 l-15 3 l7 8 z" fill="currentColor" style="fill: var(--text)"/>
+            <line class="d-a-stroke" stroke-width="2.5" x1="110" y1="195" x2="320" y2="185"/>
+            <path class="d-a" d="M320 185 l-13 -6 l0 11 z"/>
+            <line class="d-b-stroke" stroke-width="2.5" stroke-dasharray="7 5" x1="320" y1="185" x2="320" y2="45"/>
+            <path class="d-muted" stroke-width="1.5" d="M320 171 l-13 0.6 l0 14"/>
+            <circle class="d-ink" cx="110" cy="195" r="3" style="fill: var(--text)"/>
+            <text class="d-text" x="92" y="214">0</text>
+            <text class="d-text" x="328" y="38" font-weight="700">y</text>
+            <text class="d-text" x="328" y="200" font-weight="700">ŷ (fitted values)</text>
+            <text class="d-text" x="330" y="118" font-weight="700">e = y − ŷ</text>
+          </svg>
+          <figcaption>Least squares as an orthogonal projection. The fitted values $\hat\by$ are the point of the
+            column space of $\bX$ closest to $\by$, and the residual vector $\mathbf e$ is perpendicular to that
+            space.</figcaption>
+        </figure>
+
+        <div class="env theorem" id="thm-projection" data-name="Least squares is a projection">
+          <p>Let $\bX$ have full column rank, $\hat\theta = (\bX\T\bX)^{-1}\bX\T\by$, $\hat\by = \bX\hat\theta$ and
+            $\mathbf e = \by - \hat\by$. Then</p>
+          <ol>
+            <li>$\mathbf e$ is orthogonal to every column of $\bX$: $\bX\T\mathbf e = 0$;</li>
+            <li>$\hat\by = H\by$ with the <strong>hat matrix</strong> $H = \bX(\bX\T\bX)^{-1}\bX\T$, which is
+              symmetric ($H\T = H$) and idempotent ($H^2 = H$), so it is the orthogonal projection onto
+              $\operatorname{col}(\bX)$;</li>
+            <li>for every $\theta$, $\norm{\by - \bX\theta}^2 = \norm{\mathbf e}^2 + \norm{\bX(\hat\theta - \theta)}^2$.
+              In particular $\hat\theta$ minimises the squared error.</li>
+          </ol>
+        </div>
+        <details class="proof" data-for="thm-projection">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>(1) is the normal equations rewritten: $\bX\T(\by - \bX\hat\theta) = \bX\T\by - \bX\T\bX\hat\theta = 0$.</p>
+            <p>(2) $\hat\by = \bX(\bX\T\bX)^{-1}\bX\T\by = H\by$. Since $\bX\T\bX$ is symmetric, so is its inverse,
+              and $H\T = H$. Also $H^2 = \bX(\bX\T\bX)^{-1}(\bX\T\bX)(\bX\T\bX)^{-1}\bX\T = H$. A symmetric idempotent
+              matrix is the orthogonal projection onto its range, and the range of $H$ is $\operatorname{col}(\bX)$.</p>
+            <p>(3) Write $\by - \bX\theta = \mathbf e + \bX(\hat\theta - \theta)$. The second vector lies in
+              $\operatorname{col}(\bX)$, which is orthogonal to $\mathbf e$ by (1). Pythagoras' theorem gives the
+              identity. The second term is $\geq 0$ and vanishes at $\theta = \hat\theta$.</p>
+          </div>
+        </details>
+
+        <p>Part (1) has a concrete meaning. Since the first column of $\bX$ is the all-ones vector, the residuals of a
+          model with intercept sum to zero: $\sum_i e_i = 0$. The model is right <em>on average</em> on the training
+          data, and the residuals are uncorrelated with every feature.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="gradient-descent">Gradient descent</h2>
+        <p>The closed form is elegant, but it is not always practical:</p>
+        <ul>
+          <li>with millions of features, forming and inverting the $(p+1) \times (p+1)$ matrix $\bX\T\bX$ costs too
+            much time and memory;</li>
+          <li>the data may not fit in memory at once;</li>
+          <li>for most other models (logistic regression, neural networks) there is no closed form at all.</li>
+        </ul>
+        <p>The universal alternative is to improve the parameters step by step.</p>
+
+        <div class="env definition" id="def-gd" data-name="Gradient descent">
+          <p>Start from an initial guess $\theta^{(0)}$ and repeat
+            $$\theta^{(t+1)} = \theta^{(t)} - \eta\, \nabla L\big(\theta^{(t)}\big), \qquad t = 0, 1, 2, \dots$$
+            until the loss stops decreasing. The step size $\eta > 0$ is the <strong>learning rate</strong>.</p>
+        </div>
+        <p>The gradient points in the direction in which $L$ increases fastest, so a small step against it decreases
+          $L$. For linear regression, using the gradient computed above, the update reads</p>
+        $$\theta^{(t+1)} = \theta^{(t)} + \frac{2\eta}{n}\, \bX\T\big(\by - \bX\theta^{(t)}\big).$$
+        <p>The vector $\by - \bX\theta^{(t)}$ holds the current residuals, and $\bX\T$ multiplies them by each feature.
+          Each coefficient therefore moves in proportion to how strongly its feature is still correlated with the
+          errors. When no feature is correlated with the residuals any more, the update is zero: these are exactly
+          the normal equations.</p>
+
+        <h3 id="gd-convergence">When does gradient descent converge?</h3>
+        <p>For least squares we can answer this question exactly. Let $H = \nabla^2 L = \frac2n\bX\T\bX$, and let
+          $\lambda_{\min}$ and $\lambda_{\max}$ be its smallest and largest eigenvalues.</p>
+
+        <div class="env theorem" id="thm-gd-ls" data-name="Gradient descent for least squares">
+          <p>Assume $\bX$ has full column rank, so $\lambda_{\min} > 0$. Gradient descent with constant learning
+            rate $\eta$ satisfies
+            $$\theta^{(t)} - \hat\theta = (I - \eta H)^t\big(\theta^{(0)} - \hat\theta\big).$$
+            It converges to $\hat\theta$ from every starting point if and only if $0 \lt \eta \lt 2/\lambda_{\max}$,
+            and then
+            $$\norm{\theta^{(t)} - \hat\theta} \leq \rho^{\,t}\, \norm{\theta^{(0)} - \hat\theta}, \qquad
+            \rho = \max\big(|1 - \eta\lambda_{\min}|,\ |1 - \eta\lambda_{\max}|\big) \lt 1.$$
+            The best constant step $\eta = 2/(\lambda_{\min} + \lambda_{\max})$ gives
+            $\rho = \frac{\kappa - 1}{\kappa + 1}$, where $\kappa = \lambda_{\max}/\lambda_{\min}$ is the
+            <strong>condition number</strong>.</p>
+        </div>
+        <details class="proof" data-for="thm-gd-ls">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>By the normal equations $\frac2n\bX\T\by = H\hat\theta$, so the gradient is
+              $\nabla L(\theta) = \frac2n(\bX\T\bX\theta - \bX\T\by) = H(\theta - \hat\theta)$. Subtracting
+              $\hat\theta$ from both sides of the update gives
+              $\theta^{(t+1)} - \hat\theta = (I - \eta H)(\theta^{(t)} - \hat\theta)$, and iterating gives the
+              formula.</p>
+            <p>$H$ is symmetric, so it has an orthonormal basis of eigenvectors $\mathbf u_1, \dots, \mathbf u_{p+1}$
+              with eigenvalues $\lambda_j$. In this basis, $I - \eta H$ multiplies the $j$-th coordinate of the error
+              by $1 - \eta\lambda_j$ at every step. That coordinate tends to $0$ for every starting value if and only if
+              $|1 - \eta\lambda_j| \lt 1$, i.e. $0 \lt \eta \lt 2/\lambda_j$. Requiring this for all $j$ gives
+              $0 \lt \eta \lt 2/\lambda_{\max}$. Starting along $\mathbf u_{\max}$ with a larger $\eta$ shows the
+              condition is necessary.</p>
+            <p>$I - \eta H$ is symmetric with eigenvalues $1 - \eta\lambda_j$, so its spectral norm is
+              $\max_j|1 - \eta\lambda_j| = \rho$ (the maximum of $|1 - \eta\lambda|$ over
+              $[\lambda_{\min}, \lambda_{\max}]$ is attained at an endpoint). Hence
+              $\norm{\theta^{(t)} - \hat\theta} \leq \rho^t\norm{\theta^{(0)} - \hat\theta}$. Finally,
+              $|1 - \eta\lambda_{\min}|$ decreases and $|1 - \eta\lambda_{\max}|$ increases in $\eta$ near the optimum,
+              so the maximum is smallest when $1 - \eta\lambda_{\min} = \eta\lambda_{\max} - 1$, i.e.
+              $\eta = 2/(\lambda_{\min} + \lambda_{\max})$, which gives
+              $\rho = (\lambda_{\max} - \lambda_{\min})/(\lambda_{\max} + \lambda_{\min}) = (\kappa - 1)/(\kappa + 1)$.</p>
+          </div>
+        </details>
+
+        <p>The theorem explains two practical rules.</p>
+        <ul>
+          <li><strong>The learning rate has a hard ceiling.</strong> Above $2/\lambda_{\max}$, the iterates oscillate
+            with growing amplitude and blow up. Far below it, progress is very slow.</li>
+          <li><strong>Feature scaling matters.</strong> If $\kappa$ is large, the contours of $L$ are long, thin
+            ellipses. The step size is limited by the steep direction, so progress along the flat direction is
+            painfully slow, with the zig-zag path you see in <a class="ref" href="#fig-gd"></a>.
+            <strong>Standardising</strong> each feature (subtract its mean, divide by its standard deviation)
+            makes the ellipses much rounder.</li>
+        </ul>
+
+        <div class="env proposition" id="prop-standardise">
+          <p>In simple linear regression ($p = 1$), suppose the feature is standardised:
+            $\frac1n\sum_i x_i = 0$ and $\frac1n\sum_i x_i^2 = 1$. Then $H = 2I$, $\kappa = 1$, and gradient descent
+            with $\eta = 1/2$ reaches $\hat\theta$ in a single step from any starting point.</p>
+        </div>
+        <details class="proof" data-for="prop-standardise">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>$\frac1n\bX\T\bX = \begin{pmatrix} 1 & \frac1n\sum x_i \\ \frac1n\sum x_i & \frac1n\sum x_i^2\end{pmatrix}
+              = I$, so $H = 2I$ and both eigenvalues equal $2$. With $\eta = 1/2$, $I - \eta H = 0$, and
+              <a class="ref" href="#thm-gd-ls"></a> gives $\theta^{(1)} = \hat\theta$.</p>
+          </div>
+        </details>
+
+        <!-- ============================================================ -->
+        <h2 id="sgd">Stochastic and mini-batch gradient descent</h2>
+        <p>Each step of gradient descent needs the full gradient, a sum over all $n$ data points. When $n$ is in the
+          millions this is very expensive, and we only want to take a small step anyway. The key observation is that
+          the gradient is an <em>average</em>:</p>
+        $$\nabla L(\theta) = \frac1n\sum_{i=1}^n \nabla \ell_i(\theta), \qquad
+          \ell_i(\theta) = \big(y_i - \bx_i\T\theta\big)^2, \qquad
+          \nabla\ell_i(\theta) = -2\,\bx_i\big(y_i - \bx_i\T\theta\big).$$
+        <p>An average can be estimated from a small random sample. That is the whole idea of stochastic gradient
+          descent.</p>
+
+        <div class="env definition" id="def-sgd" data-name="Mini-batch stochastic gradient descent">
+          <p>At each step draw a random set $B_t$ of $m$ indices (a <strong>mini-batch</strong>) and update
+            $$\theta^{(t+1)} = \theta^{(t)} - \eta\, \hat g_t, \qquad
+            \hat g_t = \frac1m \sum_{i \in B_t} \nabla \ell_i\big(\theta^{(t)}\big).$$
+            With $m = n$ (all points) this is gradient descent. With $m = 1$ it is
+            <strong>stochastic gradient descent</strong> (SGD) in its simplest form.</p>
+        </div>
+
+        <p>To judge $\hat g_t$ as an estimate of the true gradient $g = \nabla L(\theta)$ we use two standard notions.
+          An estimator $\hat g$ of $g$ has <strong>bias</strong> $\E[\hat g] - g$, and is <strong>unbiased</strong> if
+          the bias is zero: on average, over the random choice of the batch, it hits the right value. Its
+          <strong>variance</strong> $\E\big[\norm{\hat g - \E\hat g}^2\big]$ measures how much it fluctuates from one
+          batch to another.</p>
+
+        <div class="env proposition" id="prop-sgd-variance">
+          <p>Fix $\theta$ and draw the $m$ indices of the batch independently and uniformly from
+            $\{1, \dots, n\}$. Then $\hat g$ is an unbiased estimator of the full gradient, and its variance decreases
+            like $1/m$:
+            $$\E[\hat g] = \nabla L(\theta), \qquad
+            \E\big[\norm{\hat g - \nabla L(\theta)}^2\big] = \frac{s^2(\theta)}{m}, \qquad
+            s^2(\theta) = \frac1n\sum_{i=1}^n \norm{\nabla\ell_i(\theta) - \nabla L(\theta)}^2.$$</p>
+        </div>
+        <details class="proof" data-for="prop-sgd-variance">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Let $I_1, \dots, I_m$ be the drawn indices and $G_k = \nabla\ell_{I_k}(\theta)$. Each $G_k$ takes
+              the value $\nabla\ell_i(\theta)$ with probability $1/n$, so
+              $\E[G_k] = \frac1n\sum_i\nabla\ell_i(\theta) = \nabla L(\theta)$, and
+              $\E\norm{G_k - \nabla L}^2 = s^2(\theta)$. By linearity, $\E[\hat g] = \frac1m\sum_k \E[G_k] = \nabla L$.
+              The $G_k - \nabla L$ are independent with mean zero, so the cross terms vanish when expanding the square:
+              $\E\norm{\frac1m\sum_k (G_k - \nabla L)}^2 = \frac1{m^2}\sum_k \E\norm{G_k - \nabla L}^2 = s^2/m$.</p>
+          </div>
+        </details>
+
+        <p>So SGD moves in the right direction <em>on average</em>, but each individual step is noisy. A batch of
+          size $m$ costs $m$ gradient evaluations and divides the noise variance by $m$. Going from $m = 1$ to
+          $m = 100$ makes each step 100 times more expensive but only 10 times less noisy (in standard deviation).
+          This is why small batches are so efficient in practice.</p>
+
+        <figure class="viz viz--wide" data-viz="gd-regression" id="fig-gd">
+          <div class="viz__stage"></div>
+          <figcaption>Gradient descent on the house data. <strong>Try:</strong> (1) increase $\eta$ past the
+            stability limit shown below the plots; (2) tick "standardise" and compare the shape of the contours and
+            the speed of convergence (with $\eta = 0.5$ it converges in one step, as
+            <a class="ref" href="#prop-standardise"></a> predicts); (3) switch to mini-batch and SGD, and watch the
+            path become noisy and keep jittering around the minimum.</figcaption>
+        </figure>
+
+        <h3 id="lr-batch">Choosing the learning rate and the batch size</h3>
+        <ul>
+          <li><strong>Learning rate.</strong> Too large and the iterates overshoot and diverge; too small and
+            training takes forever. A common remedy is a <em>schedule</em> that decreases $\eta$ over time.
+            Adaptive methods such as Adam and RMSprop, which you will use in the neural network labs, adjust the
+            step size per parameter automatically.</li>
+          <li><strong>Batch size.</strong> Small batches (1 to 32) give noisy but cheap steps, so many updates per
+            pass over the data. Large batches give accurate but expensive steps, and they parallelise well on
+            GPUs. In practice $m$ balances statistical efficiency and hardware efficiency.</li>
+          <li><strong>Noise at the minimum.</strong> At $\hat\theta$ the full gradient is zero, but the individual
+            gradients $\nabla\ell_i(\hat\theta)$ are not. With a constant $\eta$, SGD therefore never settles. It
+            keeps jittering in a region whose size shrinks with $\eta$ and grows with the variance $s^2/m$. To
+            converge exactly, $\eta_t$ must decrease to $0$, slowly enough that $\sum_t \eta_t = \infty$ (for
+            example $\eta_t \propto 1/t$).</li>
+          <li><strong>Epochs.</strong> One pass over the whole training set ($n/m$ mini-batch steps) is called an
+            <em>epoch</em>. In practice the data are shuffled once per epoch and cut into consecutive batches.</li>
+        </ul>
+
+        <div class="callout intuition">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+          <p class="callout__title">Why bother, if we have a closed form?</p>
+          <div class="callout__body">
+            <p>For linear regression you would normally use the closed form, or a solver based on it. Linear
+              regression is just the simplest setting in which to understand gradient descent, because here
+              everything can be computed exactly. The same algorithm, unchanged, trains logistic regression
+              (<a href="04-logistic-regression.html">Chapter 4</a>) and neural networks
+              (<a href="10-neural-networks.html">Chapter 10</a>), where no closed form exists.</p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="metrics">Evaluation metrics</h2>
+        <p>Once a model is fitted we must measure how good its predictions are, on the training data and above all on
+          a held-out test set. Let $y_1, \dots, y_n$ be the observed values, $\hat y_1, \dots, \hat y_n$ the
+          predictions, and $\bar y$ the mean of the $y_i$.</p>
+
+        <div class="env definition" id="def-metrics" data-name="Regression metrics">
+          <ul>
+            <li><strong>Mean squared error</strong> $\mathrm{MSE} = \frac1n\sum_i (y_i - \hat y_i)^2$. Penalises large
+              errors heavily; it is the quantity least squares minimises.</li>
+            <li><strong>Root mean squared error</strong> $\mathrm{RMSE} = \sqrt{\mathrm{MSE}}$. In the same units as
+              $y$ (dollars, not dollars squared), so it reads as a typical error size.</li>
+            <li><strong>Mean absolute error</strong> $\mathrm{MAE} = \frac1n\sum_i |y_i - \hat y_i|$. Less sensitive to
+              a few huge errors (outliers), because errors count linearly.</li>
+            <li><strong>Coefficient of determination</strong>
+              $$R^2 = 1 - \frac{\sum_i (y_i - \hat y_i)^2}{\sum_i (y_i - \bar y)^2}.$$
+              It compares the model with the trivial predictor that always outputs $\bar y$. $R^2 = 1$ means a
+              perfect fit, $R^2 = 0$ means no better than the mean.</li>
+            <li><strong>Correlation</strong> $\rho(\by, \hat\by)$, the Pearson correlation between observed and
+              predicted values, measures how well they line up linearly.</li>
+          </ul>
+        </div>
+
+        <div class="env proposition" id="prop-r2">
+          <p>Fit a linear model with intercept by least squares and evaluate it on the training data. Then</p>
+          <ol>
+            <li>$\sum_i (y_i - \bar y)^2 = \sum_i (\hat y_i - \bar y)^2 + \sum_i (y_i - \hat y_i)^2$, hence
+              $0 \leq R^2 \leq 1$;</li>
+            <li>$R^2 = \rho(\by, \hat\by)^2$.</li>
+          </ol>
+        </div>
+        <details class="proof" data-for="prop-r2">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Let $\mathbf 1$ be the all-ones vector and $\mathbf e = \by - \hat\by$. By
+              <a class="ref" href="#thm-projection"></a>, $\mathbf e$ is orthogonal to $\operatorname{col}(\bX)$,
+              which contains $\mathbf 1$ (the intercept column) and $\hat\by$. So $\sum_i e_i = 0$, which means the
+              mean of the $\hat y_i$ is also $\bar y$.</p>
+            <p>(1) Write $\by - \bar y\mathbf 1 = (\hat\by - \bar y\mathbf 1) + \mathbf e$. The first vector lies in
+              $\operatorname{col}(\bX)$, hence is orthogonal to $\mathbf e$, and Pythagoras gives the identity.
+              Dividing by $\sum_i (y_i - \bar y)^2$ shows that $1 - R^2$ is a ratio between $0$ and $1$.</p>
+            <p>(2) Let $\mathbf a = \by - \bar y\mathbf 1$ and $\mathbf b = \hat\by - \bar y\mathbf 1$ (both
+              centred, since both means equal $\bar y$). Then $\rho = \langle \mathbf a, \mathbf b\rangle /
+              (\norm{\mathbf a}\norm{\mathbf b})$. Since $\mathbf a = \mathbf b + \mathbf e$ with
+              $\mathbf e \perp \mathbf b$, $\langle\mathbf a, \mathbf b\rangle = \norm{\mathbf b}^2$, so
+              $\rho^2 = \norm{\mathbf b}^2/\norm{\mathbf a}^2$, which is $R^2$ by (1).</p>
+          </div>
+        </details>
+
+        <div class="callout pitfall">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>
+          <p class="callout__title">These identities hold on the training data only</p>
+          <div class="callout__body">
+            <p>On a test set the residuals are no longer orthogonal to anything. There, $R^2$ can be
+              <em>negative</em> (the model is worse than predicting the mean), and $R^2$ and $\rho^2$ differ. A model
+              can have $\rho = 1$ on test data and still be badly off, for instance if all its predictions are
+              shifted by a constant. Always report test metrics, and say which ones you report.</p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-linear-model">
+          <p>Write the simple linear regression model with one feature $x$. Explain what each term represents and what
+            the model assumes about the relationship between $x$ and $y$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-simple">
+          <p>For $p = 1$, write out the two normal equations and solve them to obtain the formulas of
+            <a class="ref" href="#ex-simple-ols"></a>. Deduce that the fitted line passes through
+            $(\bar x, \bar y)$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-by-hand">
+          <p>Fit $y = \theta_0 + \theta_1 x$ by least squares to the three points $(0, 1)$, $(1, 2)$, $(2, 4)$.
+            Compute the residuals and check that they sum to zero and are orthogonal to $(0, 1, 2)$. Compute $R^2$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-geometry">
+          <p>In geometric terms, what does the fitted line represent with respect to the data points? And what does
+            $\hat\by$ represent with respect to the vector $\by \in \R^n$? Explain why these are two different
+            pictures of the same problem.</p>
+        </div>
+
+        <div class="env exercise" id="exo-metrics">
+          <p>Name two metrics for regression and say what each tells you. Which one would you prefer if a few houses
+            in the test set have wildly wrong prices because of data-entry errors, and why?</p>
+        </div>
+
+        <div class="env exercise" id="exo-batch-sgd">
+          <p>Explain the difference between gradient descent and stochastic gradient descent. Give one advantage and
+            one disadvantage of each.</p>
+        </div>
+
+        <div class="env exercise" id="exo-scaling">
+          <p>Why is feature scaling important when training linear regression with gradient descent? Answer with the
+            shape of the contours of the loss and with <a class="ref" href="#thm-gd-ls"></a>. Does scaling change the
+            least-squares <em>predictions</em>?</p>
+        </div>
+
+        <div class="env exercise" id="exo-interpret">
+          <p>A multiple linear regression predicts house prices from size (m²), number of rooms and distance to the
+            city centre (km). How do you interpret the sign and the size of each coefficient? Could the coefficient of
+            "number of rooms" be negative even though bigger houses are more expensive? Explain.</p>
+        </div>
+
+        <div class="env exercise" id="exo-collinear">
+          <p>You fit a linear regression with two highly correlated features $x_1$ and $x_2$. (a) Explain, using
+            $\bX\T\bX$, why the estimated coefficients are unstable. (b) Propose one way to detect the problem and one
+            way to mitigate it.</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>Linear regression predicts $\hat y = \bx\T\theta$ and is fitted by minimising the mean squared error.</li>
+            <li>The minimisers solve the normal equations $\bX\T\bX\hat\theta = \bX\T\by$; with full column rank,
+              $\hat\theta = (\bX\T\bX)^{-1}\bX\T\by$.</li>
+            <li>Geometrically, $\hat\by$ is the orthogonal projection of $\by$ onto the column space of $\bX$, and the
+              residuals are orthogonal to every feature.</li>
+            <li>Gradient descent converges for $\eta \lt 2/\lambda_{\max}$, at a speed governed by the condition number.
+              Standardise features before using it.</li>
+            <li>Mini-batch SGD uses an unbiased gradient estimate whose variance is proportional to $1/m$: cheap, noisy
+              steps.</li>
+            <li>Report MSE/RMSE/MAE and $R^2$ on a test set. $R^2 \in [0, 1]$ is only guaranteed on the training data.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-prob">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-prob">Probabilistic view: least squares as maximum likelihood</h2>
+          <p class="extra__intro">So far the squared loss was a convenient choice. Here we show it follows from a
+            model of the noise, and why that model is usually Gaussian.</p>
+
+          <p>Make the error term random: assume the $\varepsilon_i$ are independent with
+            $\varepsilon_i \sim \mathcal N(0, \sigma^2)$. Equivalently, given $\bx_i$,
+            $$y_i \mid \bx_i \sim \mathcal N\big(\bx_i\T\theta,\ \sigma^2\big), \qquad
+            p(y_i \mid \bx_i; \theta, \sigma^2) = \frac{1}{\sqrt{2\pi\sigma^2}}\exp\Big(-\frac{(y_i - \bx_i\T\theta)^2}{2\sigma^2}\Big).$$
+            By independence, the probability density of all the observed prices, seen as a function of the
+            parameters, is the <strong>likelihood</strong>
+            $$\mathcal L(\theta, \sigma^2) = \prod_{i=1}^n p(y_i \mid \bx_i; \theta, \sigma^2).$$
+            The <strong>maximum likelihood estimator</strong> (MLE) chooses the parameters that make the observed data
+            most probable.</p>
+
+          <div class="env theorem" id="thm-mle-ols">
+            <p>Under the Gaussian noise model, the maximum likelihood estimator of $\theta$ is the least-squares
+              estimator $\hat\theta$, whatever the value of $\sigma^2$. The MLE of the noise variance is the training
+              MSE of the fitted model:
+              $$\hat\sigma^2 = \frac1n\sum_{i=1}^n \big(y_i - \bx_i\T\hat\theta\big)^2.$$</p>
+          </div>
+          <details class="proof" data-for="thm-mle-ols">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p>The logarithm is increasing, so we can maximise the log-likelihood instead:
+                $$\log\mathcal L(\theta, \sigma^2) = -\frac n2\log(2\pi\sigma^2) - \frac{1}{2\sigma^2}\sum_{i=1}^n\big(y_i - \bx_i\T\theta\big)^2.$$
+                For any fixed $\sigma^2 > 0$, the first term does not depend on $\theta$ and the second is
+                $-\frac{n}{2\sigma^2}L(\theta)$. Maximising over $\theta$ is therefore the same as minimising $L$,
+                which gives $\hat\theta$. Now plug in $\hat\theta$ and differentiate with respect to $\sigma^2$:
+                $-\frac{n}{2\sigma^2} + \frac{1}{2\sigma^4}\sum_i e_i^2 = 0$, so $\sigma^2 = \frac1n\sum_i e_i^2$. This
+                is a maximum because the derivative is positive before this point and negative after it.</p>
+            </div>
+          </details>
+
+          <p>The probabilistic view is more than a justification. It gives the model a measure of uncertainty
+            ($\hat\sigma$ is the typical size of the noise), and it shows how to adapt the loss to the data. Different
+            noise models lead to different losses, as you show in <a class="ref" href="#exo-laplace"></a>.</p>
+
+          <h3 id="extra-maxent">Why Gaussian noise? Maximum entropy</h3>
+          <p>The <strong>entropy</strong> of a density $p$ on $\R$ is $H[p] = -\int p(y)\log p(y)\,dy$. It measures
+            how spread out, or uninformative, the distribution is. If all we are willing to assume about the noise is
+            its mean and variance, the most honest choice is the distribution with the largest entropy among those
+            with that mean and variance.</p>
+
+          <div class="env theorem" id="thm-maxent">
+            <p>Among all densities on $\R$ with mean $\mu$ and variance $\sigma^2$, the Gaussian
+              $\mathcal N(\mu, \sigma^2)$ has the largest entropy, equal to $\frac12\log(2\pi e\sigma^2)$.</p>
+          </div>
+
+          <div class="derivation" data-title="Where the Gaussian comes from (Lagrange multipliers)">
+            <ol class="derivation__steps">
+              <li class="step"><p class="step__why">Maximise $H[p]$ under three constraints: $\int p = 1$,
+                $\int y\,p = \mu$, $\int (y - \mu)^2 p = \sigma^2$. Introduce one multiplier per constraint.</p>
+                $$\mathcal J[p] = -\!\int p\log p + \lambda_0\Big(\!\int p - 1\Big) + \lambda_1\Big(\!\int y\,p - \mu\Big)
+                + \lambda_2\Big(\!\int (y-\mu)^2 p - \sigma^2\Big).$$</li>
+              <li class="step"><p class="step__why">Set the derivative with respect to the value $p(y)$ to zero, for
+                every $y$ (the derivative of $-p\log p$ is $-\log p - 1$).</p>
+                $$-\log p(y) - 1 + \lambda_0 + \lambda_1 y + \lambda_2 (y - \mu)^2 = 0.$$</li>
+              <li class="step"><p class="step__why">Solve for $p$: the exponential of a quadratic in $y$. It is
+                integrable only if $\lambda_2 \lt 0$, and then it is a Gaussian density.</p>
+                $$p(y) = \exp\big(\lambda_0 - 1 + \lambda_1 y + \lambda_2 (y - \mu)^2\big).$$</li>
+              <li class="step"><p class="step__why">Match the constraints: the mean $\mu$ forces $\lambda_1 = 0$, the
+                variance forces $\lambda_2 = -1/(2\sigma^2)$, and normalisation fixes $e^{\lambda_0 - 1}$.</p>
+                $$p(y) = \frac{1}{\sqrt{2\pi\sigma^2}}\exp\Big(-\frac{(y - \mu)^2}{2\sigma^2}\Big).$$</li>
+            </ol>
+          </div>
+
+          <details class="proof" data-for="thm-maxent">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p>The derivation finds the candidate; here is a short proof that it is the maximum. Let $q$ be the
+                Gaussian density and $p$ any density with the same mean and variance. Since
+                $\log q(y) = -\frac12\log(2\pi\sigma^2) - \frac{(y-\mu)^2}{2\sigma^2}$ depends on $y$ only through
+                $(y - \mu)^2$, and $p$ and $q$ have the same variance,
+                $$-\int p\log q = \tfrac12\log(2\pi\sigma^2) + \tfrac12 = -\int q\log q = H[q].$$
+                Hence $H[q] - H[p] = \int p\log p - \int p\log q = \int p\log\frac pq \geq 0$, by Gibbs' inequality
+                ($\log u \leq u - 1$ applied to $u = q/p$ gives $\int p\log\frac qp \leq \int (q - p) = 0$). Finally
+                $H[q] = \frac12\log(2\pi\sigma^2) + \frac12 = \frac12\log(2\pi e\sigma^2)$.</p>
+            </div>
+          </details>
+
+          <div class="env exercise" id="exo-laplace">
+            <p>Assume instead Laplace noise, $p(\varepsilon) = \frac{1}{2b}e^{-|\varepsilon|/b}$. Show that the maximum
+              likelihood estimator of $\theta$ minimises the mean absolute error $\frac1n\sum_i|y_i - \bx_i\T\theta|$.
+              Which model would you expect to be more robust to outliers, and why?</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

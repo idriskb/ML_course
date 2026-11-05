@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dimensionality reduction: PCA — Machine Learning</title>
+  <meta name="description" content="Principal component analysis: unsupervised learning, the covariance matrix, variance maximisation and reconstruction error, eigen-decomposition and SVD, explained variance and the choice of the number of components.">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/digits-data.js"></script>
+  <script defer src="../assets/js/viz/pca-direction.js"></script>
+  <script defer src="../assets/js/viz/pca-digits.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="05-pca">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Dimensionality reduction: PCA</h1>
+          <p class="lede">Our first unsupervised method. Given data without labels, principal component analysis finds
+            the few directions along which the data vary the most. Projecting onto them compresses the data, makes
+            them easy to visualise, and loses as little information as possible. Everything follows from one object,
+            the covariance matrix, and one tool, its eigen-decomposition.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>Explain what makes unsupervised learning different, and why reducing dimension is useful.</li>
+            <li>Use a Lagrange multiplier to show that the direction of maximum variance is the top eigenvector of the
+              covariance matrix, and that the maximum variance is its largest eigenvalue.</li>
+            <li>Explain why PCA is the eigen-decomposition of the covariance matrix.</li>
+            <li>Express the variance kept and the reconstruction error of $k$ components with eigenvalues.</li>
+            <li>Compute PCA with the eigen-decomposition or the SVD, and explain why centring and scaling matter.</li>
+            <li>Choose the number of components, and recognise the limitations of PCA.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="unsupervised">From supervised to unsupervised learning</h2>
+        <p>So far every example came with a target: a price $y_i$ for each house, a label for each tumour. We could
+          measure errors against the truth and minimise them. In <strong>unsupervised learning</strong> we only have
+          the inputs
+          $$\bx_1, \dots, \bx_n \in \R^p,$$
+          and the goal is to find structure in them. This is harder, for three reasons.</p>
+        <ul>
+          <li><strong>There is no target.</strong> We must decide what "structure" means: large variance, small
+            distances, high density, and so on.</li>
+          <li><strong>Several structures can be plausible.</strong> The same images could be grouped by shape, by
+            thickness of the stroke, or by brightness.</li>
+          <li><strong>Evaluation is indirect.</strong> Without a ground truth we judge a solution by interpretability,
+            stability, or how much it helps a later supervised task.</li>
+        </ul>
+        <p>A useful way to think about structure is through <strong>latent variables</strong>: hidden quantities that
+          generate the measurements.</p>
+        <ul>
+          <li><strong>Continuous latent variables.</strong> Images of a person walking have thousands of pixels, but
+            they are essentially described by one number, the phase of the stride. The data lie close to a
+            low-dimensional set inside $\R^p$. PCA, the topic of this chapter, looks for such a set when it is
+            flat (a linear subspace).</li>
+          <li><strong>Discrete latent variables.</strong> An image of a handwritten digit is essentially described by
+            which digit it is, one of ten categories. Recovering such groups is <em>clustering</em>, the topic of the
+            next chapter (k-means).</li>
+        </ul>
+
+        <h3 id="why-reduce">Why reduce dimension?</h3>
+        <p>Replacing $\bx_i \in \R^p$ by a few numbers $\bz_i \in \R^k$, with $k \ll p$, helps in several ways.</p>
+        <ul>
+          <li><strong>Visualisation.</strong> We cannot plot 64 pixels, but we can plot two well-chosen
+            combinations of them.</li>
+          <li><strong>Compression.</strong> Storing $k$ numbers per example instead of $p$.</li>
+          <li><strong>Denoising.</strong> Noise spreads over all directions, while the signal often concentrates in a
+            few. Dropping the weak directions removes mostly noise.</li>
+          <li><strong>Better supervised learning.</strong> Fewer, uncorrelated features make regression more stable
+            (recall collinearity in <a href="02-linear-regression.html">Chapter 2</a>) and training faster. In high
+            dimension, data become sparse and distances less informative (the <em>curse of dimensionality</em>, which
+            we meet again with k-nearest neighbours).</li>
+        </ul>
+        <p>We use two running examples: a small set of <strong>houses</strong> described by two features, area and
+          price (so we can see everything), and 150 <strong>handwritten digits</strong> from scikit-learn
+          (8×8 grey-level images, so $p = 64$).</p>
+
+        <!-- ============================================================ -->
+        <h2 id="covariance">Centred data and the covariance matrix</h2>
+        <p>Throughout, the data are <strong>centred</strong>: we subtract the mean $\bar\bx = \frac1n\sum_i \bx_i$ from
+          every observation, so that $\sum_i \bx_i = \mathbf 0$. We will see in <a class="ref" href="#centring"></a>
+          why this matters. Stack the centred observations as the rows of the data matrix
+          $\bX \in \R^{n \times p}$.</p>
+
+        <div class="env definition" id="def-cov">
+          <p>The <strong>sample covariance matrix</strong> of centred data is
+            $$\Sigma = \frac1n\sum_{i=1}^n \bx_i\bx_i\T = \frac1n\bX\T\bX \in \R^{p \times p},
+            \qquad \Sigma_{jl} = \frac1n\sum_{i=1}^n x_{ij}\,x_{il}.$$
+            The diagonal entry $\Sigma_{jj}$ is the variance of feature $j$. The off-diagonal entry $\Sigma_{jl}$ is
+            the covariance of features $j$ and $l$: positive if they tend to be large together, negative if one tends
+            to be large when the other is small. The <strong>total variance</strong> is
+            $\tr(\Sigma) = \sum_j \Sigma_{jj}$.</p>
+        </div>
+        <p>Software often divides by $n - 1$ instead of $n$. This rescales every eigenvalue by the same factor and
+          changes nothing below.</p>
+
+        <p>PCA describes the data along directions. For a unit vector $\bu \in \R^p$ ($\norm{\bu} = 1$), the
+          <strong>score</strong> of $\bx_i$ along $\bu$ is the coordinate $z_i = \bu\T\bx_i$: how far $\bx_i$ reaches
+          in the direction $\bu$.</p>
+
+        <div class="env lemma" id="lem-proj-var">
+          <p>Let $\bu$ be a unit vector and $z_i = \bu\T\bx_i$. The scores have mean $0$ and variance
+            $$\frac1n\sum_{i=1}^n z_i^2 = \bu\T\Sigma\,\bu .$$
+            In particular $\Sigma$ is symmetric and positive semidefinite: $\bv\T\Sigma\bv \geq 0$ for every $\bv$.</p>
+        </div>
+        <details class="proof" data-for="lem-proj-var">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: mean.</strong> By linearity and centring,
+              $$\frac1n\sum_{i=1}^n z_i = \bu\T\Big(\frac1n\sum_{i=1}^n \bx_i\Big) = \bu\T\mathbf 0 = 0.$$</p>
+            <p><strong>Step 2: variance.</strong> Since the mean is $0$, the variance is the mean of the squares. Write
+              $z_i^2 = (\bu\T\bx_i)(\bx_i\T\bu)$:
+              $$\frac1n\sum_{i=1}^n z_i^2 = \frac1n\sum_{i=1}^n \bu\T\bx_i\bx_i\T\bu
+              = \bu\T\Big(\frac1n\sum_{i=1}^n \bx_i\bx_i\T\Big)\bu = \bu\T\Sigma\,\bu.$$</p>
+            <p><strong>Step 3: symmetric and positive semidefinite.</strong> $\Sigma\T = \frac1n(\bX\T\bX)\T = \Sigma$.
+              For any $\bv$, Step 2 (without the unit-norm assumption) gives
+              $\bv\T\Sigma\bv = \frac1n\sum_i (\bv\T\bx_i)^2 \geq 0$.</p>
+          </div>
+        </details>
+
+        <!-- ============================================================ -->
+        <h2 id="one-direction">The first principal component</h2>
+        <p>Imagine the house data as an elongated cloud of points around the origin. We want to summarise each point by
+          a <em>single</em> number: its score $z_i = \bu\T\bx_i$ along a direction $\bu$. A good summary should keep the
+          points as spread out as possible, so we look for the direction of <strong>maximum variance</strong>. By
+          <a class="ref" href="#lem-proj-var"></a>, this variance is $\bu\T\Sigma\bu$, and we solve
+          $$\max_{\bu \in \R^p}\ \bu\T\Sigma\,\bu \qquad \text{subject to} \qquad \bu\T\bu = 1 .$$
+          The constraint is needed: without it, doubling $\bu$ would multiply the variance by $4$, and the maximum would
+          be infinite. Only the direction matters.</p>
+
+        <div class="env theorem" id="thm-first-pc" data-name="First principal component">
+          <p>Every solution of the problem above is an eigenvector of $\Sigma$, and the variance along an eigenvector
+            equals its eigenvalue. Hence the maximum variance is the largest eigenvalue $\lambda_1$ of $\Sigma$, and the
+            direction of maximum variance is a corresponding unit eigenvector $\bu_1$:
+            $$\Sigma\,\bu_1 = \lambda_1\bu_1, \qquad \max_{\bu\T\bu = 1} \bu\T\Sigma\,\bu = \bu_1\T\Sigma\,\bu_1 = \lambda_1 .$$</p>
+        </div>
+        <details class="proof" data-for="thm-first-pc">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: the Lagrangian.</strong> Introduce a multiplier $\lambda$ for the constraint
+              $\bu\T\bu = 1$:
+              $$J(\bu, \lambda) = \bu\T\Sigma\,\bu - \lambda\big(\bu\T\bu - 1\big).$$</p>
+            <p><strong>Step 2: set the gradient to zero.</strong> Since $\Sigma$ is symmetric,
+              $\nabla_{\bu}(\bu\T\Sigma\bu) = 2\Sigma\bu$, and $\nabla_{\bu}(\bu\T\bu) = 2\bu$. So
+              $$\nabla_{\bu} J = 2\Sigma\,\bu - 2\lambda\,\bu = \mathbf 0
+              \quad\Longrightarrow\quad \boxed{\Sigma\,\bu = \lambda\,\bu} .$$
+              The derivative with respect to $\lambda$ gives back the constraint $\bu\T\bu = 1$. So any solution is a
+              unit eigenvector of $\Sigma$, and the multiplier $\lambda$ is its eigenvalue.</p>
+            <p><strong>Step 3: the variance at an eigenvector.</strong> If $\Sigma\bu = \lambda\bu$ and $\bu\T\bu = 1$,
+              $$\bu\T\Sigma\,\bu = \bu\T(\lambda\,\bu) = \lambda\,\underbrace{\bu\T\bu}_{=\,1} = \lambda .$$
+              The variance along an eigenvector is its eigenvalue.</p>
+            <p><strong>Step 4: pick the best eigenvector.</strong> The variance is a continuous function on the unit
+              sphere, which is closed and bounded, so a maximiser exists. By Step 2 it is an eigenvector, and by Step 3
+              its variance is its eigenvalue. The largest possible value is therefore the largest eigenvalue
+              $\lambda_1$, reached at its eigenvector $\bu_1$.</p>
+          </div>
+        </details>
+
+        <p>The first principal component of $\bx_i$ is its score $z_{i1} = \bu_1\T\bx_i$, and the ratio
+          $\lambda_1/\tr(\Sigma)$ is the fraction of the total variance it keeps.</p>
+
+        <h3 id="min-error">The same direction is the closest line</h3>
+        <p>There is a second natural criterion: replace each point by its orthogonal projection $(\bu\T\bx_i)\bu$ on
+          the line, and ask for the line that loses the least, i.e. that is closest to the data. By Pythagoras
+          (<a class="ref" href="#fig-pythagoras"></a>), it gives the same answer.</p>
+
+        <figure class="numbered diagram diagram--narrow" id="fig-pythagoras">
+          <svg viewBox="0 0 520 250" role="img" aria-label="A line through the origin in direction u. A point x is joined to its orthogonal projection on the line, which is at distance u-transpose-x from the origin. The vector x, the projection and the residual form a right triangle.">
+            <line class="d-b-stroke" stroke-width="2.5" x1="22" y1="223.7" x2="501" y2="49.3"/>
+            <line class="d-ink" stroke-width="1.5" x1="60" y1="210" x2="300" y2="30"/>
+            <line class="d-b-stroke" stroke-width="2" stroke-dasharray="6 4" x1="330" y1="111.8" x2="300" y2="30"/>
+            <polyline fill="none" class="d-ink" stroke-width="1.2" points="341.3,107.7 337.2,96.4 325.9,100.5"/>
+            <line class="d-ink" stroke-width="3" x1="60" y1="210" x2="116.4" y2="189.5"/>
+            <polygon class="d-text" points="122,187.4 111.4,186.6 114.6,195.2"/>
+            <circle class="d-a" cx="300" cy="30" r="6"/>
+            <circle class="d-b" cx="330" cy="111.8" r="5"/>
+            <circle class="d-text" cx="60" cy="210" r="3.5"/>
+            <text class="d-text" x="44" y="228">0</text>
+            <text class="d-text" x="112" y="215" font-weight="700">u</text>
+            <text class="d-text" x="282" y="26" font-weight="700">x</text>
+            <text class="d-text" x="338" y="138">(u⊤x) u</text>
+            <text class="d-label" x="322" y="66">residual x − (u⊤x) u</text>
+            <text class="d-label" x="150" y="112">‖x‖</text>
+            <text class="d-label" x="196" y="186">length |u⊤x|</text>
+          </svg>
+          <figcaption>Projecting $\bx$ onto the line spanned by a unit vector $\bu$. The vector $\bx$, its projection
+            $(\bu\T\bx)\bu$ and the residual form a right triangle, so
+            $\norm{\bx}^2 = (\bu\T\bx)^2 + \norm{\bx - (\bu\T\bx)\bu}^2$: what the projection keeps plus what it
+            loses is fixed.</figcaption>
+        </figure>
+
+        <div class="env proposition" id="prop-min-error">
+          <p>For every unit vector $\bu$, the average squared distance between the points and their projections is
+            $$\frac1n\sum_{i=1}^n \norm{\bx_i - (\bu\T\bx_i)\bu}^2 = \tr(\Sigma) - \bu\T\Sigma\,\bu .$$
+            The total $\tr(\Sigma)$ does not depend on $\bu$, so the line of minimum reconstruction error is the
+            direction of maximum variance, $\bu_1$, and the smallest error is $\tr(\Sigma) - \lambda_1$.</p>
+        </div>
+        <details class="proof" data-for="prop-min-error">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: one point.</strong> Expand the square and use $\bu\T\bu = 1$:
+              $$\norm{\bx_i - (\bu\T\bx_i)\bu}^2 = \norm{\bx_i}^2 - 2(\bu\T\bx_i)^2 + (\bu\T\bx_i)^2\underbrace{\bu\T\bu}_{=\,1}
+              = \norm{\bx_i}^2 - (\bu\T\bx_i)^2 .$$</p>
+            <p><strong>Step 2: average.</strong> $\frac1n\sum_i\norm{\bx_i}^2 = \sum_j \Sigma_{jj} = \tr(\Sigma)$, and
+              $\frac1n\sum_i(\bu\T\bx_i)^2 = \bu\T\Sigma\bu$ by <a class="ref" href="#lem-proj-var"></a>.</p>
+          </div>
+        </details>
+
+        <p>Explore both criteria in <a class="ref" href="#fig-pca-direction"></a>.</p>
+
+        <figure class="viz viz--wide" data-viz="pca-direction" id="fig-pca-direction">
+          <div class="viz__stage"></div>
+          <figcaption>Choosing one direction for the house data (area and price). Left: the line spanned by $\bu$ and
+            the orthogonal projection of each house. Right: the captured part $\frac1n\sum_i(\bu\T\bx_i)^2$ and the
+            lost part $\frac1n\sum_i\norm{\bx_i - \hat\bx_i}^2$ against the angle of $\bu$. They always add up to the
+            same total.
+            <strong>Try:</strong> (1) rotate $\bu$ and find the angle that makes the dashed residuals shortest: it is
+            also where the captured part peaks; (2) press <em>Best direction</em>: the captured part equals
+            $\lambda_1$; (3) untick <em>Centre the data</em>: the best line through the origin now points at the
+            cloud instead of along it; (4) switch the units to <em>area in 100 sq ft</em>: the area numbers become ten
+            times larger and the best direction swings to the area axis.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="k-components">All the components: the eigen-decomposition</h2>
+        <p>One number per point is rarely enough. For a second number, we look for the direction of maximum variance
+          among the directions <em>orthogonal</em> to $\bu_1$, so that it captures something new. Then a third,
+          orthogonal to the first two, and so on. The same Lagrange argument shows that each of these directions is
+          again an eigenvector of $\Sigma$ (<a class="ref" href="#exo-second-pc"></a>). What makes everything fit is
+          the structure of $\Sigma$.</p>
+
+        <div class="env lemma" id="lem-sym-psd">
+          <p>Let $\Sigma$ be symmetric and positive semidefinite. Then:</p>
+          <ol>
+            <li>all its eigenvalues are non-negative;</li>
+            <li>eigenvectors with different eigenvalues are orthogonal;</li>
+            <li>(spectral theorem) $\Sigma$ has an orthonormal basis of eigenvectors $\bu_1, \dots, \bu_p$:
+              $$\Sigma = U\Lambda U\T, \qquad U = [\bu_1, \dots, \bu_p], \quad U\T U = I_p, \quad
+              \Lambda = \operatorname{diag}(\lambda_1, \dots, \lambda_p).$$</li>
+          </ol>
+        </div>
+        <details class="proof" data-for="lem-sym-psd">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: non-negative eigenvalues.</strong> If $\Sigma\bu = \lambda\bu$ with $\bu\T\bu = 1$, then
+              by positive semidefiniteness
+              $$\lambda = \bu\T\Sigma\,\bu \geq 0 .$$</p>
+            <p><strong>Step 2: orthogonality.</strong> Let $\Sigma\bu = \lambda\bu$ and $\Sigma\bv = \mu\bv$ with
+              $\lambda \neq \mu$. Compute $\bv\T\Sigma\bu$ in two ways, using $\Sigma\T = \Sigma$:
+              $$\lambda\,\bv\T\bu = \bv\T(\Sigma\bu) = (\Sigma\bv)\T\bu = \mu\,\bv\T\bu
+              \quad\Longrightarrow\quad (\lambda - \mu)\,\bv\T\bu = 0 \quad\Longrightarrow\quad \bv\T\bu = 0 .$$</p>
+            <p><strong>Step 3: orthonormal basis.</strong> This is the spectral theorem for symmetric matrices from
+              linear algebra. Within an eigenspace of dimension greater than one, we pick an orthonormal basis
+              (Gram–Schmidt); Step 2 makes eigenvectors from different eigenspaces orthogonal.</p>
+          </div>
+        </details>
+
+        <p>So the orthogonal directions we are looking for are already provided by linear algebra: <strong>PCA is the
+          eigen-decomposition of the covariance matrix</strong>. Order the eigenvalues
+          $\lambda_1 \geq \lambda_2 \geq \dots \geq \lambda_p \geq 0$. By Step 3 of
+          <a class="ref" href="#thm-first-pc"></a>, the variance along $\bu_j$ is $\lambda_j$, and the total variance
+          is the sum of the eigenvalues, $\tr(\Sigma) = \tr(U\Lambda U\T) = \tr(\Lambda U\T U) = \lambda_1 + \dots + \lambda_p$.</p>
+
+        <div class="env definition" id="def-pca">
+          <p>Let $\Sigma = U\Lambda U\T$ with $\lambda_1 \geq \dots \geq \lambda_p$. The columns $\bu_1, \dots, \bu_p$
+            of $U$ are the <strong>principal directions</strong> (or <em>loadings</em>). For $k \leq p$, with
+            $U_k = [\bu_1, \dots, \bu_k]$:</p>
+          <ul>
+            <li>the <strong>principal component scores</strong> of $\bx$ are $\bz = U_k\T\bx$, that is
+              $z_j = \bu_j\T\bx$;</li>
+            <li>the <strong>rank-$k$ reconstruction</strong> is $\hat\bx = U_k\bz = U_kU_k\T\bx$;</li>
+            <li>the <strong>explained variance ratio</strong> is
+              $$\mathrm{EVR}(k) = \frac{\lambda_1 + \dots + \lambda_k}{\lambda_1 + \dots + \lambda_p} .$$</li>
+          </ul>
+        </div>
+
+        <div class="env proposition" id="prop-kept-lost">
+          <p>Keeping $k$ components keeps the variance $\lambda_1 + \dots + \lambda_k$, and the average squared
+            reconstruction error is what is left:
+            $$\frac1n\sum_{i=1}^n \norm{\bx_i - U_kU_k\T\bx_i}^2 = \lambda_{k+1} + \dots + \lambda_p .$$</p>
+        </div>
+        <details class="proof" data-for="prop-kept-lost">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: Pythagoras with $k$ directions.</strong> Complete $\bu_1, \dots, \bu_k$ to the
+              orthonormal basis $\bu_1, \dots, \bu_p$, so $\bx_i = \sum_{j=1}^p (\bu_j\T\bx_i)\bu_j$. The
+              reconstruction keeps the first $k$ terms, so
+              $$\norm{\bx_i - U_kU_k\T\bx_i}^2 = \Big\lVert\sum_{j=k+1}^p (\bu_j\T\bx_i)\,\bu_j\Big\rVert^2
+              = \sum_{j=k+1}^p (\bu_j\T\bx_i)^2 .$$</p>
+            <p><strong>Step 2: average.</strong> By <a class="ref" href="#lem-proj-var"></a> and Step 3 of
+              <a class="ref" href="#thm-first-pc"></a>,
+              $$\frac1n\sum_{i=1}^n \norm{\bx_i - U_kU_k\T\bx_i}^2 = \sum_{j=k+1}^p \bu_j\T\Sigma\,\bu_j
+              = \lambda_{k+1} + \dots + \lambda_p .$$</p>
+          </div>
+        </details>
+
+        <p>So the eigenvalues tell the whole story: $\lambda_j$ is the variance along the $j$-th principal direction,
+          the first $k$ directions keep $\lambda_1 + \dots + \lambda_k$, and the error is the sum of the discarded
+          eigenvalues. One can show that no other $k$-dimensional subspace does better. The new coordinates have one
+          more pleasant property.</p>
+
+        <div class="env proposition" id="prop-uncorrelated">
+          <p>The principal component scores are uncorrelated, with variances $\lambda_1, \dots, \lambda_k$: the
+            covariance matrix of $\bz_i = U_k\T\bx_i$ is
+            $$\frac1n\sum_{i=1}^n \bz_i\bz_i\T = \Lambda_k = \operatorname{diag}(\lambda_1, \dots, \lambda_k).$$</p>
+        </div>
+        <details class="proof" data-for="prop-uncorrelated">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>The scores are centred (as in <a class="ref" href="#lem-proj-var"></a>), and
+              $$\frac1n\sum_{i=1}^n \bz_i\bz_i\T = U_k\T\Big(\frac1n\sum_{i=1}^n \bx_i\bx_i\T\Big)U_k = U_k\T\Sigma\, U_k .$$
+              The $(j, l)$ entry is $\bu_j\T\Sigma\bu_l = \lambda_l\,\bu_j\T\bu_l = \lambda_l\,\delta_{jl}$.</p>
+          </div>
+        </details>
+
+        <p>Geometrically, PCA <em>rotates</em> the coordinate system so that its axes line up with the natural axes
+          of the cloud, ordered from the most to the least spread. In the new coordinates the features are
+          uncorrelated.</p>
+
+        <p>Geometrically, PCA <em>rotates</em> the coordinate system so that its axes line up with the natural axes
+          of the cloud, ordered from the most to the least spread. In the new coordinates the features are
+          uncorrelated.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="computing">Computing PCA</h2>
+        <p>In practice PCA is computed through the <strong>singular value decomposition</strong> (SVD) of the centred
+          data matrix, without forming $\Sigma$. Every $\bX \in \R^{n \times p}$ of rank $r$ can be written
+          $$\bX = A\,S\,V\T, \qquad A \in \R^{n \times r},\ A\T A = I_r, \qquad V \in \R^{p \times r},\ V\T V = I_r,
+          \qquad S = \operatorname{diag}(s_1, \dots, s_r),$$
+          with singular values $s_1 \geq \dots \geq s_r > 0$.</p>
+
+        <div class="env proposition" id="prop-svd">
+          <p>The principal directions are the right singular vectors (the columns $\mathbf v_j$ of $V$), the
+            eigenvalues are $\lambda_j = s_j^2/n$, and the score matrix is $\bX V = AS$.</p>
+        </div>
+        <details class="proof" data-for="prop-svd">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1.</strong> Substitute the SVD into the covariance and use $A\T A = I_r$:
+              $$\Sigma = \frac1n\bX\T\bX = \frac1n V S\underbrace{A\T A}_{=\,I_r} S V\T = V\,\frac{S^2}{n}\,V\T .$$</p>
+            <p><strong>Step 2.</strong> Multiply by $\mathbf v_j$ and use $V\T\mathbf v_j = \mathbf e_j$:
+              $\Sigma\mathbf v_j = V\frac{S^2}{n}\mathbf e_j = \frac{s_j^2}{n}\mathbf v_j$. The remaining eigenvalues of
+              $\Sigma$ (for directions orthogonal to all $\mathbf v_j$) are $0$.</p>
+            <p><strong>Step 3.</strong> The scores are $\bX V = AS\,V\T V = AS$.</p>
+          </div>
+        </details>
+
+        <p>Forming $\bX\T\bX$ squares the condition number and can lose accuracy, so libraries
+          (scikit-learn's <code>PCA</code> included) use the SVD. The cost of the eigen-decomposition of the
+          $p \times p$ matrix $\Sigma$ is of order $p^3$. When there are far more features than examples
+          ($n \ll p$, e.g. images with millions of pixels), it is cheaper to work with the $n \times n$
+          <em>Gram matrix</em> $\bX\bX\T$.</p>
+
+        <div class="env proposition" id="prop-gram">
+          <p>If $\frac1n\bX\bX\T\mathbf a = \lambda\mathbf a$ with $\lambda > 0$ and $\mathbf a \neq \mathbf 0$, then
+            $\bu = \bX\T\mathbf a / \norm{\bX\T\mathbf a}$ is a unit eigenvector of $\Sigma$ with the same eigenvalue
+            $\lambda$. So the nonzero eigenvalues of $\Sigma$ and of $\frac1n\bX\bX\T$ coincide.</p>
+        </div>
+        <details class="proof" data-for="prop-gram">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: eigenvector.</strong> Multiply the eigen-equation on the left by $\bX\T$:
+              $$\Sigma\,(\bX\T\mathbf a) = \frac1n\bX\T\bX\bX\T\mathbf a = \bX\T\Big(\frac1n\bX\bX\T\mathbf a\Big)
+              = \lambda\,(\bX\T\mathbf a).$$</p>
+            <p><strong>Step 2: it is not zero.</strong>
+              $\norm{\bX\T\mathbf a}^2 = \mathbf a\T\bX\bX\T\mathbf a = n\lambda\norm{\mathbf a}^2 > 0$, so we may
+              normalise.</p>
+          </div>
+        </details>
+
+        <div class="callout intuition">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z"/></svg>
+          <p class="callout__title">PCA in four steps</p>
+          <div class="callout__body">
+            <ol>
+              <li>Centre each feature (and standardise it if the features have different units).</li>
+              <li>Compute the SVD $\bX = ASV\T$, or the eigen-decomposition of $\Sigma$.</li>
+              <li>Choose $k$ from the explained variance ratios $\lambda_j/\sum_l\lambda_l$.</li>
+              <li>Keep the scores $\bz_i = U_k\T\bx_i$, and reconstruct with $\hat\bx_i = \bar\bx + U_k\bz_i$ if
+                needed (adding back the mean).</li>
+            </ol>
+          </div>
+        </div>
+
+        <div class="code" data-lang="python">
+<pre><code>from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+Xs = StandardScaler().fit_transform(X)     # centre and scale each feature
+pca = PCA(n_components=2).fit(Xs)
+Z = pca.transform(Xs)                      # scores, shape (n, 2)
+print(pca.components_)                     # rows = principal directions u_j
+print(pca.explained_variance_ratio_)       # lambda_j / sum of all lambdas</code></pre>
+        </div>
+
+        <div class="env example" id="ex-2x2">
+          <p>Two standardised features have covariance $\Sigma = \begin{pmatrix} 2 & 1 \\ 1 & 2 \end{pmatrix}$.</p>
+          <p><strong>Step 1: eigenvalues.</strong>
+            $\det(\Sigma - \lambda I) = (2 - \lambda)^2 - 1 = 0$ gives $2 - \lambda = \pm 1$, so $\lambda_1 = 3$ and
+            $\lambda_2 = 1$.</p>
+          <p><strong>Step 2: eigenvectors.</strong> For $\lambda_1 = 3$: $(\Sigma - 3I)\bu = \mathbf 0$ means
+            $-u_1 + u_2 = 0$, so $\bu_1 = \frac{1}{\sqrt2}(1, 1)\T$. For $\lambda_2 = 1$: $u_1 + u_2 = 0$, so
+            $\bu_2 = \frac{1}{\sqrt2}(1, -1)\T$.</p>
+          <p><strong>Step 3: explained variance.</strong> $\mathrm{EVR}(1) = 3/(3 + 1) = 75\%$. The first component
+            is the (scaled) sum of the two features, which move together. The second, their difference, carries the
+            remaining $25\%$.</p>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="practical">Centring and scaling</h2>
+
+        <h3 id="centring">Why centre?</h3>
+        <p>Without centring, the matrix we diagonalise is the matrix of second moments, not the covariance.</p>
+        <div class="env proposition" id="prop-uncentred">
+          <p>For raw (uncentred) data with mean $\bar\bx$ and covariance $\Sigma$,
+            $$\frac1n\sum_{i=1}^n \bx_i\bx_i\T = \Sigma + \bar\bx\,\bar\bx\T .$$</p>
+        </div>
+        <details class="proof" data-for="prop-uncentred">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Write $\bx_i = \bar\bx + \mathbf c_i$ with $\sum_i\mathbf c_i = \mathbf 0$. Then
+              $$\frac1n\sum_{i=1}^n (\bar\bx + \mathbf c_i)(\bar\bx + \mathbf c_i)\T
+              = \bar\bx\bar\bx\T + \bar\bx\underbrace{\Big(\frac1n\sum_i \mathbf c_i\Big)\T}_{=\,\mathbf 0}
+              + \underbrace{\Big(\frac1n\sum_i \mathbf c_i\Big)}_{=\,\mathbf 0}\bar\bx\T + \frac1n\sum_{i=1}^n \mathbf c_i\mathbf c_i\T
+              = \bar\bx\bar\bx\T + \Sigma .$$</p>
+          </div>
+        </details>
+        <p>The extra term $\bar\bx\bar\bx\T$ adds $\norm{\bar\bx}^2$ of "variance" in the direction of the mean. When
+          the data sit far from the origin, it dominates, and the first "component" just points from the origin
+          towards the cloud. It describes <em>where</em> the cloud is, not its <em>shape</em>. Untick
+          <em>Centre the data</em> in <a class="ref" href="#fig-pca-direction"></a> to see it.</p>
+
+        <h3 id="scaling">Why (usually) standardise?</h3>
+        <p>PCA is driven by variances, so it depends on the units. Measuring area in hundreds instead of thousands of
+          square feet multiplies its values by $10$ and its variance by $100$. The first component then points almost
+          exactly along the area axis, whatever the correlation with price. In
+          <a class="ref" href="#fig-pca-direction"></a>, compare the best angle in the three unit settings.</p>
+        <p>When features have different units or very different ranges, <strong>standardise</strong> them: divide
+          each centred feature by its standard deviation. The covariance of standardised data is the
+          <em>correlation matrix</em>, so PCA then looks at correlations only. When the features are already on a
+          common scale (pixel intensities, for instance), raw units are fine and often preferable.</p>
+
+        <div class="callout pitfall">
+          <svg class="callout__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.01"/></svg>
+          <p class="callout__title">Signs and ties</p>
+          <div class="callout__body">
+            <p>If $\bu$ is a principal direction, so is $-\bu$: two programs can return opposite signs, and a plot of
+              scores can come out mirrored. Only the line matters. If two eigenvalues are equal, any orthonormal
+              basis of their eigenspace is valid, so the individual directions are not determined (nearly equal
+              eigenvalues make them unstable).</p>
+          </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="choosing-k">How many components?</h2>
+        <p>Keeping too few components discards signal, while keeping too many keeps noise and defeats the purpose.
+          There is no universal rule. Common criteria:</p>
+        <ul>
+          <li><strong>Explained variance threshold.</strong> Choose the smallest $k$ with
+            $\mathrm{EVR}(k) \geq \tau$, typically $\tau = 0.90$ or $0.95$. The threshold is a convention, not a
+            law.</li>
+          <li><strong>Scree plot and elbow.</strong> Plot $\lambda_1 \geq \lambda_2 \geq \dots$ (or the individual
+            ratios). Usually a few large values are followed by a long flat tail; keep the components before the bend
+            ("elbow").</li>
+          <li><strong>Downstream performance.</strong> If the components feed a supervised model, treat $k$ as a
+            hyperparameter and choose it by cross-validation (<a href="03-regularization.html">Chapter 3</a>).</li>
+          <li><strong>Interpretability and inspection.</strong> For visualisation, $k = 2$ or $3$. For compression,
+            look at reconstructions and stop when they are good enough.</li>
+        </ul>
+
+        <figure class="viz viz--wide" data-viz="pca-digits" id="fig-pca-digits">
+          <div class="viz__stage"></div>
+          <figcaption>PCA of 150 handwritten digits (zeros, threes and fours; 8×8 images, $p = 64$). Top: the selected
+            image, its reconstruction $\bar\bx + U_k\bz$ from $k$ components, the mean image $\bar\bx$, and the first
+            three principal directions drawn as images (two colours for positive and negative weights). Bottom left:
+            individual and cumulative explained variance ratios. Bottom right: every image plotted at its first two
+            scores.
+            <strong>Try:</strong> (1) with $k = 2$, the three digits already form three groups, although PCA never saw
+            the labels; (2) look for the elbow in the scree plot: two components stand out, then the ratios decay
+            slowly; (3) increase $k$ until the reconstruction is recognisable, and note the explained variance; how
+            many numbers per image does that need instead of 64? (4) step through the images: is the error of each
+            image close to the average error $\lambda_{k+1} + \dots + \lambda_{64}$?</figcaption>
+        </figure>
+
+        <p>Here the first two components explain about $59\%$ of the variance, $13$ components are needed for $90\%$
+          and $20$ for $95\%$. The elbow suggests $k = 2$ for a picture of the data, while compression needs more.
+          Different goals, different $k$.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="applications">Applications</h2>
+        <ul>
+          <li><strong>Visualisation.</strong> A scatter plot of the first two or three scores is often the first look
+            at a new dataset. It reveals groups, outliers and trends, as in
+            <a class="ref" href="#fig-pca-digits"></a>.</li>
+          <li><strong>Compression.</strong> Store the mean, $k$ directions and $k$ scores per example:
+            $p + kp + kn$ numbers instead of $np$. For $n = 10\,000$ images with $p = 64$ and $k = 13$ this is about
+            $1.4 \times 10^5$ numbers instead of $6.4 \times 10^5$.</li>
+          <li><strong>Denoising.</strong> Reconstructing from the top components discards the small-variance directions,
+            where much of the noise lives.</li>
+          <li><strong>Preprocessing.</strong> Regressing on the first few scores instead of the raw features
+            (<em>principal component regression</em>) removes collinearity, because the scores are uncorrelated
+            (<a class="ref" href="#prop-uncorrelated"></a>). It also speeds up training.</li>
+          <li><strong>Exploration.</strong> The loadings $\bu_j$ show which features move together. In
+            <a class="ref" href="#ex-2x2"></a>, the first component weights both features equally.</li>
+        </ul>
+
+        <!-- ============================================================ -->
+        <h2 id="limitations">Limitations</h2>
+        <ul>
+          <li><strong>Linearity.</strong> PCA finds flat subspaces. Data on a curved surface (a circle, a spiral)
+            need more linear components than their true dimension, and the projection can overlap distant parts.
+            Kernel PCA (Chapter 9) and other non-linear methods address this.</li>
+          <li><strong>Variance is not relevance.</strong> PCA ranks directions by spread, not by usefulness for a task.
+            A low-variance direction may be exactly the one that separates two classes
+            (<a class="ref" href="#fig-variance-relevance"></a>). With labels available, supervised methods may be
+            better.</li>
+          <li><strong>Sensitivity to scaling and centring</strong> (<a class="ref" href="#practical"></a>).</li>
+          <li><strong>Sensitivity to outliers.</strong> Variances are averages of squares, so a few extreme points can
+            rotate the components. Inspect the data, or use robust variants.</li>
+          <li><strong>Interpretability.</strong> Each component mixes all features, which can be hard to explain.</li>
+          <li><strong>Global criterion.</strong> PCA maximises total variance. Small groups that contribute little
+            variance can be invisible in the first components.</li>
+        </ul>
+
+        <figure class="numbered diagram" id="fig-variance-relevance">
+          <svg viewBox="0 0 640 270" role="img" aria-label="Two long thin parallel clouds, one above the other. The first principal direction runs along their length; projecting onto it, both classes cover the same range. The second principal direction is vertical; projecting onto it separates the classes completely.">
+            <ellipse class="d-a" opacity="0.45" cx="260" cy="105" rx="190" ry="20"/>
+            <ellipse class="d-b" opacity="0.45" cx="260" cy="155" rx="190" ry="20"/>
+            <line class="d-ink" stroke-width="2" x1="50" y1="130" x2="472" y2="130"/>
+            <polygon class="d-text" points="482,130 470,124 470,136"/>
+            <text class="d-text" x="488" y="135" font-weight="700">PC 1</text>
+            <line class="d-ink" stroke-width="2" x1="260" y1="215" x2="260" y2="55"/>
+            <polygon class="d-text" points="260,45 254,57 266,57"/>
+            <text class="d-text" x="268" y="52" font-weight="700">PC 2</text>
+            <rect class="d-a" x="575" y="85" width="16" height="40" rx="3"/>
+            <rect class="d-b" x="575" y="135" width="16" height="40" rx="3"/>
+            <text class="d-label" x="583" y="200" text-anchor="middle">scores on PC 2:</text>
+            <text class="d-label" x="583" y="216" text-anchor="middle">separated</text>
+            <rect class="d-a" x="70" y="236" width="380" height="9" rx="3"/>
+            <rect class="d-b" x="70" y="248" width="380" height="9" rx="3"/>
+            <text class="d-label" x="462" y="252">scores on PC 1: overlap</text>
+          </svg>
+          <figcaption>Variance is not relevance. Two classes form long parallel clouds. The first principal direction
+            runs along the clouds and keeps most of the variance, but both classes cover the same range of scores.
+            The second direction, with little variance, separates them perfectly. PCA does not use the labels, so
+            nothing tells it which direction matters.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-why-reduce">
+          <p>Explain why dimensionality reduction is often useful in machine learning. Give two problems that may arise
+            when working with very high-dimensional data.</p>
+        </div>
+
+        <div class="env exercise" id="exo-max-var">
+          <p>What does each principal component represent? Explain why the first principal component is chosen as the
+            direction of maximum variance, and why this is the same as choosing the line closest to the data.</p>
+        </div>
+
+        <div class="env exercise" id="exo-cov">
+          <p>For a dataset with $n$ samples and $p$ standardised features, write the covariance matrix in terms of the
+            data matrix. What do its diagonal and off-diagonal entries represent? Why are the diagonal entries all
+            equal to $1$ here?</p>
+        </div>
+
+        <div class="env exercise" id="exo-project">
+          <p>After computing the eigenvectors of the covariance matrix, how do we project the data onto $k$
+            dimensions? Describe geometrically what the projection does, and what the reconstruction error measures.</p>
+        </div>
+
+        <div class="env exercise" id="exo-by-hand">
+          <p>Consider the four centred points $(2, 2)$, $(-2, -2)$, $(1, -1)$, $(-1, 1)$.
+            (a) Compute $\Sigma$ (with $\frac1n$).
+            (b) Find its eigenvalues and eigenvectors.
+            (c) Compute the scores on the first component and the reconstruction error with $k = 1$; check it equals
+            $\lambda_2$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-evr">
+          <p>Two features have covariance $\Sigma = \begin{pmatrix} 5 & 2 \\ 2 & 2 \end{pmatrix}$. Compute the
+            principal directions and the proportion of variance explained by the first component.</p>
+        </div>
+
+        <div class="env exercise" id="exo-scaling">
+          <p>One feature takes values in $[0, 1000]$ and another in $[0, 1]$. Explain what PCA returns if the data are
+            not standardised, and why scaling is then essential. Show that PCA on standardised data diagonalises the
+            correlation matrix.</p>
+        </div>
+
+        <div class="env exercise" id="exo-second-pc">
+          <p>Let $\bu_1$ be the first principal direction. Find the second one by solving
+            $$\max_{\bu}\ \bu\T\Sigma\,\bu \qquad \text{subject to} \qquad \bu\T\bu = 1, \quad \bu_1\T\bu = 0 .$$
+            (a) Write the Lagrangian with two multipliers $\lambda$ and $\mu$, and set its gradient to zero.
+            (b) Multiply the result on the left by $\bu_1\T$ and show that $\mu = 0$.
+            (c) Conclude that $\Sigma\bu = \lambda\bu$, and that the best choice is $\bu_2$, with variance
+            $\lambda_2$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-gram">
+          <p>You have $n = 100$ images of $10^6$ pixels each. (a) Which matrix would you diagonalise to compute PCA, and
+            why? (b) Explain why, after centring, at most $n - 1 = 99$ eigenvalues can be nonzero.
+            (<em>Hint:</em> the centred rows sum to zero.)</p>
+        </div>
+
+        <div class="env exercise" id="exo-interpret">
+          <p>PCA on the answers of 500 people to a 40-question survey finds that the first two components explain
+            $85\%$ of the variance.
+            (a) Explain why a high explained variance does not by itself mean the two components correspond to
+            meaningful factors.
+            (b) Propose ways to interpret or validate them (loadings, stability across subsamples, relation to
+            other variables, usefulness in a downstream task).</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>Unsupervised learning looks for structure without labels. PCA looks for a low-dimensional linear
+              subspace that summarises the data.</li>
+            <li>For centred data, the variance along a unit vector $\bu$ is $\bu\T\Sigma\bu$. Maximising it with a
+              Lagrange multiplier gives $\Sigma\bu = \lambda\bu$: the best direction is the top eigenvector, and the
+              maximum variance is $\lambda_1$. The same direction minimises the reconstruction error.</li>
+            <li>$\Sigma$ is symmetric positive semidefinite, so its eigenvectors are orthonormal and its eigenvalues
+              non-negative: PCA is the eigen-decomposition $\Sigma = U\Lambda U\T$. Keeping $k$ components loses
+              exactly $\lambda_{k+1} + \dots + \lambda_p$.</li>
+            <li>The scores are uncorrelated. In practice PCA is computed with the SVD of the centred data matrix,
+              $\lambda_j = s_j^2/n$.</li>
+            <li>Always centre; standardise when units differ. Choose $k$ with the explained variance, the scree plot,
+              or downstream validation.</li>
+            <li>PCA is linear, driven by variance rather than relevance, and sensitive to outliers.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-prob">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-prob">Probabilistic view: Gaussians and probabilistic PCA</h2>
+          <p class="extra__intro">PCA was defined without any probability model. Two results show what it means when
+            the data are Gaussian, and how it arises as the limit of a latent variable model.</p>
+
+          <h3 id="extra-ellipses">The axes of a Gaussian cloud</h3>
+          <div class="env proposition" id="prop-gauss-axes">
+            <p>Let $\bx \sim \mathcal N(\mathbf 0, \Sigma)$ with $\Sigma = U\Lambda U\T$ positive definite. Then the
+              principal coordinates $\bz = U\T\bx$ are independent, $z_j \sim \mathcal N(0, \lambda_j)$, and the
+              contours of the density are ellipsoids whose axes point along the eigenvectors $\bu_j$, with
+              semi-axis lengths proportional to $\sqrt{\lambda_j}$.</p>
+          </div>
+          <details class="proof" data-for="prop-gauss-axes">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: distribution of $\bz$.</strong> A linear map of a Gaussian vector is Gaussian, with
+                $$\E[\bz] = U\T\E[\bx] = \mathbf 0, \qquad \Cov(\bz) = U\T\Sigma U = U\T U\Lambda U\T U = \Lambda .$$
+                A Gaussian vector with diagonal covariance has independent coordinates.</p>
+              <p><strong>Step 2: contours.</strong> The density is a decreasing function of
+                $\bx\T\Sigma^{-1}\bx$. With $\Sigma^{-1} = U\Lambda^{-1}U\T$,
+                $$\bx\T\Sigma^{-1}\bx = \bz\T\Lambda^{-1}\bz = \sum_{j=1}^p \frac{z_j^2}{\lambda_j} .$$
+                The contour $\sum_j z_j^2/\lambda_j = c^2$ is an ellipsoid in the coordinates $z_j$ along
+                $\bu_j$, with semi-axes $c\sqrt{\lambda_j}$.</p>
+            </div>
+          </details>
+          <p>So for Gaussian data PCA finds the axes of the ellipsoidal cloud, longest first. Moreover, the
+            principal coordinates are not only uncorrelated (true for any data) but independent.</p>
+
+          <h3 id="extra-ppca">Probabilistic PCA</h3>
+          <p>Suppose each observation is generated from a low-dimensional latent variable, plus isotropic noise:
+            $$\bz \sim \mathcal N(\mathbf 0, I_k), \qquad \bx = \boldsymbol\mu + W\bz + \boldsymbol\varepsilon,
+            \qquad \boldsymbol\varepsilon \sim \mathcal N(\mathbf 0, \sigma^2 I_p),$$
+            with $\bz$ and $\boldsymbol\varepsilon$ independent and $W \in \R^{p \times k}$.</p>
+
+          <div class="env proposition" id="prop-ppca-marginal">
+            <p>Under this model, $\bx \sim \mathcal N\big(\boldsymbol\mu,\ WW\T + \sigma^2 I_p\big)$.</p>
+          </div>
+          <details class="proof" data-for="prop-ppca-marginal">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1.</strong> $(\bz, \boldsymbol\varepsilon)$ is a Gaussian vector (independent Gaussian
+                blocks), and $\bx$ is an affine function of it, so $\bx$ is Gaussian.</p>
+              <p><strong>Step 2: mean.</strong> $\E[\bx] = \boldsymbol\mu + W\E[\bz] + \E[\boldsymbol\varepsilon] = \boldsymbol\mu$.</p>
+              <p><strong>Step 3: covariance.</strong> The cross terms vanish by independence:
+                $$\Cov(\bx) = W\underbrace{\Cov(\bz)}_{=\,I_k}W\T + \Cov(\boldsymbol\varepsilon)
+                = WW\T + \sigma^2 I_p .$$</p>
+            </div>
+          </details>
+
+          <p>Maximising the likelihood of this model over $\boldsymbol\mu, W, \sigma^2$ can be done in closed form
+            (we state the result without proof): $\hat{\boldsymbol\mu} = \bar\bx$,
+            $$\hat\sigma^2 = \frac{1}{p - k}\sum_{j=k+1}^p \lambda_j, \qquad
+            \hat W = U_k\big(\Lambda_k - \hat\sigma^2 I_k\big)^{1/2}R$$
+            for any orthogonal $R \in \R^{k \times k}$. The columns of $\hat W$ span exactly the top-$k$ principal
+            subspace, and the noise level is the average of the discarded eigenvalues: what PCA throws away is
+            modelled as noise.</p>
+
+          <div class="env proposition" id="prop-ppca-posterior">
+            <p>Given $\bx$, the latent variable is Gaussian with mean
+              $$\E[\bz \mid \bx] = M^{-1}W\T(\bx - \boldsymbol\mu), \qquad M = W\T W + \sigma^2 I_k .$$
+              As $\sigma^2 \to 0$, $W\,\E[\bz \mid \bx] \to W(W\T W)^{-1}W\T(\bx - \boldsymbol\mu)$, the orthogonal
+              projection of $\bx - \boldsymbol\mu$ onto the column space of $W$: classical PCA.</p>
+          </div>
+          <details class="proof" data-for="prop-ppca-posterior">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: Bayes' rule.</strong> Write $\mathbf r = \bx - \boldsymbol\mu$. Up to factors not
+                depending on $\bz$,
+                $$p(\bz \mid \bx) \propto p(\bz)\,p(\bx \mid \bz)
+                \propto \exp\Big(-\tfrac12\norm{\bz}^2 - \tfrac{1}{2\sigma^2}\norm{\mathbf r - W\bz}^2\Big).$$</p>
+              <p><strong>Step 2: collect the terms in $\bz$.</strong> Expanding the square,
+                $$-\tfrac12\norm{\bz}^2 - \tfrac{1}{2\sigma^2}\norm{\mathbf r - W\bz}^2
+                = -\tfrac{1}{2\sigma^2}\Big(\bz\T\underbrace{(W\T W + \sigma^2 I_k)}_{=\,M}\bz - 2\bz\T W\T\mathbf r\Big)
+                + \text{const}.$$</p>
+              <p><strong>Step 3: complete the square.</strong> With $\mathbf m = M^{-1}W\T\mathbf r$,
+                $$\bz\T M\bz - 2\bz\T M\mathbf m = (\bz - \mathbf m)\T M(\bz - \mathbf m) - \mathbf m\T M\mathbf m .$$
+                So $\bz \mid \bx \sim \mathcal N(\mathbf m, \sigma^2 M^{-1})$, with mean $\mathbf m$.</p>
+              <p><strong>Step 4: the limit.</strong> As $\sigma^2 \to 0$, $M \to W\T W$ (invertible when $W$ has full
+                column rank), so $W\mathbf m \to W(W\T W)^{-1}W\T\mathbf r$, the projector onto the column space
+                of $W$ applied to $\mathbf r$.</p>
+            </div>
+          </details>
+
+          <p>Unlike plain PCA, the probabilistic model has a likelihood. It can compare different $k$ on held-out
+            data, handle missing entries, and be combined with other probabilistic models, for instance mixtures,
+            which relate it to the clustering of the next chapter.</p>
+
+          <div class="env exercise" id="exo-ppca">
+            <p>Let $\Sigma = \operatorname{diag}(5, 3, 1, 1)$ and $k = 2$. Compute $\hat\sigma^2$ and $\hat W$ (take
+              $R = I_2$). Check that $\hat W\hat W\T + \hat\sigma^2 I_4 = \Sigma$. Why is the fit exact here?</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

@@ -366,12 +366,15 @@
         <details class="proof" data-for="prop-unbiased">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>Write $L_i = \ell(f(\bx_i), y_i)$. Because $f$ does not depend on the data and the pairs are
-              i.i.d., the $L_i$ are i.i.d. with mean $\E[L_i] = R(f)$ and variance $\sigma_f^2$. By linearity of
-              expectation, $\E[\hat R_n(f)] = \frac1n \sum_i \E[L_i] = R(f)$. By independence,
-              $\Var(\hat R_n(f)) = \frac1{n^2} \sum_i \Var(L_i) = \sigma_f^2 / n$. Chebyshev's inequality gives, for
-              every $\varepsilon > 0$,
-              $\P\big(|\hat R_n(f) - R(f)| \geq \varepsilon\big) \leq \sigma_f^2 / (n \varepsilon^2) \to 0.$</p>
+            <p><strong>Step 1: the losses are i.i.d.</strong> Write $L_i = \ell(f(\bx_i), y_i)$. Because $f$ does not depend
+              on the data and the pairs are i.i.d., the $L_i$ are i.i.d. with mean $\E[L_i] = R(f)$ and variance
+              $\sigma_f^2$.</p>
+            <p><strong>Step 2: unbiased.</strong> By linearity of expectation,
+              $$\E[\hat R_n(f)] = \frac1n \sum_{i=1}^n \E[L_i] = R(f) .$$</p>
+            <p><strong>Step 3: variance.</strong> By independence,
+              $$\Var(\hat R_n(f)) = \frac1{n^2} \sum_{i=1}^n \Var(L_i) = \frac{\sigma_f^2}{n} .$$</p>
+            <p><strong>Step 4: concentration.</strong> Chebyshev's inequality gives, for every $\varepsilon > 0$,
+              $$\P\big(|\hat R_n(f) - R(f)| \geq \varepsilon\big) \leq \frac{\sigma_f^2}{n \varepsilon^2} \xrightarrow[n \to \infty]{} 0 .$$</p>
           </div>
         </details>
 
@@ -447,10 +450,11 @@
         <details class="proof" data-for="prop-nested">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>Let $\hat f$ minimise $\hat R_n$ over $\mathcal H$. Since $\hat f \in \mathcal H'$ too,
-              $\min_{f \in \mathcal H'} \hat R_n(f) \leq \hat R_n(\hat f) = \min_{f \in \mathcal H} \hat R_n(f)$. A
-              polynomial of degree at most $d$ is also one of degree at most $d+1$ (take $\theta_{d+1} = 0$), so
-              $\mathcal H_d \subseteq \mathcal H_{d+1}$.</p>
+            <p><strong>Step 1: the larger class can do at least as well.</strong> Let $\hat f$ minimise $\hat R_n$ over
+              $\mathcal H$. Since $\hat f \in \mathcal H'$ too,
+              $$\min_{f \in \mathcal H'} \hat R_n(f) \leq \hat R_n(\hat f) = \min_{f \in \mathcal H} \hat R_n(f) .$$</p>
+            <p><strong>Step 2: polynomials are nested.</strong> A polynomial of degree at most $d$ is also one of degree at most
+              $d+1$ (take $\theta_{d+1} = 0$), so $\mathcal H_d \subseteq \mathcal H_{d+1}$.</p>
           </div>
         </details>
 
@@ -461,10 +465,11 @@
         <details class="proof" data-for="prop-interpolation">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>The conditions $f_\theta(x_i) = y_i$ for $i = 1, \dots, n$ form the linear system $V\theta = y$ with
-              the square Vandermonde matrix $V_{ij} = x_i^{\,j-1}$, $1 \leq i, j \leq n$. Its determinant is
-              $\det V = \prod_{1 \leq i \lt j \leq n} (x_j - x_i)$, which is non-zero because the $x_i$ are
-              distinct. Hence $V$ is invertible and $\theta = V^{-1} y$ interpolates the data.</p>
+            <p><strong>Step 1: a linear system.</strong> The conditions $f_\theta(x_i) = y_i$ for $i = 1, \dots, n$ form the
+              system $V\theta = y$ with the square Vandermonde matrix $V_{ij} = x_i^{\,j-1}$, $1 \leq i, j \leq n$.</p>
+            <p><strong>Step 2: it is invertible.</strong> Its determinant is
+              $$\det V = \prod_{1 \leq i \lt j \leq n} (x_j - x_i) \neq 0,$$
+              because the $x_i$ are distinct. Hence $\theta = V^{-1} y$ interpolates the data.</p>
           </div>
         </details>
 
@@ -602,12 +607,14 @@
           <details class="proof" data-for="thm-regression-function">
             <summary>Proof</summary>
             <div class="proof__body">
-              <p>Add and subtract $f^*(\bx)$:
-                $$(y - f(\bx))^2 = (y - f^*(\bx))^2 + 2\,(y - f^*(\bx))(f^*(\bx) - f(\bx)) + (f^*(\bx) - f(\bx))^2.$$
-                Take expectations. For the middle term, condition on $\bx$: the factor $f^*(\bx) - f(\bx)$ is fixed
-                given $\bx$, and $\E[y - f^*(\bx) \mid \bx] = \E[y \mid \bx] - f^*(\bx) = 0$. By the tower property
-                the middle term has expectation $0$, which gives the decomposition. The second term is non-negative
-                and is $0$ for $f = f^*$, so $f^*$ minimises $R$.</p>
+              <p><strong>Step 1: add and subtract $f^*(\bx)$.</strong>
+                $$(y - f(\bx))^2 = (y - f^*(\bx))^2 + 2\,(y - f^*(\bx))(f^*(\bx) - f(\bx)) + (f^*(\bx) - f(\bx))^2 .$$</p>
+              <p><strong>Step 2: the cross term vanishes.</strong> Condition on $\bx$: the factor $f^*(\bx) - f(\bx)$ is fixed given
+                $\bx$, and
+                $$\E[y - f^*(\bx) \mid \bx] = \E[y \mid \bx] - f^*(\bx) = 0 .$$
+                By the tower property the middle term has expectation $0$, which gives the decomposition.</p>
+              <p><strong>Step 3: conclude.</strong> The second term is non-negative and is $0$ for $f = f^*$, so $f^*$ minimises
+                $R$.</p>
             </div>
           </details>
 
@@ -624,11 +631,11 @@
           <details class="proof" data-for="thm-bayes-classifier">
             <summary>Proof</summary>
             <div class="proof__body">
-              <p>Conditioning on $\bx$, the risk of any classifier $f$ is
-                $R(f) = \E\big[\P(y \neq f(\bx) \mid \bx)\big] = \E\big[1 - \P(y = f(\bx) \mid \bx)\big]$.
-                For each $\bx$, the quantity inside is smallest when $f(\bx)$ is the class with the largest
-                conditional probability. Choosing it for every $\bx$ minimises the integrand pointwise, hence the
-                expectation.</p>
+              <p><strong>Step 1: condition on $\bx$.</strong> The risk of any classifier $f$ is
+                $$R(f) = \E\big[\P(y \neq f(\bx) \mid \bx)\big] = \E\big[1 - \P(y = f(\bx) \mid \bx)\big] .$$</p>
+              <p><strong>Step 2: minimise pointwise.</strong> For each $\bx$, the quantity inside is smallest when $f(\bx)$ is the
+                class with the largest conditional probability. Choosing it for every $\bx$ minimises the integrand pointwise, hence
+                the expectation.</p>
             </div>
           </details>
 

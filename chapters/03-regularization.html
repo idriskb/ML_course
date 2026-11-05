@@ -541,13 +541,14 @@
           <details class="proof" data-for="thm-map">
             <summary>Proof</summary>
             <div class="proof__body">
-              <p>Up to constants that do not depend on $\theta$,
-                $-\log p(\mathcal D \mid \theta) = \frac{1}{2\sigma^2}\norm{\by - \bX\theta}^2$.</p>
-              <p>(1) $-\log p(\theta) = \frac{1}{2\tau^2}\norm{\theta}_2^2 + \text{const}$. Multiply the sum by the
-                positive constant $2\sigma^2/n$, which does not change the minimiser:
-                $\frac1n\norm{\by - \bX\theta}^2 + \frac{\sigma^2}{n\tau^2}\norm{\theta}_2^2$.</p>
-              <p>(2) $-\log p(\theta) = \frac1b\norm{\theta}_1 + \text{const}$. Multiplying by $2\sigma^2/n$ gives
-                $\frac1n\norm{\by - \bX\theta}^2 + \frac{2\sigma^2}{nb}\norm{\theta}_1$.</p>
+              <p><strong>Step 1: the likelihood term.</strong> Up to constants that do not depend on $\theta$,
+                $$-\log p(\mathcal D \mid \theta) = \frac{1}{2\sigma^2}\norm{\by - \bX\theta}^2 .$$</p>
+              <p><strong>Step 2: Gaussian prior (part 1).</strong> $-\log p(\theta) = \frac{1}{2\tau^2}\norm{\theta}_2^2 + \text{const}$.
+                Multiply the sum by the positive constant $2\sigma^2/n$, which does not change the minimiser:
+                $$\frac1n\norm{\by - \bX\theta}^2 + \frac{\sigma^2}{n\tau^2}\norm{\theta}_2^2 .$$</p>
+              <p><strong>Step 3: Laplace prior (part 2).</strong> $-\log p(\theta) = \frac1b\norm{\theta}_1 + \text{const}$.
+                Multiplying by $2\sigma^2/n$ gives
+                $$\frac1n\norm{\by - \bX\theta}^2 + \frac{2\sigma^2}{nb}\norm{\theta}_1 .$$</p>
             </div>
           </details>
 
@@ -566,13 +567,15 @@
           <details class="proof" data-for="prop-ridge-posterior">
             <summary>Proof</summary>
             <div class="proof__body">
-              <p>The log-posterior is, up to a constant,
-                $-\frac{1}{2\sigma^2}\norm{\by - \bX\theta}^2 - \frac{1}{2\tau^2}\norm{\theta}^2
-                = -\frac12\theta\T\Sigma^{-1}\theta + \theta\T\frac{\bX\T\by}{\sigma^2} + \text{const}.$
-                Completing the square, this is $-\frac12(\theta - \mu)\T\Sigma^{-1}(\theta - \mu) + \text{const}$ with
-                $\Sigma^{-1}\mu = \bX\T\by/\sigma^2$, which is the log-density of $\mathcal N(\mu, \Sigma)$. Finally
-                $\mu = (\bX\T\bX + \frac{\sigma^2}{\tau^2}I)^{-1}\bX\T\by$, the ridge solution with
-                $n\lambda = \sigma^2/\tau^2$.</p>
+              <p><strong>Step 1: the log-posterior is quadratic.</strong> Up to a constant,
+                $$-\frac{1}{2\sigma^2}\norm{\by - \bX\theta}^2 - \frac{1}{2\tau^2}\norm{\theta}^2
+                = -\frac12\theta\T\Sigma^{-1}\theta + \theta\T\frac{\bX\T\by}{\sigma^2} + \text{const}.$$</p>
+              <p><strong>Step 2: complete the square.</strong> This equals
+                $-\frac12(\theta - \mu)\T\Sigma^{-1}(\theta - \mu) + \text{const}$ with $\Sigma^{-1}\mu = \bX\T\by/\sigma^2$, which is
+                the log-density of $\mathcal N(\mu, \Sigma)$.</p>
+              <p><strong>Step 3: identify the mean.</strong>
+                $$\mu = \Big(\bX\T\bX + \frac{\sigma^2}{\tau^2}I\Big)^{-1}\bX\T\by ,$$
+                the ridge solution with $n\lambda = \sigma^2/\tau^2$.</p>
             </div>
           </details>
 

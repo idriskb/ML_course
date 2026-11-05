@@ -163,11 +163,13 @@
         <details class="proof" data-for="prop-monotone">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>If $\phi$ is strictly increasing, then $x_{ij} \leq x_{kj}$ if and only if
-              $\phi(x_{ij}) \leq \phi(x_{kj})$. A split $x_j \leq t$ only separates the points of a node into those below and
-              above a threshold, so the possible splits of the training points are the same before and after
-              transforming (only the ordering of each feature matters). The impurities of the children, and hence the
-              chosen splits, are therefore identical. The threshold $t$ between two consecutive values becomes a
+            <p><strong>Step 1: the order of the values is preserved.</strong> If $\phi$ is strictly increasing, then
+              $$x_{ij} \leq x_{kj} \iff \phi(x_{ij}) \leq \phi(x_{kj}) .$$</p>
+            <p><strong>Step 2: the candidate splits are the same.</strong> A split $x_j \leq t$ only separates the points of a node
+              into those below and above a threshold, so the possible splits of the training points are the same before and after
+              transforming: only the ordering of each feature matters.</p>
+            <p><strong>Step 3: the chosen splits are the same.</strong> Identical splits give identical children, hence identical
+              impurities, so the algorithm makes the same choices. The threshold $t$ between two consecutive values becomes a
               threshold between their images.</p>
           </div>
         </details>

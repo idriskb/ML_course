@@ -701,3 +701,13 @@ a.card:hover { border-color: var(--heading); box-shadow: var(--shadow); color: v
 .viz__rules ol { margin: .25rem 0 0; padding-left: 1.5rem; }
 .viz__rules li { margin: .15rem 0; }
 .viz__muted { color: var(--text-muted); }
+
+/* Step-by-step proofs and worked examples (built by layout.js) */
+.pstep.is-new { animation: reveal .35s ease; }
+@media (prefers-reduced-motion: reduce) { .pstep.is-new { animation: none; } }
+.pstep__controls { margin-top: .75rem; }
+.proof__body.is-partial::after, .solution__body.is-partial::after { content: none; }
+@media print {
+  .pstep__controls { display: none !important; }
+  .pstep[hidden] { display: block !important; }
+}

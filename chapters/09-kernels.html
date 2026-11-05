@@ -271,10 +271,12 @@
           <summary>Proof</summary>
           <div class="proof__body">
             <p>We check positive semidefiniteness of the kernel matrices and use Mercer's theorem.</p>
-            <p><strong>Sum and scaling.</strong> $\mathbf v\T(K_1 + K_2)\mathbf v = \mathbf v\T K_1\mathbf v + \mathbf v\T K_2\mathbf v \geq 0$,
-              and $\mathbf v\T(cK_1)\mathbf v = c\,\mathbf v\T K_1\mathbf v \geq 0$.</p>
-            <p><strong>Rescaling by $g$.</strong> The new matrix is $DK_1D$ with $D = \operatorname{diag}(g(\bx_i))$, and
-              $\mathbf v\T DK_1D\mathbf v = (D\mathbf v)\T K_1(D\mathbf v) \geq 0$.</p>
+            <p><strong>Step 1: sums.</strong> For any $\mathbf v$,
+              $$\mathbf v\T(K_1 + K_2)\mathbf v = \mathbf v\T K_1\mathbf v + \mathbf v\T K_2\mathbf v \geq 0 .$$</p>
+            <p><strong>Step 2: positive scaling.</strong> $\mathbf v\T(cK_1)\mathbf v = c\,\mathbf v\T K_1\mathbf v \geq 0$ for
+              $c > 0$.</p>
+            <p><strong>Step 3: rescaling by $g$.</strong> The new matrix is $DK_1D$ with $D = \operatorname{diag}(g(\bx_i))$, and
+              $$\mathbf v\T DK_1D\mathbf v = (D\mathbf v)\T K_1(D\mathbf v) \geq 0 .$$</p>
           </div>
         </details>
         <p>For example, the Gaussian kernel is
@@ -303,11 +305,13 @@
         <details class="proof" data-for="prop-rbf-limits">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p><strong>Small $\sigma$.</strong> For $i \neq j$, $\norm{\bx_i - \bx_j} > 0$, so
-              $e^{-\norm{\bx_i - \bx_j}^2/2\sigma^2} \to 0$, while the diagonal is $1$. Likewise $\mathbf k(\bx) \to \mathbf 0$
-              for $\bx$ different from all $\bx_i$. Then $\boldsymbol\alpha \to \by/(1 + \lambda)$ and
-              $\hat y(\bx) = \mathbf k(\bx)\T\boldsymbol\alpha \to 0$.</p>
-            <p><strong>Large $\sigma$.</strong> For fixed points, $\norm{\bx - \bx'}^2/2\sigma^2 \to 0$, so every kernel value
+            <p><strong>Step 1: small $\sigma$, the kernel matrix.</strong> For $i \neq j$, $\norm{\bx_i - \bx_j} > 0$, so
+              $$e^{-\norm{\bx_i - \bx_j}^2/2\sigma^2} \xrightarrow[\sigma \to 0]{} 0,$$
+              while the diagonal is $1$: $K \to I_N$. Likewise $\mathbf k(\bx) \to \mathbf 0$ for $\bx$ different from all
+              $\bx_i$.</p>
+            <p><strong>Step 2: small $\sigma$, the predictions.</strong> Then $\boldsymbol\alpha = (K + \lambda I)^{-1}\by \to \by/(1 + \lambda)$
+              and $\hat y(\bx) = \mathbf k(\bx)\T\boldsymbol\alpha \to 0$.</p>
+            <p><strong>Step 3: large $\sigma$.</strong> For fixed points, $\norm{\bx - \bx'}^2/2\sigma^2 \to 0$, so every kernel value
               tends to $e^0 = 1$, independently of the inputs.</p>
           </div>
         </details>

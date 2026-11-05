@@ -77,8 +77,10 @@
         <h2 id="environments">Definitions, theorems and proofs</h2>
         <p>Definitions, lemmas, theorems, examples and exercises share a single counter within each chapter,
           so <em>Theorem 0.3</em> always comes after <em>Lemma 0.2</em>. Proofs are collapsed by default: try the
-          statement yourself first, then open the proof. Use <strong>Expand all proofs</strong> in the right-hand
-          panel when revising.</p>
+          statement yourself first, then open the proof. Longer proofs and worked examples are revealed
+          <strong>one step at a time</strong>: try to predict the next step, then press <em>Next step</em> to check
+          (or <em>Show all</em> to read it in one go). Use <strong>Expand all proofs</strong> in the right-hand panel
+          when revising.</p>
 
         <div class="env definition" id="def-erm" data-name="Empirical risk">
           <p>Let $(\bx_1, y_1), \dots, (\bx_n, y_n)$ be a training sample and $\ell : \R \times \R \to [0, \infty)$
@@ -97,10 +99,11 @@
         <details class="proof" data-for="lem-gram">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>For every $\bv \in \R^d$ we have $\bv\T\bX\T\bX\bv = \norm{\bX\bv}^2 \geq 0$, so $\bX\T\bX$ is
-              positive semidefinite. Equality holds if and only if $\bX\bv = \mathbf{0}$. Hence $\bv\T\bX\T\bX\bv > 0$
-              for every $\bv \neq \mathbf{0}$ exactly when the kernel of $\bX$ is trivial, that is, when $\bX$
-              has full column rank.</p>
+            <p><strong>Step 1: positive semidefinite.</strong> For every $\bv \in \R^d$,
+              $$\bv\T\bX\T\bX\bv = (\bX\bv)\T(\bX\bv) = \norm{\bX\bv}^2 \geq 0 .$$</p>
+            <p><strong>Step 2: when it is definite.</strong> Equality holds if and only if $\bX\bv = \mathbf{0}$. Hence
+              $\bv\T\bX\T\bX\bv > 0$ for every $\bv \neq \mathbf{0}$ exactly when the kernel of $\bX$ is trivial, that is, when
+              $\bX$ has full column rank.</p>
           </div>
         </details>
 
@@ -112,12 +115,15 @@
         <details class="proof" data-for="thm-ols">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>The function $J$ is a quadratic with Hessian $\nabla^2 J(\bw) = 2\bX\T\bX$, which is positive definite
-              by <a class="ref" href="#lem-gram"></a>. Hence $J$ is strictly convex and has at most one minimiser.
-              Since $J$ is differentiable and convex, $\bw$ minimises $J$ if and only if $\nabla J(\bw) = \mathbf{0}$.
-              As derived in <a class="ref" href="#derivations"></a>, this condition is equivalent to the
-              <em>normal equations</em> $\bX\T\bX\bw = \bX\T\by$. Because $\bX\T\bX$ is invertible, they have the
-              unique solution $\hatw = (\bX\T\bX)^{-1}\bX\T\by$.</p>
+            <p><strong>Step 1: strict convexity.</strong> $J$ is a quadratic with Hessian $\nabla^2 J(\bw) = 2\bX\T\bX$, which is
+              positive definite by <a class="ref" href="#lem-gram"></a>. Hence $J$ is strictly convex and has at most one
+              minimiser.</p>
+            <p><strong>Step 2: the minimiser solves the normal equations.</strong> Since $J$ is differentiable and convex, $\bw$
+              minimises $J$ if and only if $\nabla J(\bw) = \mathbf{0}$. As derived in <a class="ref" href="#derivations"></a>, this
+              is equivalent to the <em>normal equations</em>
+              $$\bX\T\bX\bw = \bX\T\by .$$</p>
+            <p><strong>Step 3: solve.</strong> Because $\bX\T\bX$ is invertible, the unique solution is
+              $\hatw = (\bX\T\bX)^{-1}\bX\T\by$.</p>
           </div>
         </details>
 
@@ -187,22 +193,27 @@
         <details class="proof" data-for="prop-descent">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>$L$-smoothness implies the quadratic upper bound
-              $f(\by) \leq f(\bx) + \nabla f(\bx)\T(\by - \bx) + \tfrac{L}{2}\norm{\by - \bx}^2$.
-              Take $\by = \bx - \eta\nabla f(\bx)$ and write $\mathbf{g} = \nabla f(\bx)$:
+            <p><strong>Step 1: a quadratic upper bound.</strong> $L$-smoothness implies, for all $\bx, \by$,
+              $$f(\by) \leq f(\bx) + \nabla f(\bx)\T(\by - \bx) + \tfrac{L}{2}\norm{\by - \bx}^2 .$$</p>
+            <p><strong>Step 2: apply it to one gradient step.</strong> Take $\by = \bx - \eta\nabla f(\bx)$ and write
+              $\mathbf{g} = \nabla f(\bx)$:
               $$f(\by) \leq f(\bx) - \eta\norm{\mathbf{g}}^2 + \frac{L\eta^2}{2}\norm{\mathbf{g}}^2
-              = f(\bx) - \eta\Big(1 - \frac{L\eta}{2}\Big)\norm{\mathbf{g}}^2.$$
-              Since $L\eta \leq 1$, we have $1 - L\eta/2 \geq 1/2$, which gives the claim.</p>
+              = f(\bx) - \eta\Big(1 - \frac{L\eta}{2}\Big)\norm{\mathbf{g}}^2 .$$</p>
+            <p><strong>Step 3: conclude.</strong> Since $L\eta \leq 1$, we have $1 - L\eta/2 \geq 1/2$, which gives the claim.</p>
           </div>
         </details>
 
         <div class="env example" id="ex-gd">
-          <p>For the function in <a class="ref" href="#fig-gd"></a>, $f''(x) = 3x^2 - 2$, so on $[-2.5, 2.5]$ we have
-            $|f''| \leq 16.75$. While the iterates stay in this interval, <a class="ref" href="#prop-descent"></a>
-            guarantees a decrease at every step for $\eta \leq 1/16.75 \approx 0.06$. Starting from $x_0 = 2.2$
-            with $\eta = 0.06$, the iterates descend smoothly into the <em>local</em> minimum near $x \approx 1.33$.
-            With $\eta = 0.5$, the first step jumps over the barrier into the other basin, and the iterates end up
-            bouncing between two points instead of settling at the minimum. Try both in the figure.</p>
+          <p>For the function in <a class="ref" href="#fig-gd"></a>, find a step size that guarantees descent.</p>
+          <p><strong>Step 1: bound the curvature.</strong> $f''(x) = 3x^2 - 2$, so on $[-2.5, 2.5]$ we have
+            $|f''| \leq 3(2.5)^2 - 2 = 16.75$: $f$ is $L$-smooth there with $L = 16.75$.</p>
+          <p><strong>Step 2: apply the descent lemma.</strong> While the iterates stay in this interval,
+            <a class="ref" href="#prop-descent"></a> guarantees a decrease at every step for
+            $\eta \leq 1/16.75 \approx 0.06$.</p>
+          <p><strong>Step 3: check in the figure.</strong> Starting from $x_0 = 2.2$ with $\eta = 0.06$, the iterates
+            descend smoothly into the <em>local</em> minimum near $x \approx 1.33$. With $\eta = 0.5$, the first step
+            jumps over the barrier into the other basin, and the iterates end up bouncing between two points instead of
+            settling at the minimum. Try both in the figure.</p>
         </div>
 
         <div class="callout pitfall">

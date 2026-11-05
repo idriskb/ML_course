@@ -4,6 +4,7 @@
    COURSE (course.js), then enhances the chapter content:
      - numbers sections, environments (Theorem 2.3, …) and figures
      - labels proofs, adds "expand all", wires step-by-step derivations
+       and step-by-step proofs / worked examples ("Step k:" paragraphs)
      - resolves cross-references  <a class="ref" href="#thm-ols"></a>
      - renders math with KaTeX
    Every page sets  <body data-root="../" data-page="chapter" data-chapter="slug">
@@ -336,6 +337,78 @@
     });
   }
 
+  // Proofs and worked examples written as "Step 1: …", "Step 2: …" paragraphs are
+  // revealed one step at a time (Next step / Show all / Start over). Text after a
+  // step paragraph belongs to that step; text before the first step is always shown.
+  function setupSteppedProofs() {
+    const isStep = (el) => {
+      if (el.tagName !== "P") return false;
+      const s = el.firstElementChild;
+      return !!s && s.tagName === "STRONG" && /^Step\b/.test(s.textContent.trim()) &&
+        el.textContent.trim().startsWith(s.textContent.trim());
+    };
+    const containers = [
+      ...document.querySelectorAll("details.proof > .proof__body, details.solution > .solution__body"),
+      ...document.querySelectorAll(".env.example"),
+    ];
+    containers.forEach((box) => {
+      const kids = [...box.children];
+      const first = kids.findIndex(isStep);
+      if (first < 0 || kids.filter(isStep).length < 2) return;
+
+      // group the children into steps
+      const steps = [];
+      kids.slice(first).forEach((el) => {
+        if (isStep(el) || !steps.length) {
+          const wrap = document.createElement("div");
+          wrap.className = "pstep";
+          el.before(wrap);
+          steps.push(wrap);
+        }
+        steps[steps.length - 1].appendChild(el);
+      });
+
+      const controls = document.createElement("div");
+      controls.className = "derivation__controls pstep__controls";
+      controls.innerHTML = `
+        <button type="button" class="btn btn--primary btn--small" data-act="next">Next step</button>
+        <button type="button" class="btn btn--small" data-act="all">Show all</button>
+        <button type="button" class="btn btn--small" data-act="reset">Start over</button>
+        <span class="derivation__progress" aria-live="polite"></span>`;
+      box.appendChild(controls);
+      const btn = (act) => controls.querySelector(`[data-act="${act}"]`);
+      const progress = controls.querySelector(".derivation__progress");
+      let shown = 1;
+
+      function update() {
+        steps.forEach((s, k) => { s.hidden = k >= shown; });
+        const done = shown === steps.length;
+        box.classList.toggle("is-partial", !done);
+        progress.textContent = `Step ${shown} of ${steps.length}`;
+        btn("next").disabled = done;
+        btn("all").disabled = done;
+        btn("reset").disabled = shown === 1;
+      }
+      function reveal(to, focus = true) {
+        for (let k = shown; k < to; k++) steps[k].classList.add("is-new");
+        shown = to;
+        update();
+        if (focus && shown === steps.length) btn("reset").focus();
+      }
+      btn("next").addEventListener("click", () => reveal(shown + 1));
+      btn("all").addEventListener("click", () => reveal(steps.length));
+      btn("reset").addEventListener("click", () => {
+        steps.forEach((s) => s.classList.remove("is-new"));
+        shown = 1;
+        update();
+        btn("next").focus();
+      });
+      // used by "Expand all proofs" and printing
+      box.revealAllSteps = () => reveal(steps.length, false);
+      update();
+    });
+  }
+
   function resolveRefs() {
     document.querySelectorAll("a.ref").forEach((a) => {
       if (a.textContent.trim()) return;
@@ -372,7 +445,11 @@
     if (toggle) {
       toggle.addEventListener("click", () => {
         const openAll = [...proofs].some((p) => !p.open);
-        proofs.forEach((p) => { p.open = openAll; });
+        proofs.forEach((p) => {
+          p.open = openAll;
+          const body = p.querySelector(".proof__body");
+          if (openAll && body && body.revealAllSteps) body.revealAllSteps();
+        });
         toggle.textContent = openAll ? "Collapse all proofs" : "Expand all proofs";
       });
     }
@@ -448,6 +525,7 @@
     let closed = [];
     window.addEventListener("beforeprint", () => {
       closed = [...document.querySelectorAll("details:not([open])")];
+      document.querySelectorAll(".is-partial").forEach((b) => b.revealAllSteps && b.revealAllSteps());
       closed.forEach((d) => { d.open = true; });
     });
     window.addEventListener("afterprint", () => closed.forEach((d) => { d.open = false; }));
@@ -464,6 +542,7 @@
   numberEnvironments();
   setupProofs();
   setupDerivations();
+  setupSteppedProofs();
   resolveRefs();
   buildToc();
   buildPager();

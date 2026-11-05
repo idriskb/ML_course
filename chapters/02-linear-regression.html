@@ -184,10 +184,12 @@
         <details class="proof" data-for="lem-gram">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>Symmetry: $(\bX\T\bX)\T = \bX\T\bX$. For every $\mathbf v \in \R^q$,
-              $\mathbf v\T\bX\T\bX\mathbf v = \norm{\bX\mathbf v}^2 \geq 0$. Equality holds if and only if
-              $\bX\mathbf v = 0$. So $\mathbf v\T\bX\T\bX\mathbf v > 0$ for all $\mathbf v \neq 0$ exactly when the
-              only solution of $\bX\mathbf v = 0$ is $\mathbf v = 0$, that is, when the columns are independent.</p>
+            <p><strong>Step 1: symmetry.</strong> $(\bX\T\bX)\T = \bX\T(\bX\T)\T = \bX\T\bX$.</p>
+            <p><strong>Step 2: positive semidefinite.</strong> For every $\mathbf v \in \R^q$,
+              $$\mathbf v\T\bX\T\bX\mathbf v = (\bX\mathbf v)\T(\bX\mathbf v) = \norm{\bX\mathbf v}^2 \geq 0 .$$</p>
+            <p><strong>Step 3: when it is definite.</strong> Equality holds if and only if $\bX\mathbf v = \mathbf 0$. So
+              $\mathbf v\T\bX\T\bX\mathbf v > 0$ for all $\mathbf v \neq \mathbf 0$ exactly when the only solution of
+              $\bX\mathbf v = \mathbf 0$ is $\mathbf v = \mathbf 0$, that is, when the columns of $\bX$ are independent.</p>
           </div>
         </details>
 
@@ -200,12 +202,15 @@
         <details class="proof" data-for="thm-ols">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>The Hessian $\frac2n\bX\T\bX$ is positive semidefinite by <a class="ref" href="#lem-gram"></a>, so $L$
-              is convex. For a differentiable convex function every stationary point is a global minimiser, and the
-              stationary points are exactly the solutions of the normal equations. If $\bX$ has full column rank,
-              $\bX\T\bX$ is invertible and the normal equations have the single solution
-              $(\bX\T\bX)^{-1}\bX\T\by$.</p>
-            <p>(A proof without calculus is given in <a class="ref" href="#thm-projection"></a>.)</p>
+            <p><strong>Step 1: convexity.</strong> The Hessian $\nabla^2 L = \frac2n\bX\T\bX$ is positive semidefinite by
+              <a class="ref" href="#lem-gram"></a>, so $L$ is convex.</p>
+            <p><strong>Step 2: stationary points are minimisers.</strong> For a differentiable convex function every stationary
+              point is a global minimiser, and the stationary points of $L$ are exactly the solutions of the normal equations
+              $$\bX\T\bX\,\theta = \bX\T\by .$$</p>
+            <p><strong>Step 3: uniqueness.</strong> If $\bX$ has full column rank, $\bX\T\bX$ is invertible
+              (<a class="ref" href="#lem-gram"></a>), and the normal equations have the single solution
+              $$\hat\theta = (\bX\T\bX)^{-1}\bX\T\by .$$
+              (A proof without calculus is given in <a class="ref" href="#thm-projection"></a>.)</p>
           </div>
         </details>
 
@@ -272,13 +277,19 @@
         <details class="proof" data-for="thm-projection">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>(1) is the normal equations rewritten: $\bX\T(\by - \bX\hat\theta) = \bX\T\by - \bX\T\bX\hat\theta = 0$.</p>
-            <p>(2) $\hat\by = \bX(\bX\T\bX)^{-1}\bX\T\by = H\by$. Since $\bX\T\bX$ is symmetric, so is its inverse,
-              and $H\T = H$. Also $H^2 = \bX(\bX\T\bX)^{-1}(\bX\T\bX)(\bX\T\bX)^{-1}\bX\T = H$. A symmetric idempotent
-              matrix is the orthogonal projection onto its range, and the range of $H$ is $\operatorname{col}(\bX)$.</p>
-            <p>(3) Write $\by - \bX\theta = \mathbf e + \bX(\hat\theta - \theta)$. The second vector lies in
-              $\operatorname{col}(\bX)$, which is orthogonal to $\mathbf e$ by (1). Pythagoras' theorem gives the
-              identity. The second term is $\geq 0$ and vanishes at $\theta = \hat\theta$.</p>
+            <p><strong>Step 1: the residual is orthogonal to the columns (part 1).</strong> This is the normal equations
+              rewritten:
+              $$\bX\T(\by - \bX\hat\theta) = \bX\T\by - \bX\T\bX\hat\theta = \mathbf 0 .$$</p>
+            <p><strong>Step 2: $H$ is a projector (part 2).</strong> $\hat\by = \bX(\bX\T\bX)^{-1}\bX\T\by = H\by$. Since
+              $\bX\T\bX$ is symmetric, so is its inverse, and $H\T = H$. Moreover
+              $$H^2 = \bX(\bX\T\bX)^{-1}\underbrace{(\bX\T\bX)(\bX\T\bX)^{-1}}_{=\,I}\bX\T = H .$$
+              A symmetric idempotent matrix is the orthogonal projection onto its range, which here is
+              $\operatorname{col}(\bX)$.</p>
+            <p><strong>Step 3: Pythagoras (part 3).</strong> For any $\theta$, write
+              $$\by - \bX\theta = \underbrace{\mathbf e}_{\perp\ \operatorname{col}(\bX)} + \underbrace{\bX(\hat\theta - \theta)}_{\in\ \operatorname{col}(\bX)} .$$
+              The two vectors are orthogonal by Step 1, so
+              $\norm{\by - \bX\theta}^2 = \norm{\mathbf e}^2 + \norm{\bX(\hat\theta - \theta)}^2$. The second term is
+              $\geq 0$ and vanishes at $\theta = \hat\theta$.</p>
           </div>
         </details>
 
@@ -329,25 +340,28 @@
         <details class="proof" data-for="thm-gd-ls">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>By the normal equations $\frac2n\bX\T\by = H\hat\theta$, so the gradient is
-              $\nabla L(\theta) = \frac2n(\bX\T\bX\theta - \bX\T\by) = H(\theta - \hat\theta)$. Subtracting
-              $\hat\theta$ from both sides of the update gives
-              $\theta^{(t+1)} - \hat\theta = (I - \eta H)(\theta^{(t)} - \hat\theta)$, and iterating gives the
-              formula.</p>
-            <p>$H$ is symmetric, so it has an orthonormal basis of eigenvectors $\mathbf u_1, \dots, \mathbf u_{p+1}$
-              with eigenvalues $\lambda_j$. In this basis, $I - \eta H$ multiplies the $j$-th coordinate of the error
-              by $1 - \eta\lambda_j$ at every step. That coordinate tends to $0$ for every starting value if and only if
-              $|1 - \eta\lambda_j| \lt 1$, i.e. $0 \lt \eta \lt 2/\lambda_j$. Requiring this for all $j$ gives
-              $0 \lt \eta \lt 2/\lambda_{\max}$. Starting along $\mathbf u_{\max}$ with a larger $\eta$ shows the
-              condition is necessary.</p>
-            <p>$I - \eta H$ is symmetric with eigenvalues $1 - \eta\lambda_j$, so its spectral norm is
-              $\max_j|1 - \eta\lambda_j| = \rho$ (the maximum of $|1 - \eta\lambda|$ over
-              $[\lambda_{\min}, \lambda_{\max}]$ is attained at an endpoint). Hence
-              $\norm{\theta^{(t)} - \hat\theta} \leq \rho^t\norm{\theta^{(0)} - \hat\theta}$. Finally,
-              $|1 - \eta\lambda_{\min}|$ decreases and $|1 - \eta\lambda_{\max}|$ increases in $\eta$ near the optimum,
-              so the maximum is smallest when $1 - \eta\lambda_{\min} = \eta\lambda_{\max} - 1$, i.e.
-              $\eta = 2/(\lambda_{\min} + \lambda_{\max})$, which gives
-              $\rho = (\lambda_{\max} - \lambda_{\min})/(\lambda_{\max} + \lambda_{\min}) = (\kappa - 1)/(\kappa + 1)$.</p>
+            <p><strong>Step 1: the gradient in terms of the error.</strong> By the normal equations
+              $\frac2n\bX\T\by = H\hat\theta$, so
+              $$\nabla L(\theta) = \frac2n\big(\bX\T\bX\theta - \bX\T\by\big) = H\theta - H\hat\theta = H(\theta - \hat\theta) .$$</p>
+            <p><strong>Step 2: the error recursion.</strong> Subtract $\hat\theta$ from both sides of the update
+              $\theta^{(t+1)} = \theta^{(t)} - \eta H(\theta^{(t)} - \hat\theta)$:
+              $$\theta^{(t+1)} - \hat\theta = (I - \eta H)\big(\theta^{(t)} - \hat\theta\big)
+              \quad\Longrightarrow\quad \theta^{(t)} - \hat\theta = (I - \eta H)^t\big(\theta^{(0)} - \hat\theta\big).$$</p>
+            <p><strong>Step 3: one eigen-direction at a time.</strong> $H$ is symmetric, with orthonormal eigenvectors
+              $\mathbf u_1, \dots, \mathbf u_{p+1}$ and eigenvalues $\lambda_j$. Along $\mathbf u_j$, the matrix
+              $I - \eta H$ multiplies the error by $1 - \eta\lambda_j$ at every step. That coordinate tends to $0$ for every
+              start if and only if
+              $$|1 - \eta\lambda_j| \lt 1 \iff 0 \lt \eta \lt \frac{2}{\lambda_j} .$$
+              Requiring this for all $j$ gives $0 \lt \eta \lt 2/\lambda_{\max}$; starting along $\mathbf u_{\max}$ with a
+              larger $\eta$ shows the condition is necessary.</p>
+            <p><strong>Step 4: the rate.</strong> $I - \eta H$ is symmetric with eigenvalues $1 - \eta\lambda_j$, so its spectral
+              norm is $\max_j|1 - \eta\lambda_j| = \rho$ (the maximum of $|1 - \eta\lambda|$ over $[\lambda_{\min}, \lambda_{\max}]$
+              is attained at an endpoint). Hence
+              $$\norm{\theta^{(t)} - \hat\theta} \leq \rho^{\,t}\,\norm{\theta^{(0)} - \hat\theta} .$$</p>
+            <p><strong>Step 5: the best step size.</strong> Near the optimum $|1 - \eta\lambda_{\min}|$ decreases and
+              $|1 - \eta\lambda_{\max}|$ increases with $\eta$, so their maximum is smallest when they are equal:
+              $$1 - \eta\lambda_{\min} = \eta\lambda_{\max} - 1 \iff \eta = \frac{2}{\lambda_{\min} + \lambda_{\max}},
+              \qquad \rho = \frac{\lambda_{\max} - \lambda_{\min}}{\lambda_{\max} + \lambda_{\min}} = \frac{\kappa - 1}{\kappa + 1} .$$</p>
           </div>
         </details>
 
@@ -412,12 +426,13 @@
         <details class="proof" data-for="prop-sgd-variance">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>Let $I_1, \dots, I_m$ be the drawn indices and $G_k = \nabla\ell_{I_k}(\theta)$. Each $G_k$ takes
-              the value $\nabla\ell_i(\theta)$ with probability $1/n$, so
-              $\E[G_k] = \frac1n\sum_i\nabla\ell_i(\theta) = \nabla L(\theta)$, and
-              $\E\norm{G_k - \nabla L}^2 = s^2(\theta)$. By linearity, $\E[\hat g] = \frac1m\sum_k \E[G_k] = \nabla L$.
-              The $G_k - \nabla L$ are independent with mean zero, so the cross terms vanish when expanding the square:
-              $\E\norm{\frac1m\sum_k (G_k - \nabla L)}^2 = \frac1{m^2}\sum_k \E\norm{G_k - \nabla L}^2 = s^2/m$.</p>
+            <p><strong>Step 1: one sampled gradient.</strong> Let $I_1, \dots, I_m$ be the drawn indices and
+              $G_k = \nabla\ell_{I_k}(\theta)$. Each $G_k$ equals $\nabla\ell_i(\theta)$ with probability $1/n$, so
+              $$\E[G_k] = \frac1n\sum_{i=1}^n\nabla\ell_i(\theta) = \nabla L(\theta), \qquad \E\norm{G_k - \nabla L}^2 = s^2(\theta) .$$</p>
+            <p><strong>Step 2: unbiased.</strong> By linearity, $\E[\hat g] = \frac1m\sum_k \E[G_k] = \nabla L$.</p>
+            <p><strong>Step 3: variance.</strong> The $G_k - \nabla L$ are independent with mean zero, so the cross terms vanish when
+              expanding the square:
+              $$\E\Big\lVert\frac1m\sum_{k=1}^m (G_k - \nabla L)\Big\rVert^2 = \frac1{m^2}\sum_{k=1}^m \E\norm{G_k - \nabla L}^2 = \frac{s^2}{m} .$$</p>
           </div>
         </details>
 
@@ -499,18 +514,20 @@
         <details class="proof" data-for="prop-r2">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>Let $\mathbf 1$ be the all-ones vector and $\mathbf e = \by - \hat\by$. By
-              <a class="ref" href="#thm-projection"></a>, $\mathbf e$ is orthogonal to $\operatorname{col}(\bX)$,
-              which contains $\mathbf 1$ (the intercept column) and $\hat\by$. So $\sum_i e_i = 0$, which means the
-              mean of the $\hat y_i$ is also $\bar y$.</p>
-            <p>(1) Write $\by - \bar y\mathbf 1 = (\hat\by - \bar y\mathbf 1) + \mathbf e$. The first vector lies in
-              $\operatorname{col}(\bX)$, hence is orthogonal to $\mathbf e$, and Pythagoras gives the identity.
-              Dividing by $\sum_i (y_i - \bar y)^2$ shows that $1 - R^2$ is a ratio between $0$ and $1$.</p>
-            <p>(2) Let $\mathbf a = \by - \bar y\mathbf 1$ and $\mathbf b = \hat\by - \bar y\mathbf 1$ (both
-              centred, since both means equal $\bar y$). Then $\rho = \langle \mathbf a, \mathbf b\rangle /
-              (\norm{\mathbf a}\norm{\mathbf b})$. Since $\mathbf a = \mathbf b + \mathbf e$ with
-              $\mathbf e \perp \mathbf b$, $\langle\mathbf a, \mathbf b\rangle = \norm{\mathbf b}^2$, so
-              $\rho^2 = \norm{\mathbf b}^2/\norm{\mathbf a}^2$, which is $R^2$ by (1).</p>
+            <p><strong>Step 1: the residuals sum to zero.</strong> Let $\mathbf 1$ be the all-ones vector and
+              $\mathbf e = \by - \hat\by$. By <a class="ref" href="#thm-projection"></a>, $\mathbf e$ is orthogonal to
+              $\operatorname{col}(\bX)$, which contains $\mathbf 1$ (the intercept column) and $\hat\by$. So $\sum_i e_i = 0$, and
+              the mean of the $\hat y_i$ is also $\bar y$.</p>
+            <p><strong>Step 2: the decomposition (part 1).</strong> Write
+              $$\by - \bar y\mathbf 1 = \underbrace{(\hat\by - \bar y\mathbf 1)}_{\in\ \operatorname{col}(\bX)} + \mathbf e .$$
+              The two vectors are orthogonal, and Pythagoras gives the identity. Dividing by $\sum_i (y_i - \bar y)^2$ shows that
+              $1 - R^2$ is a ratio between $0$ and $1$.</p>
+            <p><strong>Step 3: the correlation (part 2).</strong> Let $\mathbf a = \by - \bar y\mathbf 1$ and
+              $\mathbf b = \hat\by - \bar y\mathbf 1$ (both centred, by Step 1), so
+              $\rho = \langle \mathbf a, \mathbf b\rangle / (\norm{\mathbf a}\norm{\mathbf b})$. Since
+              $\mathbf a = \mathbf b + \mathbf e$ with $\mathbf e \perp \mathbf b$,
+              $$\langle\mathbf a, \mathbf b\rangle = \norm{\mathbf b}^2 \quad\Longrightarrow\quad
+              \rho^2 = \frac{\norm{\mathbf b}^4}{\norm{\mathbf a}^2\norm{\mathbf b}^2} = \frac{\norm{\mathbf b}^2}{\norm{\mathbf a}^2} = R^2 .$$</p>
           </div>
         </details>
 
@@ -626,13 +643,15 @@
           <details class="proof" data-for="thm-mle-ols">
             <summary>Proof</summary>
             <div class="proof__body">
-              <p>The logarithm is increasing, so we can maximise the log-likelihood instead:
-                $$\log\mathcal L(\theta, \sigma^2) = -\frac n2\log(2\pi\sigma^2) - \frac{1}{2\sigma^2}\sum_{i=1}^n\big(y_i - \bx_i\T\theta\big)^2.$$
-                For any fixed $\sigma^2 > 0$, the first term does not depend on $\theta$ and the second is
-                $-\frac{n}{2\sigma^2}L(\theta)$. Maximising over $\theta$ is therefore the same as minimising $L$,
-                which gives $\hat\theta$. Now plug in $\hat\theta$ and differentiate with respect to $\sigma^2$:
-                $-\frac{n}{2\sigma^2} + \frac{1}{2\sigma^4}\sum_i e_i^2 = 0$, so $\sigma^2 = \frac1n\sum_i e_i^2$. This
-                is a maximum because the derivative is positive before this point and negative after it.</p>
+              <p><strong>Step 1: take logarithms.</strong> The logarithm is increasing, so we can maximise
+                $$\log\mathcal L(\theta, \sigma^2) = -\frac n2\log(2\pi\sigma^2) - \frac{1}{2\sigma^2}\sum_{i=1}^n\big(y_i - \bx_i\T\theta\big)^2 .$$</p>
+              <p><strong>Step 2: maximise over $\theta$.</strong> For any fixed $\sigma^2 > 0$, the first term does not depend on
+                $\theta$ and the second is $-\frac{n}{2\sigma^2}L(\theta)$. Maximising over $\theta$ is therefore minimising $L$,
+                which gives $\hat\theta$.</p>
+              <p><strong>Step 3: maximise over $\sigma^2$.</strong> Plug in $\hat\theta$ and differentiate with respect to
+                $\sigma^2$:
+                $$-\frac{n}{2\sigma^2} + \frac{1}{2\sigma^4}\sum_{i=1}^n e_i^2 = 0 \iff \sigma^2 = \frac1n\sum_{i=1}^n e_i^2 .$$
+                This is a maximum because the derivative is positive before this point and negative after it.</p>
             </div>
           </details>
 
@@ -672,14 +691,16 @@
           <details class="proof" data-for="thm-maxent">
             <summary>Proof</summary>
             <div class="proof__body">
-              <p>The derivation finds the candidate; here is a short proof that it is the maximum. Let $q$ be the
-                Gaussian density and $p$ any density with the same mean and variance. Since
-                $\log q(y) = -\frac12\log(2\pi\sigma^2) - \frac{(y-\mu)^2}{2\sigma^2}$ depends on $y$ only through
-                $(y - \mu)^2$, and $p$ and $q$ have the same variance,
-                $$-\int p\log q = \tfrac12\log(2\pi\sigma^2) + \tfrac12 = -\int q\log q = H[q].$$
-                Hence $H[q] - H[p] = \int p\log p - \int p\log q = \int p\log\frac pq \geq 0$, by Gibbs' inequality
-                ($\log u \leq u - 1$ applied to $u = q/p$ gives $\int p\log\frac qp \leq \int (q - p) = 0$). Finally
-                $H[q] = \frac12\log(2\pi\sigma^2) + \frac12 = \frac12\log(2\pi e\sigma^2)$.</p>
+              <p>The derivation finds the candidate; here is a short proof that it is the maximum. Let $q$ be the Gaussian
+                density and $p$ any density with the same mean $\mu$ and variance $\sigma^2$.</p>
+              <p><strong>Step 1: $-\int p\log q$ only depends on the variance.</strong> Since
+                $\log q(y) = -\frac12\log(2\pi\sigma^2) - \frac{(y-\mu)^2}{2\sigma^2}$ depends on $y$ only through $(y - \mu)^2$,
+                and $p$ and $q$ have the same variance,
+                $$-\int p\log q = \tfrac12\log(2\pi\sigma^2) + \tfrac12 = -\int q\log q = H[q] .$$</p>
+              <p><strong>Step 2: Gibbs' inequality.</strong> Using Step 1,
+                $$H[q] - H[p] = \int p\log p - \int p\log q = \int p\log\frac pq \geq 0,$$
+                because $\log u \leq u - 1$ applied to $u = q/p$ gives $\int p\log\frac qp \leq \int (q - p) = 0$.</p>
+              <p><strong>Step 3: the value.</strong> $H[q] = \frac12\log(2\pi\sigma^2) + \frac12 = \frac12\log(2\pi e\sigma^2)$.</p>
             </div>
           </details>
 

@@ -107,16 +107,16 @@
         <details class="proof" data-for="lem-sigmoid">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p><strong>(1)</strong> $e^{-z} > 0$, so $1 + e^{-z} > 1$ and $0 \lt \sigma(z) \lt 1$. As $z$ increases,
-              $e^{-z}$ decreases, so $\sigma$ increases. The limits follow from $e^{-z} \to \infty$ and $e^{-z} \to 0$,
-              and $\sigma(0) = \frac{1}{1 + 1} = \frac12$.</p>
-            <p><strong>(2)</strong> Multiply numerator and denominator by $e^{z}$:
+            <p><strong>Step 1: range, monotonicity and limits (property 1).</strong> $e^{-z} > 0$, so $1 + e^{-z} > 1$ and
+              $0 \lt \sigma(z) \lt 1$. As $z$ increases, $e^{-z}$ decreases, so $\sigma$ increases. The limits follow from
+              $e^{-z} \to \infty$ and $e^{-z} \to 0$, and $\sigma(0) = \frac{1}{1 + 1} = \frac12$.</p>
+            <p><strong>Step 2: symmetry (property 2).</strong> Multiply numerator and denominator by $e^{z}$:
               $$1 - \sigma(z) = \frac{e^{-z}}{1 + e^{-z}} = \frac{1}{e^{z} + 1} = \sigma(-z).$$</p>
-            <p><strong>(3)</strong> By the chain rule,
+            <p><strong>Step 3: derivative (property 3).</strong> By the chain rule,
               $$\sigma'(z) = \frac{e^{-z}}{(1 + e^{-z})^2}
               = \underbrace{\frac{1}{1 + e^{-z}}}_{\sigma(z)}\cdot\underbrace{\frac{e^{-z}}{1 + e^{-z}}}_{1 - \sigma(z)}.$$</p>
-            <p><strong>(4)</strong> From $p = \frac{1}{1 + e^{-z}}$ we get $e^{-z} = \frac{1}{p} - 1 = \frac{1 - p}{p}$,
-              so $z = \log\frac{p}{1 - p}$.</p>
+            <p><strong>Step 4: inverse (property 4).</strong> From $p = \frac{1}{1 + e^{-z}}$ we get
+              $e^{-z} = \frac{1}{p} - 1 = \frac{1 - p}{p}$, so $z = \log\frac{p}{1 - p}$.</p>
           </div>
         </details>
 
@@ -292,11 +292,13 @@
         <details class="proof" data-for="thm-logreg-convex">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>For every $\mathbf v$, using <a class="ref" href="#prop-logreg-grad"></a>,
-              $$\mathbf v\T\nabla^2 L(\theta)\,\mathbf v = \frac1n\sum_{i=1}^n \underbrace{p_i(1 - p_i)}_{>\ 0}\,\big(\bx_i\T\mathbf v\big)^2 \ \geq\ 0 .$$
-              So the Hessian is positive semidefinite everywhere and $L$ is convex. The sum is $0$ only if
-              $\bx_i\T\mathbf v = 0$ for all $i$, i.e. $\bX\mathbf v = 0$. With full column rank this forces
-              $\mathbf v = 0$, so the Hessian is positive definite and $L$ is strictly convex.</p>
+            <p><strong>Step 1: the Hessian is positive semidefinite.</strong> For every $\mathbf v$, using
+              <a class="ref" href="#prop-logreg-grad"></a>,
+              $$\mathbf v\T\nabla^2 L(\theta)\,\mathbf v = \frac1n\sum_{i=1}^n \underbrace{p_i(1 - p_i)}_{>\ 0}\,\big(\bx_i\T\mathbf v\big)^2 \ \geq\ 0 ,$$
+              so $L$ is convex.</p>
+            <p><strong>Step 2: strict convexity with full rank.</strong> The sum is $0$ only if $\bx_i\T\mathbf v = 0$ for all $i$,
+              i.e. $\bX\mathbf v = \mathbf 0$. With full column rank this forces $\mathbf v = \mathbf 0$, so the Hessian is positive
+              definite and $L$ is strictly convex.</p>
           </div>
         </details>
 
@@ -397,12 +399,13 @@
         <details class="proof" data-for="lem-softmax">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p><strong>(1)</strong> Exponentials are positive, and the $K$ fractions share the same denominator, which
-              is the sum of their numerators.</p>
-            <p><strong>(2)</strong> $\dfrac{e^{z_k + c}}{\sum_j e^{z_j + c}} = \dfrac{e^{c}\,e^{z_k}}{e^{c}\sum_j e^{z_j}} = \operatorname{softmax}(z)_k$.
-              Subtracting $\theta_K$ from every $\theta_k$ subtracts $\bx\T\theta_K$ from every score, which changes
-              nothing and makes the last parameter vector $0$.</p>
-            <p><strong>(3)</strong> Divide numerator and denominator by $e^{z_1}$:
+            <p><strong>Step 1: a probability vector (property 1).</strong> Exponentials are positive, and the $K$ fractions share
+              the same denominator, which is the sum of their numerators.</p>
+            <p><strong>Step 2: shift invariance (property 2).</strong>
+              $$\frac{e^{z_k + c}}{\sum_j e^{z_j + c}} = \frac{e^{c}\,e^{z_k}}{e^{c}\sum_j e^{z_j}} = \operatorname{softmax}(z)_k .$$
+              Subtracting $\theta_K$ from every $\theta_k$ subtracts $\bx\T\theta_K$ from every score, which changes nothing and
+              makes the last parameter vector $0$.</p>
+            <p><strong>Step 3: two classes (property 3).</strong> Divide numerator and denominator by $e^{z_1}$:
               $$\frac{e^{z_1}}{e^{z_1} + e^{z_2}} = \frac{1}{1 + e^{-(z_1 - z_2)}} = \sigma(z_1 - z_2).$$</p>
           </div>
         </details>
@@ -466,10 +469,16 @@
         </div>
 
         <div class="env example" id="ex-metrics">
-          <p>On a test set of 143 tumours a classifier gives $TN = 85$, $FP = 5$, $FN = 10$, $TP = 43$. Then
-            accuracy $= 128/143 \approx 0.90$, precision $= 43/48 \approx 0.90$, recall $= 43/53 \approx 0.81$,
-            specificity $= 85/90 \approx 0.94$, and $F_1 \approx 0.85$. One malignant tumour in five is missed. In a
-            screening context that is the number to worry about, and accuracy hides it.</p>
+          <p>On a test set of 143 tumours a classifier gives $TN = 85$, $FP = 5$, $FN = 10$, $TP = 43$.</p>
+          <p><strong>Step 1: accuracy.</strong> $\dfrac{TP + TN}{\text{all}} = \dfrac{43 + 85}{143} = \dfrac{128}{143} \approx 0.90$.</p>
+          <p><strong>Step 2: precision and recall.</strong>
+            precision $= \dfrac{TP}{TP + FP} = \dfrac{43}{48} \approx 0.90$,
+            recall $= \dfrac{TP}{TP + FN} = \dfrac{43}{53} \approx 0.81$.</p>
+          <p><strong>Step 3: specificity and $F_1$.</strong>
+            specificity $= \dfrac{TN}{TN + FP} = \dfrac{85}{90} \approx 0.94$, and
+            $F_1 = \dfrac{2 \cdot 0.90 \cdot 0.81}{0.90 + 0.81} \approx 0.85$.</p>
+          <p><strong>Step 4: interpret.</strong> A recall of $0.81$ means one malignant tumour in five is missed. In a
+            screening context that is the number to worry about, and the accuracy of $0.90$ hides it.</p>
         </div>
 
         <div class="callout pitfall">

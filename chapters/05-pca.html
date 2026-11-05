@@ -441,8 +441,11 @@ print(pca.explained_variance_ratio_)       # lambda_j / sum of all lambdas</code
         <details class="proof" data-for="prop-uncentred">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>Write $\bx_i = \bar\bx + \mathbf c_i$ with $\sum_i\mathbf c_i = \mathbf 0$. Then
-              $$\frac1n\sum_{i=1}^n (\bar\bx + \mathbf c_i)(\bar\bx + \mathbf c_i)\T
+            <p><strong>Step 1: centre the points.</strong> Write $\bx_i = \bar\bx + \mathbf c_i$ with
+              $\sum_i\mathbf c_i = \mathbf 0$, and expand each outer product:
+              $$(\bar\bx + \mathbf c_i)(\bar\bx + \mathbf c_i)\T = \bar\bx\bar\bx\T + \bar\bx\,\mathbf c_i\T + \mathbf c_i\,\bar\bx\T + \mathbf c_i\mathbf c_i\T .$$</p>
+            <p><strong>Step 2: average; the cross terms vanish.</strong>
+              $$\frac1n\sum_{i=1}^n \bx_i\bx_i\T
               = \bar\bx\bar\bx\T + \bar\bx\underbrace{\Big(\frac1n\sum_i \mathbf c_i\Big)\T}_{=\,\mathbf 0}
               + \underbrace{\Big(\frac1n\sum_i \mathbf c_i\Big)}_{=\,\mathbf 0}\bar\bx\T + \frac1n\sum_{i=1}^n \mathbf c_i\mathbf c_i\T
               = \bar\bx\bar\bx\T + \Sigma .$$</p>

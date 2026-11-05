@@ -79,7 +79,8 @@
           $\boldsymbol\mu_k \in \R^p$, and each point is assigned to one cluster. Encode the assignment with indicators
           $$c_{ik} = \begin{cases} 1 & \text{if } \bx_i \text{ is assigned to cluster } k, \\ 0 & \text{otherwise,} \end{cases}
           \qquad \sum_{k=1}^K c_{ik} = 1 \ \text{ for every } i .$$
-          Write $C_k = \{i : c_{ik} = 1\}$ for the points of cluster $k$ and $n_k = |C_k|$ for its size.</p>
+          Write $C_k = \{i : c_{ik} = 1\}$ for the points of cluster $k$ and $n_k = \sum_{i=1}^n c_{ik} = |C_k|$ for its
+          size.</p>
 
         <div class="env definition" id="def-wcss">
           <p>The <strong>k-means objective</strong>, or <strong>within-cluster sum of squares</strong> (WCSS), is
@@ -98,33 +99,43 @@
         <p>Suppose the assignments are fixed. Where should the centroids go?</p>
 
         <div class="env theorem" id="thm-centroid" data-name="Optimal centroid">
-          <p>For fixed assignments $c$, the objective $J$ is minimised over $\boldsymbol\mu_1, \dots, \boldsymbol\mu_K$
-            by placing each centroid at the mean of its cluster:
-            $$\boldsymbol\mu_k^\star = \bar\bx_k = \frac{1}{n_k}\sum_{i \in C_k} \bx_i
-            = \frac{\sum_{i=1}^n c_{ik}\,\bx_i}{\sum_{i=1}^n c_{ik}} \qquad (n_k \geq 1).$$
+          <p>For fixed assignments $c_{ik}$, the objective
+            $$J(c, \boldsymbol\mu) = \sum_{i=1}^n \sum_{k=1}^K c_{ik}\,\norm{\bx_i - \boldsymbol\mu_k}^2$$
+            is minimised over $\boldsymbol\mu_1, \dots, \boldsymbol\mu_K$ by placing each centroid at the mean of the
+            points assigned to it:
+            $$\boldsymbol\mu_k^\star = \frac{\sum_{i=1}^n c_{ik}\,\bx_i}{\sum_{i=1}^n c_{ik}} = \bar\bx_k,
+            \qquad \text{provided } n_k = \sum_{i=1}^n c_{ik} \geq 1 .$$
             This minimiser is unique.</p>
         </div>
         <details class="proof" data-for="thm-centroid">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p><strong>Step 1: the problem splits into one problem per cluster.</strong> In
-              $$J = \sum_{k=1}^K \underbrace{\sum_{i \in C_k} \norm{\bx_i - \boldsymbol\mu_k}^2}_{=:\ f_k(\boldsymbol\mu_k)},$$
-              the centroid $\boldsymbol\mu_k$ appears only in the $k$-th term. So we minimise each $f_k$ separately.
-              Fix $k$, write $\boldsymbol\mu$ for $\boldsymbol\mu_k$ and $f$ for $f_k$.</p>
-            <p><strong>Step 2: expand one term.</strong> For each point,
-              $$\norm{\bx_i - \boldsymbol\mu}^2 = (\bx_i - \boldsymbol\mu)\T(\bx_i - \boldsymbol\mu)
-              = \norm{\bx_i}^2 - 2\,\bx_i\T\boldsymbol\mu + \norm{\boldsymbol\mu}^2 .$$</p>
-            <p><strong>Step 3: the gradient.</strong> The gradient of $\bx_i\T\boldsymbol\mu$ is $\bx_i$, and that of
-              $\norm{\boldsymbol\mu}^2$ is $2\boldsymbol\mu$. Summing over the cluster,
-              $$\nabla f(\boldsymbol\mu) = \sum_{i \in C_k} \big(-2\,\bx_i + 2\boldsymbol\mu\big)
-              = -2\sum_{i \in C_k} \bx_i + 2\,n_k\,\boldsymbol\mu .$$</p>
-            <p><strong>Step 4: set it to zero.</strong>
-              $$-2\sum_{i \in C_k} \bx_i + 2\,n_k\,\boldsymbol\mu = \mathbf 0
+            <p><strong>Step 1: collect the terms that contain $\boldsymbol\mu_k$.</strong> Exchange the two sums:
+              $$J = \sum_{k=1}^K \underbrace{\sum_{i=1}^n c_{ik}\,\norm{\bx_i - \boldsymbol\mu_k}^2}_{=:\ f_k(\boldsymbol\mu_k)} .$$
+              The centroid $\boldsymbol\mu_k$ appears only in $f_k$ (the $c_{ik}$ are fixed numbers, $0$ or $1$). So we
+              minimise each $f_k$ separately.</p>
+            <p><strong>Step 2: expand the squared norm.</strong> For each $i$,
+              $$\norm{\bx_i - \boldsymbol\mu_k}^2 = (\bx_i - \boldsymbol\mu_k)\T(\bx_i - \boldsymbol\mu_k)
+              = \norm{\bx_i}^2 - 2\,\bx_i\T\boldsymbol\mu_k + \boldsymbol\mu_k\T\boldsymbol\mu_k ,$$
+              so
+              $$f_k(\boldsymbol\mu_k) = \sum_{i=1}^n c_{ik}\norm{\bx_i}^2 - 2\Big(\sum_{i=1}^n c_{ik}\,\bx_i\Big)\T\boldsymbol\mu_k
+              + \Big(\sum_{i=1}^n c_{ik}\Big)\boldsymbol\mu_k\T\boldsymbol\mu_k .$$</p>
+            <p><strong>Step 3: differentiate with respect to $\boldsymbol\mu_k$.</strong> The first sum does not depend on
+              $\boldsymbol\mu_k$; $\nabla_{\boldsymbol\mu}(\mathbf a\T\boldsymbol\mu) = \mathbf a$ and
+              $\nabla_{\boldsymbol\mu}(\boldsymbol\mu\T\boldsymbol\mu) = 2\boldsymbol\mu$. Hence
+              $$\nabla f_k(\boldsymbol\mu_k) = -2\sum_{i=1}^n c_{ik}\,\bx_i + 2\Big(\sum_{i=1}^n c_{ik}\Big)\boldsymbol\mu_k
+              = -2\sum_{i=1}^n c_{ik}\,(\bx_i - \boldsymbol\mu_k) .$$</p>
+            <p><strong>Step 4: set the gradient to zero.</strong>
+              $$\sum_{i=1}^n c_{ik}\,\bx_i = \Big(\sum_{i=1}^n c_{ik}\Big)\boldsymbol\mu_k
               \quad\Longleftrightarrow\quad
-              \boldsymbol\mu = \frac{1}{n_k}\sum_{i \in C_k} \bx_i = \bar\bx_k .$$</p>
-            <p><strong>Step 5: it is the global minimum.</strong> The Hessian is
-              $\nabla^2 f(\boldsymbol\mu) = 2\,n_k\, I_p$, which is positive definite. So $f$ is strictly convex, and its
-              only stationary point $\bar\bx_k$ is its unique global minimiser.</p>
+              \boldsymbol\mu_k = \frac{\sum_{i=1}^n c_{ik}\,\bx_i}{\sum_{i=1}^n c_{ik}} ,$$
+              which is allowed because the denominator $n_k = \sum_i c_{ik}$ (the number of points in cluster $k$) is at
+              least $1$. The numerator adds up exactly the points assigned to cluster $k$, so this is their mean
+              $\bar\bx_k$.</p>
+            <p><strong>Step 5: it is the global minimum.</strong> Differentiating once more,
+              $$\nabla^2 f_k(\boldsymbol\mu_k) = 2\Big(\sum_{i=1}^n c_{ik}\Big) I_p = 2\,n_k\,I_p ,$$
+              which is positive definite. So $f_k$ is strictly convex, and its only stationary point $\bar\bx_k$ is its
+              unique global minimiser.</p>
           </div>
         </details>
 
@@ -133,11 +144,11 @@
 
         <div class="env proposition" id="prop-centroid-decomp">
           <p>For any $\boldsymbol\mu \in \R^p$,
-            $$\sum_{i \in C_k} \norm{\bx_i - \boldsymbol\mu}^2
-            = \underbrace{\sum_{i \in C_k} \norm{\bx_i - \bar\bx_k}^2}_{\text{does not depend on } \boldsymbol\mu}
+            $$\sum_{i=1}^n c_{ik}\,\norm{\bx_i - \boldsymbol\mu}^2
+            = \underbrace{\sum_{i=1}^n c_{ik}\,\norm{\bx_i - \bar\bx_k}^2}_{\text{does not depend on } \boldsymbol\mu}
             + \ n_k\,\norm{\bar\bx_k - \boldsymbol\mu}^2 .$$
-            In particular the cost is smallest at $\boldsymbol\mu = \bar\bx_k$, and grows quadratically with the distance
-            from the mean.</p>
+            In particular the cost of cluster $k$ is smallest at $\boldsymbol\mu = \bar\bx_k$, and grows quadratically
+            with the distance from the mean.</p>
         </div>
         <details class="proof" data-for="prop-centroid-decomp">
           <summary>Proof</summary>
@@ -146,11 +157,14 @@
               $\bx_i - \boldsymbol\mu = (\bx_i - \bar\bx_k) + (\bar\bx_k - \boldsymbol\mu)$ and expand:
               $$\norm{\bx_i - \boldsymbol\mu}^2 = \norm{\bx_i - \bar\bx_k}^2 + 2\,(\bx_i - \bar\bx_k)\T(\bar\bx_k - \boldsymbol\mu)
               + \norm{\bar\bx_k - \boldsymbol\mu}^2 .$$</p>
-            <p><strong>Step 2: sum over the cluster.</strong> The vector $\bar\bx_k - \boldsymbol\mu$ does not depend
-              on $i$, and the deviations from the mean sum to zero:
-              $$\sum_{i \in C_k} \norm{\bx_i - \boldsymbol\mu}^2 = \sum_{i \in C_k} \norm{\bx_i - \bar\bx_k}^2
-              + 2\,\underbrace{\Big(\sum_{i \in C_k} (\bx_i - \bar\bx_k)\Big)\T}_{=\ \mathbf 0}(\bar\bx_k - \boldsymbol\mu)
-              + n_k\,\norm{\bar\bx_k - \boldsymbol\mu}^2 .$$</p>
+            <p><strong>Step 2: multiply by $c_{ik}$ and sum over $i$.</strong> The vector $\bar\bx_k - \boldsymbol\mu$
+              does not depend on $i$, so
+              $$\sum_{i=1}^n c_{ik}\norm{\bx_i - \boldsymbol\mu}^2 = \sum_{i=1}^n c_{ik}\norm{\bx_i - \bar\bx_k}^2
+              + 2\,\Big(\sum_{i=1}^n c_{ik}(\bx_i - \bar\bx_k)\Big)\T(\bar\bx_k - \boldsymbol\mu)
+              + \Big(\sum_{i=1}^n c_{ik}\Big)\norm{\bar\bx_k - \boldsymbol\mu}^2 .$$</p>
+            <p><strong>Step 3: the cross term vanishes.</strong> By the definition of $\bar\bx_k$,
+              $$\sum_{i=1}^n c_{ik}(\bx_i - \bar\bx_k) = \sum_{i=1}^n c_{ik}\,\bx_i - n_k\,\bar\bx_k = \mathbf 0 ,$$
+              and the last coefficient is $\sum_i c_{ik} = n_k$.</p>
           </div>
         </details>
 
@@ -195,9 +209,15 @@
         <details class="proof" data-for="prop-assign">
           <summary>Proof</summary>
           <div class="proof__body">
-            <p>Write $J = \sum_{i=1}^n \big(\sum_k c_{ik}\norm{\bx_i - \boldsymbol\mu_k}^2\big)$. The $i$-th term
-              depends only on the assignment of point $i$, and equals $\norm{\bx_i - \boldsymbol\mu_k}^2$ if $\bx_i$ is
-              sent to cluster $k$. Each term is therefore minimised separately by choosing the closest centroid.</p>
+            <p><strong>Step 1: one term per point.</strong> Group the objective by points:
+              $$J = \sum_{i=1}^n \underbrace{\sum_{k=1}^K c_{ik}\,\norm{\bx_i - \boldsymbol\mu_k}^2}_{=:\ g_i(c_{i1}, \dots, c_{iK})} .$$
+              The term $g_i$ involves only the indicators $c_{i1}, \dots, c_{iK}$ of point $i$, so each $g_i$ can be
+              minimised separately.</p>
+            <p><strong>Step 2: only one indicator is nonzero.</strong> Since exactly one $c_{ik}$ equals $1$, say
+              $c_{im} = 1$,
+              $$g_i = \norm{\bx_i - \boldsymbol\mu_m}^2 \geq \min_{j} \norm{\bx_i - \boldsymbol\mu_j}^2 ,$$
+              with equality exactly when $m$ is a nearest centroid. So $c_{ik} = 1$ for the nearest centroid and $0$
+              for the others.</p>
           </div>
         </details>
 
@@ -463,7 +483,7 @@ print(km.inertia_)                  # the objective J (WCSS)</code></pre>
 
         <div class="env exercise" id="exo-weighted">
           <p>Each point $\bx_i$ has a weight $w_i > 0$ (for example, the number of customers with these exact values).
-            Derive the optimal centroid of a cluster for the weighted objective $\sum_{i \in C_k} w_i\norm{\bx_i - \boldsymbol\mu}^2$.</p>
+            Derive the optimal centroid of a cluster for the weighted objective $\sum_{i=1}^n c_{ik}\,w_i\norm{\bx_i - \boldsymbol\mu_k}^2$.</p>
         </div>
 
         <div class="env exercise" id="exo-median">
@@ -514,8 +534,8 @@ print(km.inertia_)                  # the objective J (WCSS)</code></pre>
             Key takeaways
           </h2>
           <ul>
-            <li>k-means minimises the within-cluster sum of squares $J = \sum_k\sum_{i \in C_k}\norm{\bx_i - \boldsymbol\mu_k}^2$.</li>
-            <li>For fixed clusters the optimal centroid is the mean: the gradient $-2\sum_{i \in C_k}(\bx_i - \boldsymbol\mu)$
+            <li>k-means minimises the within-cluster sum of squares $J = \sum_i\sum_k c_{ik}\norm{\bx_i - \boldsymbol\mu_k}^2$.</li>
+            <li>For fixed clusters the optimal centroid is the mean: the gradient $-2\sum_{i} c_{ik}(\bx_i - \boldsymbol\mu_k)$
               vanishes there, and a wrong centre costs an extra $n_k\norm{\bar\bx_k - \boldsymbol\mu}^2$.</li>
             <li>For fixed centroids the optimal assignment is the nearest centroid.</li>
             <li>Lloyd's algorithm alternates the two; $J$ never increases and the algorithm stops after finitely many

@@ -570,4 +570,19 @@
   setupCodeBlocks();
   setupPrint();
   renderMath();
+  setupAnalytics();
+
+  /* ---- Analytics (GoatCounter: cookieless, no consent banner needed) ----
+     Set GOATCOUNTER_CODE to the code chosen at goatcounter.com signup
+     (the "xxx" in xxx.goatcounter.com). Only counts visits on the live
+     site, never on localhost / file:// previews. */
+  function setupAnalytics() {
+    const GOATCOUNTER_CODE = "mlcourse";
+    if (!GOATCOUNTER_CODE || !location.hostname.endsWith("github.io")) return;
+    const s = document.createElement("script");
+    s.async = true;
+    s.src = "https://gc.zgo.at/count.js";
+    s.dataset.goatcounter = `https://${GOATCOUNTER_CODE}.goatcounter.com/count`;
+    document.head.appendChild(s);
+  }
 })();

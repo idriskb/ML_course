@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Neural networks — Machine Learning</title>
+  <meta name="description" content="Neural networks: why we need them after linear models, k-NN, trees and kernels; neurons, layers and the forward pass; why activations must be non-linear; sigmoid, tanh and ReLU; output layers and softmax; the universal approximation theorem and the role of depth.">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/nn-activations.js"></script>
+  <script defer src="../assets/js/viz/nn-universal.js"></script>
+  <script defer src="../assets/js/viz/nn-moons.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="10-neural-networks">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Neural networks</h1>
+          <p class="lede">Kernel methods make a linear model non-linear by fixing a feature map in advance. A neural network
+            learns the feature map instead. It stacks simple layers, each an affine map followed by a non-linear function,
+            and has a fixed number of parameters however large the data set. This chapter defines these networks, explains
+            why the non-linearity is essential, compares the usual activation functions, and proves that one hidden layer
+            is already enough to approximate any continuous function. How to train a network is the subject of the next
+            chapter.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>Explain what linear models, k-NN, trees and kernel methods each lack, and which of these gaps neural
+              networks fill.</li>
+            <li>Define a neuron and a feedforward network, compute a forward pass by hand, and count the parameters.</li>
+            <li>Prove that without non-linear activations a deep network is a linear model, and that no linear classifier
+              solves XOR.</li>
+            <li>Compare sigmoid, tanh, ReLU and leaky ReLU, and explain vanishing gradients and dying units.</li>
+            <li>Choose the output activation for regression, binary and multi-class classification; work with softmax.</li>
+            <li>State the universal approximation theorem, prove it for ReLU networks in one dimension, and explain what
+              it does not say.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="why">Why neural networks?</h2>
+        <p>Supervised learning looks for a function $f : \R^p \to \mathcal Y$ with $f(\bx_i) \approx y_i$ on the training
+          data that also works on new inputs. So far we have searched for $f$ in four kinds of model families.</p>
+
+        <h3 id="linear-limits">The limits of linear models</h3>
+        <p>Linear regression uses $f(\bx) = \bw\T\bx + b$; logistic regression passes the same quantity through a fixed
+          sigmoid. Both are simple, have convex objectives, and have interpretable coefficients. Their limitation is
+          linearity:</p>
+        <ul>
+          <li>the decision boundary of logistic regression is a hyperplane;</li>
+          <li>along any line $\bx + t\bu$ in input space, the prediction $\bw\T\bx + b$ changes at a constant rate;</li>
+          <li>more data does not help if the true relationship is strongly non-linear: the bias stays.</li>
+        </ul>
+
+        <h3 id="three-approaches">Three non-linear approaches, and their limits</h3>
+        <ul>
+          <li><strong>k-nearest neighbours</strong> (<a href="07-knn.html">Chapter 7</a>) predicts from the closest
+            training points. It has no fixed functional form and its boundaries can be arbitrarily complex. But the whole
+            training set must be stored and searched at prediction time, it suffers from the curse of dimensionality, and it
+            depends on $k$, the distance and the scaling of the features.</li>
+          <li><strong>Trees and ensembles</strong> (<a href="08-trees.html">Chapter 8</a>) split the input space into boxes.
+            They capture interactions and need little preprocessing. But a single tree has high variance, axis-aligned splits
+            make smooth or diagonal boundaries expensive, and the fitted function is piecewise constant, hence not
+            differentiable.</li>
+          <li><strong>Kernel methods</strong> (<a href="09-kernels.html">Chapter 9</a>) fit a linear model on features
+            $\phi(\bx)$ through the kernel $k(\bx, \bx') = \phi(\bx)\T\phi(\bx')$. They are flexible and convex. But there is one
+            coefficient $\alpha_i$ per training point, so memory grows like $N^2$ and time like $N^3$; and once the kernel is
+            chosen, so are the features.</li>
+        </ul>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col"></th><th scope="col">Linear</th><th scope="col">Kernel</th><th scope="col">k-NN</th><th scope="col">Trees</th><th scope="col">Neural networks</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Fixed model size (parameter count does not grow with $N$)</th><td>yes</td><td>no</td><td>no</td><td>no</td><td>yes</td></tr>
+              <tr><th scope="row">Rich, non-linear functions</th><td>no</td><td>yes</td><td>yes</td><td>yes</td><td>yes</td></tr>
+              <tr><th scope="row">Cost of training and prediction grows mildly with $N$</th><td>yes</td><td>no</td><td>no</td><td>yes</td><td>yes</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>A tree grown until its leaves are small has a number of leaves that grows with $N$, which is why it counts as
+          non-parametric. On tabular data, boosted trees remain very strong competitors to neural networks.</p>
+
+        <h3 id="learned-features">Learning the features</h3>
+        <p>Neural networks keep the good part of kernel methods: a linear model on top of non-linear features,
+          $$f(\bx) = \bw\T\bh(\bx) + b .$$
+          The difference is that the feature map $\bh$ is not fixed in advance. It is itself a parametrised function,
+          built by composing simple layers, and its parameters are fitted to the data together with $\bw$ and $b$. This is
+          what makes networks so effective on raw, high-dimensional inputs such as pixels, audio waveforms or text, where
+          good hand-made features are hard to design: the network learns the features from the data.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="neuron">The neuron</h2>
+        <div class="env definition" id="def-neuron">
+          <p>A <strong>neuron</strong> (or unit) with input $\bx \in \R^p$ computes
+            $$z = \bw\T\bx + b, \qquad a = \sigma(z),$$
+            where $\bw \in \R^p$ are its <strong>weights</strong>, $b \in \R$ its <strong>bias</strong>,
+            $\sigma : \R \to \R$ a fixed <strong>activation function</strong>, $z$ the <strong>pre-activation</strong> and $a$
+            the neuron's output, its <strong>activation</strong>.</p>
+        </div>
+
+        <figure class="numbered diagram" id="fig-neuron">
+          <svg viewBox="0 0 640 210" role="img" aria-label="Three inputs x1, x2, x3 are connected by arrows labelled w1, w2, w3 to a summation node, which also receives the bias b. The sum z goes into an activation box sigma, whose output is a equals sigma of z.">
+            <defs>
+              <marker id="nn-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path class="d-text" d="M0,0 L10,5 L0,10 z"/>
+              </marker>
+            </defs>
+            <circle class="d-panel" cx="60" cy="40" r="16"/><text class="d-text" x="60" y="45" text-anchor="middle" font-weight="700">x₁</text>
+            <circle class="d-panel" cx="60" cy="100" r="16"/><text class="d-text" x="60" y="105" text-anchor="middle" font-weight="700">x₂</text>
+            <circle class="d-panel" cx="60" cy="160" r="16"/><text class="d-text" x="60" y="165" text-anchor="middle" font-weight="700">x₃</text>
+            <line class="d-ink" stroke-width="1.5" x1="76" y1="44" x2="272" y2="93" marker-end="url(#nn-arrow)"/>
+            <line class="d-ink" stroke-width="1.5" x1="76" y1="100" x2="270" y2="100" marker-end="url(#nn-arrow)"/>
+            <line class="d-ink" stroke-width="1.5" x1="76" y1="156" x2="272" y2="107" marker-end="url(#nn-arrow)"/>
+            <text class="d-label" x="168" y="58" text-anchor="middle">w₁</text>
+            <text class="d-label" x="168" y="93" text-anchor="middle">w₂</text>
+            <text class="d-label" x="168" y="150" text-anchor="middle">w₃</text>
+            <circle class="d-panel" cx="300" cy="100" r="28"/>
+            <text class="d-text" x="300" y="107" text-anchor="middle" font-size="20" font-weight="700">Σ</text>
+            <text class="d-label" x="300" y="16" text-anchor="middle">bias b</text>
+            <line class="d-ink" stroke-width="1.5" x1="300" y1="24" x2="300" y2="70" marker-end="url(#nn-arrow)"/>
+            <line class="d-ink" stroke-width="1.5" x1="328" y1="100" x2="390" y2="100" marker-end="url(#nn-arrow)"/>
+            <text class="d-label" x="359" y="92" text-anchor="middle">z</text>
+            <rect class="d-panel" x="392" y="76" width="64" height="48" rx="6"/>
+            <text class="d-text" x="424" y="107" text-anchor="middle" font-size="18" font-weight="700">σ</text>
+            <line class="d-ink" stroke-width="1.5" x1="456" y1="100" x2="526" y2="100" marker-end="url(#nn-arrow)"/>
+            <text class="d-text" x="534" y="105" font-weight="700">a = σ(z)</text>
+            <text class="d-text" x="320" y="196" text-anchor="middle">z = w₁x₁ + w₂x₂ + w₃x₃ + b = wᵀx + b</text>
+          </svg>
+          <figcaption>A single neuron: a weighted sum of the inputs plus a bias, passed through an activation
+            function.</figcaption>
+        </figure>
+
+        <div class="env example" id="ex-logistic-neuron">
+          <p>Logistic regression (<a href="04-logistic-regression.html">Chapter 4</a>) is exactly one neuron with the
+            sigmoid activation $\sigma(z) = 1/(1 + e^{-z})$: its output $a = \sigma(\bw\T\bx + b)$ is read as
+            $\P(y = 1 \mid \bx)$. Linear regression is one neuron with the identity activation $\sigma(z) = z$.</p>
+        </div>
+        <p>One neuron is a linear model. A network connects many neurons in layers, and that is where the non-linearity
+          comes from.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="layers">Feedforward networks</h2>
+        <p>A <strong>layer</strong> is a group of neurons that all read the same input vector. Stacking the weight vectors
+          of its $n$ neurons as the rows of a matrix $\bW$, the layer maps a vector to a vector:
+          $$\mathbf z = \bW\ba + \bb, \qquad \ba' = \sigma(\mathbf z),$$
+          where $\sigma$ is applied to each entry.</p>
+
+        <div class="env definition" id="def-mlp">
+          <p>A <strong>feedforward neural network</strong> (or multilayer perceptron) with $L$ layers of widths
+            $n_1, \dots, n_L$ and input dimension $n_0 = p$ computes, for $\ell = 1, \dots, L$,
+            $$\mathbf z^{(\ell)} = \bW^{(\ell)}\ba^{(\ell-1)} + \bb^{(\ell)}, \qquad \ba^{(\ell)} = \sigma^{(\ell)}\big(\mathbf z^{(\ell)}\big),
+            \qquad \ba^{(0)} = \bx,$$
+            with weight matrices $\bW^{(\ell)} \in \R^{n_\ell \times n_{\ell-1}}$, bias vectors
+            $\bb^{(\ell)} \in \R^{n_\ell}$ and activation functions $\sigma^{(\ell)}$ applied entrywise. Its output is
+            $f_\theta(\bx) = \ba^{(L)}$, and its parameters are
+            $\theta = \{\bW^{(\ell)}, \bb^{(\ell)} : \ell = 1, \dots, L\}$.</p>
+        </div>
+        <ul>
+          <li>The <strong>input layer</strong> is $\ba^{(0)} = \bx$ (it has no parameters).</li>
+          <li>Layers $1, \dots, L - 1$ are <strong>hidden layers</strong>: their values are not observed in the data. A
+            network with $L - 1 \geq 2$ hidden layers is called <strong>deep</strong>.</li>
+          <li>Layer $L$ is the <strong>output layer</strong>; its activation $\sigma^{(L)}$ is chosen for the task
+            (<a class="ref" href="#output"></a>).</li>
+        </ul>
+        <p>The architecture (number of layers, widths, activations) fixes a family of functions; the parameters $\theta$
+          pick one function in that family. The information flows in one direction, from input to output, hence
+          "feedforward".</p>
+
+        <figure class="numbered diagram" id="fig-network">
+          <svg viewBox="0 0 640 300" role="img" aria-label="A network with three inputs, two hidden layers of four units each, and one output. Every unit of a layer is connected to every unit of the next layer. The weight matrices are 4 by 3, 4 by 4 and 1 by 4.">
+            <line class="d-muted" x1="96" y1="95" x2="224" y2="70"/>
+            <line class="d-muted" x1="96" y1="95" x2="224" y2="125"/>
+            <line class="d-muted" x1="96" y1="95" x2="224" y2="180"/>
+            <line class="d-muted" x1="96" y1="95" x2="224" y2="235"/>
+            <line class="d-muted" x1="96" y1="150" x2="224" y2="70"/>
+            <line class="d-muted" x1="96" y1="150" x2="224" y2="125"/>
+            <line class="d-muted" x1="96" y1="150" x2="224" y2="180"/>
+            <line class="d-muted" x1="96" y1="150" x2="224" y2="235"/>
+            <line class="d-muted" x1="96" y1="205" x2="224" y2="70"/>
+            <line class="d-muted" x1="96" y1="205" x2="224" y2="125"/>
+            <line class="d-muted" x1="96" y1="205" x2="224" y2="180"/>
+            <line class="d-muted" x1="96" y1="205" x2="224" y2="235"/>
+            <line class="d-muted" x1="256" y1="70" x2="384" y2="70"/>
+            <line class="d-muted" x1="256" y1="70" x2="384" y2="125"/>
+            <line class="d-muted" x1="256" y1="70" x2="384" y2="180"/>
+            <line class="d-muted" x1="256" y1="70" x2="384" y2="235"/>
+            <line class="d-muted" x1="256" y1="125" x2="384" y2="70"/>
+            <line class="d-muted" x1="256" y1="125" x2="384" y2="125"/>
+            <line class="d-muted" x1="256" y1="125" x2="384" y2="180"/>
+            <line class="d-muted" x1="256" y1="125" x2="384" y2="235"/>
+            <line class="d-muted" x1="256" y1="180" x2="384" y2="70"/>
+            <line class="d-muted" x1="256" y1="180" x2="384" y2="125"/>
+            <line class="d-muted" x1="256" y1="180" x2="384" y2="180"/>
+            <line class="d-muted" x1="256" y1="180" x2="384" y2="235"/>
+            <line class="d-muted" x1="256" y1="235" x2="384" y2="70"/>
+            <line class="d-muted" x1="256" y1="235" x2="384" y2="125"/>
+            <line class="d-muted" x1="256" y1="235" x2="384" y2="180"/>
+            <line class="d-muted" x1="256" y1="235" x2="384" y2="235"/>
+            <line class="d-muted" x1="416" y1="70" x2="544" y2="150"/>
+            <line class="d-muted" x1="416" y1="125" x2="544" y2="150"/>
+            <line class="d-muted" x1="416" y1="180" x2="544" y2="150"/>
+            <line class="d-muted" x1="416" y1="235" x2="544" y2="150"/>
+            <circle class="d-panel" cx="80" cy="95" r="16"/>
+            <text class="d-text" x="54" y="100" text-anchor="end" font-weight="700">x₁</text>
+            <circle class="d-panel" cx="80" cy="150" r="16"/>
+            <text class="d-text" x="54" y="155" text-anchor="end" font-weight="700">x₂</text>
+            <circle class="d-panel" cx="80" cy="205" r="16"/>
+            <text class="d-text" x="54" y="210" text-anchor="end" font-weight="700">x₃</text>
+            <circle class="d-a" cx="240" cy="70" r="16"/>
+            <circle class="d-a" cx="240" cy="125" r="16"/>
+            <circle class="d-a" cx="240" cy="180" r="16"/>
+            <circle class="d-a" cx="240" cy="235" r="16"/>
+            <circle class="d-a" cx="400" cy="70" r="16"/>
+            <circle class="d-a" cx="400" cy="125" r="16"/>
+            <circle class="d-a" cx="400" cy="180" r="16"/>
+            <circle class="d-a" cx="400" cy="235" r="16"/>
+            <circle class="d-b" cx="560" cy="150" r="16"/>
+            <text class="d-text" x="586" y="155" font-weight="700">ŷ</text>
+            <text class="d-label" x="160" y="30" text-anchor="middle">W⁽¹⁾: 4 × 3</text>
+            <text class="d-label" x="320" y="30" text-anchor="middle">W⁽²⁾: 4 × 4</text>
+            <text class="d-label" x="480" y="30" text-anchor="middle">W⁽³⁾: 1 × 4</text>
+            <text class="d-text" x="80" y="272" text-anchor="middle" font-weight="700">input</text>
+            <text class="d-text" x="240" y="272" text-anchor="middle" font-weight="700">hidden layer 1</text>
+            <text class="d-text" x="400" y="272" text-anchor="middle" font-weight="700">hidden layer 2</text>
+            <text class="d-text" x="560" y="272" text-anchor="middle" font-weight="700">output</text>
+            <text class="d-label" x="80" y="292" text-anchor="middle">a⁽⁰⁾ = x ∈ ℝ³</text>
+            <text class="d-label" x="240" y="292" text-anchor="middle">a⁽¹⁾ ∈ ℝ⁴</text>
+            <text class="d-label" x="400" y="292" text-anchor="middle">a⁽²⁾ ∈ ℝ⁴</text>
+            <text class="d-label" x="560" y="292" text-anchor="middle">ŷ = a⁽³⁾ ∈ ℝ</text>
+          </svg>
+          <figcaption>A feedforward network with $p = 3$ inputs, two hidden layers of width 4 and one output
+            ($L = 3$). Each line is one weight; each unit also has a bias.</figcaption>
+        </figure>
+
+        <h3 id="forward-pass">The forward pass</h3>
+        <p>Evaluating $f_\theta(\bx)$ layer by layer is called the <strong>forward pass</strong>. It is a sequence of
+          matrix–vector products and entrywise functions.</p>
+
+        <div class="env example" id="ex-forward">
+          <p>A network with $p = 2$ inputs, one hidden layer of two ReLU units ($\operatorname{ReLU}(z) = \max(0, z)$) and
+            one output:
+            $$\bW^{(1)} = \begin{pmatrix} 1 & -1 \\ 1 & 1 \end{pmatrix}, \quad \bb^{(1)} = \begin{pmatrix} 0 \\ -1 \end{pmatrix}, \quad
+            \bW^{(2)} = \begin{pmatrix} 2 & -1 \end{pmatrix}, \quad b^{(2)} = 0.5 .$$
+            Evaluate it at $\bx = (1, 2)$.</p>
+          <p><strong>Step 1: hidden pre-activations.</strong>
+            $$\mathbf z^{(1)} = \bW^{(1)}\bx + \bb^{(1)} = \begin{pmatrix} 1 - 2 + 0 \\ 1 + 2 - 1 \end{pmatrix} = \begin{pmatrix} -1 \\ 2 \end{pmatrix} .$$</p>
+          <p><strong>Step 2: hidden activations.</strong> ReLU sets the negative entry to zero:
+            $$\ba^{(1)} = \operatorname{ReLU}\big(\mathbf z^{(1)}\big) = \begin{pmatrix} 0 \\ 2 \end{pmatrix} .$$
+            The first unit is <em>inactive</em> at this input.</p>
+          <p><strong>Step 3: output.</strong>
+            $$z^{(2)} = \bW^{(2)}\ba^{(1)} + b^{(2)} = 2 \cdot 0 - 1 \cdot 2 + 0.5 = -1.5 .$$
+            For regression (identity output) the prediction is $\hat y = -1.5$.</p>
+          <p><strong>Step 4: as a classifier.</strong> With a sigmoid output instead, the network predicts
+            $\P(y = 1 \mid \bx) = \sigma(-1.5) = 1/(1 + e^{1.5}) \approx 0.18$, so class $0$.</p>
+        </div>
+
+        <p>For $N$ inputs at once, put them as the rows of $\bX \in \R^{N \times p}$; then each layer is one matrix product,
+          $\mathbf Z^{(\ell)} = \mathbf A^{(\ell-1)}\bW^{(\ell)\top} + \mathbf 1\bb^{(\ell)\top}$, which is how software
+          evaluates networks efficiently.</p>
+
+        <h3 id="parameters">Counting parameters</h3>
+        <div class="env proposition" id="prop-params">
+          <p>A feedforward network with widths $n_0 = p, n_1, \dots, n_L$ has
+            $$\#\theta = \sum_{\ell=1}^L n_\ell\,(n_{\ell-1} + 1)$$
+            parameters. The count depends on the architecture only, not on the number $N$ of training points.</p>
+        </div>
+        <details class="proof" data-for="prop-params">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: one layer.</strong> $\bW^{(\ell)} \in \R^{n_\ell \times n_{\ell-1}}$ has $n_\ell n_{\ell-1}$
+              entries and $\bb^{(\ell)} \in \R^{n_\ell}$ has $n_\ell$, so layer $\ell$ has
+              $$n_\ell n_{\ell-1} + n_\ell = n_\ell\,(n_{\ell-1} + 1)$$
+              parameters: each of its $n_\ell$ neurons has $n_{\ell-1}$ weights and one bias.</p>
+            <p><strong>Step 2: add the layers.</strong> The layers have disjoint parameters; summing over
+              $\ell = 1, \dots, L$ gives the formula.</p>
+          </div>
+        </details>
+        <p>For handwritten digits of $28 \times 28 = 784$ pixels, a network with one hidden layer of 128 units and 10
+          outputs has $128 \cdot 785 + 10 \cdot 129 = 101\,770$ parameters, whether it is trained on a thousand images or
+          on sixty thousand. A kernel method trained on sixty thousand images would need a kernel matrix with
+          $3.6 \times 10^9$ entries.</p>
+
+        <h3 id="features-view">Hidden layers as learned features</h3>
+        <p>Write $\bh_\theta(\bx) = \ba^{(L-1)}$ for the last hidden layer. Then
+          $$f_\theta(\bx) = \sigma^{(L)}\big(\bW^{(L)}\bh_\theta(\bx) + \bb^{(L)}\big):$$
+          the output layer is an ordinary linear model (identity output) or logistic regression (sigmoid output) applied
+          to the features $\bh_\theta(\bx)$. Compare with kernel methods:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col"></th><th scope="col">Kernel methods</th><th scope="col">Neural networks</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Model</th><td>$\theta\T\phi(\bx)$</td><td>$\bW^{(L)}\bh_\theta(\bx) + \bb^{(L)}$</td></tr>
+              <tr><th scope="row">Features</th><td>fixed by the kernel</td><td>learned from the data</td></tr>
+              <tr><th scope="row">Parameters</th><td>$\boldsymbol\alpha \in \R^N$, one per training point</td><td>fixed by the architecture</td></tr>
+              <tr><th scope="row">Optimisation</th><td>convex, unique solution</td><td>not convex, local minima</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>The price of learning the features is the last row: the training objective of a network is not convex in
+          $\theta$ (<a class="ref" href="#exo-symmetry"></a>), so gradient methods find a good local solution rather than
+          a guaranteed global one.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="nonlinearity">Why the activations must be non-linear</h2>
+        <p>If every activation were the identity, depth would buy nothing.</p>
+
+        <div class="env proposition" id="prop-collapse">
+          <p>If $\sigma^{(\ell)}(z) = z$ for every layer, the network is an affine map:
+            $$f_\theta(\bx) = \tilde\bW\bx + \tilde\bb, \qquad
+            \tilde\bW = \bW^{(L)}\bW^{(L-1)}\cdots\bW^{(1)}, \qquad
+            \tilde\bb = \sum_{k=1}^L \bW^{(L)}\cdots\bW^{(k+1)}\bb^{(k)},$$
+            where the empty product (for $k = L$) is the identity.</p>
+        </div>
+        <details class="proof" data-for="prop-collapse">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>We prove by induction on $\ell$ that
+              $$\ba^{(\ell)} = \bW^{(\ell)}\cdots\bW^{(1)}\bx + \sum_{k=1}^{\ell} \bW^{(\ell)}\cdots\bW^{(k+1)}\bb^{(k)} . \tag{1}$$</p>
+            <p><strong>Step 1: first layer.</strong> With the identity activation,
+              $\ba^{(1)} = \mathbf z^{(1)} = \bW^{(1)}\bx + \bb^{(1)}$, which is (1) for $\ell = 1$.</p>
+            <p><strong>Step 2: from $\ell$ to $\ell + 1$.</strong> Assume (1) for $\ell$. Then
+              $$\begin{aligned}
+              \ba^{(\ell+1)} &= \bW^{(\ell+1)}\ba^{(\ell)} + \bb^{(\ell+1)} \\
+              &= \bW^{(\ell+1)}\bW^{(\ell)}\cdots\bW^{(1)}\bx + \sum_{k=1}^{\ell} \bW^{(\ell+1)}\bW^{(\ell)}\cdots\bW^{(k+1)}\bb^{(k)}
+              + \underbrace{\bb^{(\ell+1)}}_{k\,=\,\ell+1\ \text{term}} ,
+              \end{aligned}$$
+              which is (1) for $\ell + 1$.</p>
+            <p><strong>Step 3: conclude.</strong> Take $\ell = L$ in (1).</p>
+          </div>
+        </details>
+
+        <div class="env corollary" id="cor-linear-boundary">
+          <p>A network whose hidden layers all use the identity activation and whose output is a sigmoid computes
+            $\sigma(\tilde\bw\T\bx + \tilde b)$: it is logistic regression, and its decision boundary is a hyperplane,
+            whatever the depth and the widths.</p>
+        </div>
+        <p>Depth without non-linearity even loses something: $\operatorname{rank}\tilde\bW \leq \min_\ell n_\ell$, so a
+          narrow hidden layer restricts which linear maps can be represented. (A linear network with a narrow middle
+          layer will reappear in the chapter on autoencoders, where it turns out to be PCA.)</p>
+
+        <h3 id="xor">The XOR problem</h3>
+        <p>The smallest classification problem that a linear classifier cannot solve has four points: $y = 1$ when exactly
+          one of two binary inputs is on.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">$x_1$</th><th scope="col">$x_2$</th><th scope="col">$y = x_1 \text{ XOR } x_2$</th></tr></thead>
+            <tbody>
+              <tr><td>0</td><td>0</td><td>0</td></tr>
+              <tr><td>1</td><td>0</td><td>1</td></tr>
+              <tr><td>0</td><td>1</td><td>1</td></tr>
+              <tr><td>1</td><td>1</td><td>0</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="env proposition" id="prop-xor">
+          <p>No linear classifier "$\hat y = 1$ if and only if $w_1x_1 + w_2x_2 + b > 0$" classifies the four XOR points
+            correctly.</p>
+        </div>
+        <details class="proof" data-for="prop-xor">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: the four conditions.</strong> Suppose $(w_1, w_2, b)$ classifies all four points correctly.
+              Then
+              $$\begin{aligned}
+              (0, 0) \mapsto 0:&\quad b \leq 0, & (1, 1) \mapsto 0:&\quad w_1 + w_2 + b \leq 0, \\
+              (1, 0) \mapsto 1:&\quad w_1 + b > 0, & (0, 1) \mapsto 1:&\quad w_2 + b > 0 .
+              \end{aligned}$$</p>
+            <p><strong>Step 2: add the two class-1 conditions.</strong>
+              $$w_1 + w_2 + 2b > 0 . \tag{2}$$</p>
+            <p><strong>Step 3: add the two class-0 conditions.</strong>
+              $$w_1 + w_2 + 2b \leq 0 . \tag{3}$$</p>
+            <p><strong>Step 4: conclude.</strong> (2) and (3) contradict each other, so no such $(w_1, w_2, b)$
+              exists.</p>
+          </div>
+        </details>
+
+        <div class="env example" id="ex-xor-net">
+          <p>One hidden layer of two ReLU units solves XOR. Take
+            $$h_1 = \operatorname{ReLU}(x_1 + x_2), \qquad h_2 = \operatorname{ReLU}(x_1 + x_2 - 1), \qquad
+            f(\bx) = h_1 - 2h_2 ,$$
+            and predict $\hat y = 1$ when $f(\bx) > \frac12$.</p>
+          <p><strong>Step 1: evaluate on the four points.</strong></p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">$(x_1, x_2)$</th><th scope="col">$x_1 + x_2$</th><th scope="col">$(h_1, h_2)$</th><th scope="col">$f = h_1 - 2h_2$</th><th scope="col">$\hat y$</th></tr></thead>
+              <tbody>
+                <tr><td>$(0, 0)$</td><td>0</td><td>$(0, 0)$</td><td>0</td><td>0</td></tr>
+                <tr><td>$(1, 0)$</td><td>1</td><td>$(1, 0)$</td><td>1</td><td>1</td></tr>
+                <tr><td>$(0, 1)$</td><td>1</td><td>$(1, 0)$</td><td>1</td><td>1</td></tr>
+                <tr><td>$(1, 1)$</td><td>2</td><td>$(2, 1)$</td><td>0</td><td>0</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p><strong>Step 2: read it as a feature map.</strong> The hidden layer sends the four inputs to
+            $(0, 0)$, $(1, 0)$, $(1, 0)$ and $(2, 1)$. In these hidden features the classes <em>are</em> linearly
+            separable: the output unit is the linear classifier $h_1 - 2h_2 > \frac12$. The hidden layer has learned the
+            kind of feature map that kernel methods fix in advance.</p>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="activations">Activation functions</h2>
+        <p>The choice of $\sigma$ in the hidden layers affects what the network can represent and, just as much, how easily
+          it can be trained by gradient descent: gradients flow backwards through the derivatives $\sigma'$.</p>
+
+        <h3 id="sigmoid-tanh">Sigmoid and tanh</h3>
+        <div class="env definition" id="def-sig-tanh">
+          <p>The <strong>sigmoid</strong> and the <strong>hyperbolic tangent</strong> are
+            $$\sigma(z) = \frac{1}{1 + e^{-z}} \in (0, 1), \qquad
+            \tanh(z) = \frac{e^z - e^{-z}}{e^z + e^{-z}} \in (-1, 1) .$$</p>
+        </div>
+
+        <div class="env proposition" id="prop-sig-deriv">
+          <p>(a) $\sigma'(z) = \sigma(z)\big(1 - \sigma(z)\big)$, so $0 < \sigma'(z) \leq \frac14$, with equality only at
+            $z = 0$.<br>
+            (b) $\tanh(z) = 2\sigma(2z) - 1$, and $\tanh'(z) = 1 - \tanh^2(z) \in (0, 1]$.<br>
+            (c) Both derivatives tend to $0$ as $|z| \to \infty$.</p>
+        </div>
+        <details class="proof" data-for="prop-sig-deriv">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: derivative of the sigmoid.</strong>
+              $$\sigma'(z) = \frac{e^{-z}}{(1 + e^{-z})^2} = \underbrace{\frac{1}{1 + e^{-z}}}_{=\ \sigma(z)}\cdot
+              \underbrace{\frac{e^{-z}}{1 + e^{-z}}}_{=\ 1 - \sigma(z)} .$$</p>
+            <p><strong>Step 2: its maximum.</strong> With $s = \sigma(z) \in (0, 1)$,
+              $$s(1 - s) = \tfrac14 - \big(s - \tfrac12\big)^2 \leq \tfrac14 ,$$
+              with equality only if $s = \frac12$, i.e. $z = 0$.</p>
+            <p><strong>Step 3: tanh in terms of the sigmoid.</strong> Multiply numerator and denominator by $e^{-z}$:
+              $$\tanh(z) = \frac{1 - e^{-2z}}{1 + e^{-2z}} = \frac{2 - (1 + e^{-2z})}{1 + e^{-2z}} = \frac{2}{1 + e^{-2z}} - 1 = 2\sigma(2z) - 1 .$$</p>
+            <p><strong>Step 4: derivative of tanh.</strong> By the chain rule and Step 1,
+              $$\tanh'(z) = 4\sigma'(2z) = 4\sigma(2z)\big(1 - \sigma(2z)\big) .$$
+              Since $\sigma(2z) = \frac{1 + \tanh z}{2}$ and $1 - \sigma(2z) = \frac{1 - \tanh z}{2}$, this is
+              $(1 + \tanh z)(1 - \tanh z) = 1 - \tanh^2(z)$, which lies in $(0, 1]$.</p>
+            <p><strong>Step 5: the tails.</strong> As $|z| \to \infty$, $\sigma(z) \to 0$ or $1$ and $\tanh(z) \to \pm1$, so
+              both derivatives tend to $0$.</p>
+          </div>
+        </details>
+        <p>Both functions are smooth and S-shaped, and they <strong>saturate</strong>: for large $|z|$ the output barely
+          changes and the derivative is nearly zero. Tanh is a rescaled sigmoid, but it is centred at zero (its outputs have
+          both signs), which usually makes optimisation easier than with sigmoid hidden units, whose outputs are always
+          positive.</p>
+
+        <h3 id="vanishing">Vanishing gradients</h3>
+        <p>Training adjusts each parameter in proportion to how much the output changes when that parameter changes. In a
+          deep network these sensitivities are products of many factors $\sigma'$. The simplest case already shows the
+          problem.</p>
+
+        <div class="env proposition" id="prop-vanishing">
+          <p>Consider a chain of $L$ single neurons, $a_0 = x$ and
+            $$a_\ell = \sigma(z_\ell), \qquad z_\ell = w_\ell a_{\ell-1} + b_\ell, \qquad \ell = 1, \dots, L .$$
+            Then
+            $$\frac{d a_L}{dx} = \prod_{\ell=1}^L \sigma'(z_\ell)\,w_\ell ,$$
+            and with the sigmoid activation
+            $$\Big|\frac{d a_L}{dx}\Big| \leq \frac{|w_1 w_2 \cdots w_L|}{4^L} .$$</p>
+        </div>
+        <details class="proof" data-for="prop-vanishing">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: one layer.</strong> By the chain rule,
+              $$\frac{d a_\ell}{d a_{\ell-1}} = \sigma'(z_\ell)\,\frac{d z_\ell}{d a_{\ell-1}} = \sigma'(z_\ell)\,w_\ell .$$</p>
+            <p><strong>Step 2: compose.</strong> $a_L$ is a function of $a_{L-1}$, which is a function of $a_{L-2}$, and so
+              on down to $a_0 = x$. The chain rule multiplies the factors of Step 1:
+              $$\frac{d a_L}{dx} = \frac{d a_L}{d a_{L-1}}\cdot\frac{d a_{L-1}}{d a_{L-2}}\cdots\frac{d a_1}{d a_0}
+              = \prod_{\ell=1}^L \sigma'(z_\ell)\,w_\ell .$$</p>
+            <p><strong>Step 3: bound.</strong> By <a class="ref" href="#prop-sig-deriv"></a>, $0 < \sigma'(z_\ell) \leq \frac14$
+              for every $\ell$, so the absolute value of the product is at most $\prod_\ell |w_\ell| / 4^L$.</p>
+          </div>
+        </details>
+        <p>With weights of size at most one and ten sigmoid layers, the derivative is below $4^{-10} \approx 10^{-6}$, and
+          it is far smaller still if some units are saturated. The early layers then receive almost no signal and learn very
+          slowly: the <strong>vanishing gradient problem</strong>. Tanh helps ($\tanh' \leq 1$) but still saturates. The same
+          products appear in networks of any width; the general computation, backpropagation, is in the next chapter.</p>
+
+        <h3 id="relu">ReLU and its variants</h3>
+        <div class="env definition" id="def-relu">
+          <p>The <strong>rectified linear unit</strong> and the <strong>leaky ReLU</strong> with slope
+            $0 < \alpha < 1$ are
+            $$\operatorname{ReLU}(z) = \max(0, z), \qquad
+            \operatorname{LReLU}_\alpha(z) = \begin{cases} z, & z \geq 0, \\ \alpha z, & z < 0. \end{cases}$$
+            Their derivatives (for $z \neq 0$) are $\mathbf 1\{z > 0\}$ and $1$ or $\alpha$.</p>
+        </div>
+        <ul>
+          <li><strong>No saturation for $z > 0$.</strong> The derivative is exactly $1$ there, so in the chain of
+            <a class="ref" href="#prop-vanishing"></a> the product of the $\sigma'$ factors is $1$ along active units: no
+            systematic shrinking. This is the main reason ReLU networks train faster and deeper.</li>
+          <li><strong>Cheap and sparse.</strong> Evaluating it is a comparison; for a given input many units output exactly
+            zero, as in <a class="ref" href="#ex-forward"></a>.</li>
+          <li><strong>Dying units.</strong> If a unit's pre-activation is negative for <em>every</em> training input (for
+            instance after a large update made its bias very negative), it outputs $0$ everywhere and its derivative is $0$
+            everywhere. Gradient descent then never changes its weights: the unit is dead.</li>
+          <li><strong>Leaky ReLU</strong> keeps a small slope $\alpha$ (e.g. $0.01$) for $z < 0$, so a unit always receives
+            some gradient and can recover.</li>
+        </ul>
+        <p>ReLU is not differentiable at $0$; in practice software uses $0$ (or $1$) for the derivative there, which does no
+          harm. ReLU is the default choice for hidden layers today.</p>
+
+        <figure class="viz viz--wide" data-viz="nn-activations" id="fig-activations">
+          <div class="viz__stage"></div>
+          <figcaption>Activation functions (left) and their derivatives (right, on the same scale for all activations).
+            The readout multiplies ten copies of $\sigma'(z)$, as in a chain of ten layers.
+            <strong>Try:</strong> (1) sigmoid: the derivative never exceeds $0.25$, and at $z = 0$ ten layers already give
+            $0.25^{10} \approx 10^{-6}$; (2) move $z$ to $\pm 4$: the sigmoid and tanh saturate and their derivatives almost
+            vanish; (3) ReLU: the derivative is exactly $1$ for $z > 0$, so the product stays $1$, but it is exactly $0$ for
+            $z < 0$; (4) leaky ReLU: the negative side keeps the slope $\alpha$.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="output">The output layer</h2>
+        <p>The hidden layers can be the same for every task. What changes is the output activation, chosen so that the
+          output has the right range, and the loss used to train it.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Task</th><th scope="col">Output units</th><th scope="col">Output activation</th><th scope="col">Output means</th><th scope="col">Loss</th></tr></thead>
+            <tbody>
+              <tr><td>Regression</td><td>1 (or one per target)</td><td>identity</td><td>$\hat y \in \R$</td><td>squared error</td></tr>
+              <tr><td>Binary classification</td><td>1</td><td>sigmoid</td><td>$\P(y = 1 \mid \bx) \in (0, 1)$</td><td>binary cross-entropy</td></tr>
+              <tr><td>$K$ classes</td><td>$K$</td><td>softmax</td><td>$(\P(y = k \mid \bx))_{k=1}^K$</td><td>cross-entropy</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="env definition" id="def-softmax">
+          <p>The <strong>softmax</strong> of $\mathbf z \in \R^K$ is the vector with entries
+            $$\operatorname{softmax}(\mathbf z)_k = \frac{e^{z_k}}{\sum_{j=1}^K e^{z_j}}, \qquad k = 1, \dots, K .$$
+            The inputs $z_k$ are called <strong>logits</strong>.</p>
+        </div>
+
+        <div class="env proposition" id="prop-softmax">
+          <p>(a) The entries of $\operatorname{softmax}(\mathbf z)$ are positive and sum to $1$.<br>
+            (b) Adding a constant to every logit does not change the result:
+            $\operatorname{softmax}(\mathbf z + c\mathbf 1) = \operatorname{softmax}(\mathbf z)$ for all $c \in \R$.<br>
+            (c) For $K = 2$, $\operatorname{softmax}(\mathbf z)_1 = \sigma(z_1 - z_2)$: two-class softmax is the sigmoid of
+            the difference of the logits.</p>
+        </div>
+        <details class="proof" data-for="prop-softmax">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: a probability vector.</strong> Each $e^{z_k} > 0$, so each entry is positive, and
+              $$\sum_{k=1}^K \frac{e^{z_k}}{\sum_j e^{z_j}} = \frac{\sum_k e^{z_k}}{\sum_j e^{z_j}} = 1 .$$</p>
+            <p><strong>Step 2: shift invariance.</strong> The factor $e^c$ cancels:
+              $$\frac{e^{z_k + c}}{\sum_j e^{z_j + c}} = \frac{\cancel{e^{c}}\,e^{z_k}}{\cancel{e^{c}}\sum_j e^{z_j}} .$$</p>
+            <p><strong>Step 3: two classes.</strong> Divide numerator and denominator by $e^{z_1}$:
+              $$\frac{e^{z_1}}{e^{z_1} + e^{z_2}} = \frac{1}{1 + e^{-(z_1 - z_2)}} = \sigma(z_1 - z_2) .$$</p>
+          </div>
+        </details>
+        <p>Part (b) is used in every implementation: computing $e^{z_k}$ directly overflows for logits around $1000$, so one
+          computes $\operatorname{softmax}(\mathbf z - \max_j z_j)$ instead, whose exponents are all $\leq 0$. Part (c) shows
+          that the softmax output layer is the multi-class version of the sigmoid output, as in
+          <a href="04-logistic-regression.html">Chapter 4</a>.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="universal">Universal approximation</h2>
+        <p>How rich is the family of networks? Already with <em>one</em> hidden layer, it can approximate any continuous
+          function as closely as we like. A one-hidden-layer network with one input, $m$ hidden units and identity output
+          computes
+          $$f_\theta(x) = c + \sum_{j=1}^m v_j\,\sigma(w_j x + b_j) .$$
+          We prove the result for ReLU, where the construction is explicit.</p>
+
+        <h3 id="building-blocks">Building blocks: hinges, ramps and rectangles</h3>
+        <p>One ReLU unit $v\operatorname{ReLU}(x - t)$ is a <strong>hinge</strong>: zero up to $t$, then a straight line of
+          slope $v$. Two hinges make a ramp, and two ramps make a rectangle.</p>
+
+        <figure class="numbered diagram" id="fig-hinges">
+          <svg viewBox="0 0 640 200" role="img" aria-label="Left: the hinge ReLU of x minus a, rising from a, and the hinge minus ReLU of x minus b, falling from b. Middle: their sum is zero before a, rises between a and b, and is flat after b. Right: subtracting a second ramp between c and d gives a flat-topped rectangle between b and c.">
+            <rect class="d-panel" x="20" y="40" width="180" height="130" rx="4"/>
+            <line class="d-muted" x1="20" y1="105.0" x2="200" y2="105.0"/>
+            <text class="d-text" x="110.0" y="28" text-anchor="middle" font-weight="700">ReLU(x − a) and −ReLU(x − b)</text>
+            <line class="d-muted" stroke-dasharray="3 3" x1="53.7" y1="40" x2="53.7" y2="170"/>
+            <text class="d-label" x="53.7" y="186" text-anchor="middle">a</text>
+            <line class="d-muted" stroke-dasharray="3 3" x1="87.5" y1="40" x2="87.5" y2="170"/>
+            <text class="d-label" x="87.5" y="186" text-anchor="middle">b</text>
+            <polyline class="d-a-stroke" stroke-width="2.5" points="20.0,105.0 21.1,105.0 22.2,105.0 23.4,105.0 24.5,105.0 25.6,105.0 26.8,105.0 27.9,105.0 29.0,105.0 30.1,105.0 31.2,105.0 32.4,105.0 33.5,105.0 34.6,105.0 35.8,105.0 36.9,105.0 38.0,105.0 39.1,105.0 40.2,105.0 41.4,105.0 42.5,105.0 43.6,105.0 44.8,105.0 45.9,105.0 47.0,105.0 48.1,105.0 49.2,105.0 50.4,105.0 51.5,105.0 52.6,105.0 53.7,105.0 54.9,104.0 56.0,103.0 57.1,102.0 58.2,101.0 59.4,100.0 60.5,99.0 61.6,98.0 62.8,97.0 63.9,96.0 65.0,95.0 66.1,94.0 67.2,93.0 68.4,92.0 69.5,91.0 70.6,90.0 71.8,89.0 72.9,88.0 74.0,87.0 75.1,86.0 76.2,85.0 77.4,84.0 78.5,83.0 79.6,82.0 80.8,81.0 81.9,80.0 83.0,79.0 84.1,78.0 85.3,77.0 86.4,76.0 87.5,75.0 88.6,74.0 89.7,73.0 90.9,72.0 92.0,71.0 93.1,70.0 94.2,69.0 95.4,68.0 96.5,67.0 97.6,66.0 98.7,65.0 99.9,64.0 101.0,63.0 102.1,62.0 103.2,61.0 104.4,60.0 105.5,59.0 106.6,58.0 107.8,57.0 108.9,56.0 110.0,55.0 111.1,54.0 112.2,53.0 113.4,52.0 114.5,51.0 115.6,50.0 116.8,49.0 117.9,48.0 119.0,47.0 120.1,46.0 121.2,45.0 122.4,44.0 123.5,43.0 124.6,42.0 125.8,41.0 126.9,40.0"/>
+            <polyline class="d-b-stroke" stroke-width="2.5" points="20.0,105.0 21.1,105.0 22.2,105.0 23.4,105.0 24.5,105.0 25.6,105.0 26.8,105.0 27.9,105.0 29.0,105.0 30.1,105.0 31.2,105.0 32.4,105.0 33.5,105.0 34.6,105.0 35.8,105.0 36.9,105.0 38.0,105.0 39.1,105.0 40.2,105.0 41.4,105.0 42.5,105.0 43.6,105.0 44.8,105.0 45.9,105.0 47.0,105.0 48.1,105.0 49.2,105.0 50.4,105.0 51.5,105.0 52.6,105.0 53.7,105.0 54.9,105.0 56.0,105.0 57.1,105.0 58.2,105.0 59.4,105.0 60.5,105.0 61.6,105.0 62.8,105.0 63.9,105.0 65.0,105.0 66.1,105.0 67.2,105.0 68.4,105.0 69.5,105.0 70.6,105.0 71.8,105.0 72.9,105.0 74.0,105.0 75.1,105.0 76.2,105.0 77.4,105.0 78.5,105.0 79.6,105.0 80.8,105.0 81.9,105.0 83.0,105.0 84.1,105.0 85.3,105.0 86.4,105.0 87.5,105.0 88.6,106.0 89.7,107.0 90.9,108.0 92.0,109.0 93.1,110.0 94.2,111.0 95.4,112.0 96.5,113.0 97.6,114.0 98.7,115.0 99.9,116.0 101.0,117.0 102.1,118.0 103.2,119.0 104.4,120.0 105.5,121.0 106.6,122.0 107.8,123.0 108.9,124.0 110.0,125.0 111.1,126.0 112.2,127.0 113.4,128.0 114.5,129.0 115.6,130.0 116.8,131.0 117.9,132.0 119.0,133.0 120.1,134.0 121.2,135.0 122.4,136.0 123.5,137.0 124.6,138.0 125.8,139.0 126.9,140.0 128.0,141.0 129.1,142.0 130.2,143.0 131.4,144.0 132.5,145.0 133.6,146.0 134.8,147.0 135.9,148.0 137.0,149.0 138.1,150.0 139.2,151.0 140.4,152.0 141.5,153.0 142.6,154.0 143.8,155.0 144.9,156.0 146.0,157.0 147.1,158.0 148.2,159.0 149.4,160.0 150.5,161.0 151.6,162.0 152.8,163.0 153.9,164.0 155.0,165.0 156.1,166.0 157.2,167.0 158.4,168.0 159.5,169.0 160.6,170.0"/>
+            <rect class="d-panel" x="230" y="40" width="180" height="130" rx="4"/>
+            <line class="d-muted" x1="230" y1="105.0" x2="410" y2="105.0"/>
+            <text class="d-text" x="320.0" y="28" text-anchor="middle" font-weight="700">sum: a ramp from 0 to b − a</text>
+            <line class="d-muted" stroke-dasharray="3 3" x1="263.8" y1="40" x2="263.8" y2="170"/>
+            <text class="d-label" x="263.8" y="186" text-anchor="middle">a</text>
+            <line class="d-muted" stroke-dasharray="3 3" x1="297.5" y1="40" x2="297.5" y2="170"/>
+            <text class="d-label" x="297.5" y="186" text-anchor="middle">b</text>
+            <polyline class="d-ink" stroke-width="2.5" points="230.0,105.0 231.1,105.0 232.2,105.0 233.4,105.0 234.5,105.0 235.6,105.0 236.8,105.0 237.9,105.0 239.0,105.0 240.1,105.0 241.2,105.0 242.4,105.0 243.5,105.0 244.6,105.0 245.8,105.0 246.9,105.0 248.0,105.0 249.1,105.0 250.2,105.0 251.4,105.0 252.5,105.0 253.6,105.0 254.8,105.0 255.9,105.0 257.0,105.0 258.1,105.0 259.2,105.0 260.4,105.0 261.5,105.0 262.6,105.0 263.8,105.0 264.9,104.0 266.0,103.0 267.1,102.0 268.2,101.0 269.4,100.0 270.5,99.0 271.6,98.0 272.8,97.0 273.9,96.0 275.0,95.0 276.1,94.0 277.2,93.0 278.4,92.0 279.5,91.0 280.6,90.0 281.8,89.0 282.9,88.0 284.0,87.0 285.1,86.0 286.2,85.0 287.4,84.0 288.5,83.0 289.6,82.0 290.8,81.0 291.9,80.0 293.0,79.0 294.1,78.0 295.2,77.0 296.4,76.0 297.5,75.0 298.6,75.0 299.8,75.0 300.9,75.0 302.0,75.0 303.1,75.0 304.2,75.0 305.4,75.0 306.5,75.0 307.6,75.0 308.8,75.0 309.9,75.0 311.0,75.0 312.1,75.0 313.2,75.0 314.4,75.0 315.5,75.0 316.6,75.0 317.8,75.0 318.9,75.0 320.0,75.0 321.1,75.0 322.2,75.0 323.4,75.0 324.5,75.0 325.6,75.0 326.8,75.0 327.9,75.0 329.0,75.0 330.1,75.0 331.2,75.0 332.4,75.0 333.5,75.0 334.6,75.0 335.8,75.0 336.9,75.0 338.0,75.0 339.1,75.0 340.2,75.0 341.4,75.0 342.5,75.0 343.6,75.0 344.8,75.0 345.9,75.0 347.0,75.0 348.1,75.0 349.2,75.0 350.4,75.0 351.5,75.0 352.6,75.0 353.8,75.0 354.9,75.0 356.0,75.0 357.1,75.0 358.2,75.0 359.4,75.0 360.5,75.0 361.6,75.0 362.8,75.0 363.9,75.0 365.0,75.0 366.1,75.0 367.2,75.0 368.4,75.0 369.5,75.0 370.6,75.0 371.8,75.0 372.9,75.0 374.0,75.0 375.1,75.0 376.2,75.0 377.4,75.0 378.5,75.0 379.6,75.0 380.8,75.0 381.9,75.0 383.0,75.0 384.1,75.0 385.2,75.0 386.4,75.0 387.5,75.0 388.6,75.0 389.8,75.0 390.9,75.0 392.0,75.0 393.1,75.0 394.2,75.0 395.4,75.0 396.5,75.0 397.6,75.0 398.8,75.0 399.9,75.0 401.0,75.0 402.1,75.0 403.2,75.0 404.4,75.0 405.5,75.0 406.6,75.0 407.8,75.0 408.9,75.0 410.0,75.0"/>
+            <rect class="d-panel" x="440" y="40" width="180" height="130" rx="4"/>
+            <line class="d-muted" x1="440" y1="105.0" x2="620" y2="105.0"/>
+            <text class="d-text" x="530.0" y="28" text-anchor="middle" font-weight="700">two ramps: a rectangle</text>
+            <line class="d-muted" stroke-dasharray="3 3" x1="473.8" y1="40" x2="473.8" y2="170"/>
+            <text class="d-label" x="473.8" y="186" text-anchor="middle">a</text>
+            <line class="d-muted" stroke-dasharray="3 3" x1="507.5" y1="40" x2="507.5" y2="170"/>
+            <text class="d-label" x="507.5" y="186" text-anchor="middle">b</text>
+            <line class="d-muted" stroke-dasharray="3 3" x1="552.5" y1="40" x2="552.5" y2="170"/>
+            <text class="d-label" x="552.5" y="186" text-anchor="middle">c</text>
+            <line class="d-muted" stroke-dasharray="3 3" x1="586.2" y1="40" x2="586.2" y2="170"/>
+            <text class="d-label" x="586.2" y="186" text-anchor="middle">d</text>
+            <polyline class="d-ink" stroke-width="2.5" points="440.0,105.0 441.1,105.0 442.2,105.0 443.4,105.0 444.5,105.0 445.6,105.0 446.8,105.0 447.9,105.0 449.0,105.0 450.1,105.0 451.2,105.0 452.4,105.0 453.5,105.0 454.6,105.0 455.8,105.0 456.9,105.0 458.0,105.0 459.1,105.0 460.2,105.0 461.4,105.0 462.5,105.0 463.6,105.0 464.8,105.0 465.9,105.0 467.0,105.0 468.1,105.0 469.2,105.0 470.4,105.0 471.5,105.0 472.6,105.0 473.8,105.0 474.9,104.0 476.0,103.0 477.1,102.0 478.2,101.0 479.4,100.0 480.5,99.0 481.6,98.0 482.8,97.0 483.9,96.0 485.0,95.0 486.1,94.0 487.2,93.0 488.4,92.0 489.5,91.0 490.6,90.0 491.8,89.0 492.9,88.0 494.0,87.0 495.1,86.0 496.2,85.0 497.4,84.0 498.5,83.0 499.6,82.0 500.8,81.0 501.9,80.0 503.0,79.0 504.1,78.0 505.2,77.0 506.4,76.0 507.5,75.0 508.6,75.0 509.8,75.0 510.9,75.0 512.0,75.0 513.1,75.0 514.2,75.0 515.4,75.0 516.5,75.0 517.6,75.0 518.8,75.0 519.9,75.0 521.0,75.0 522.1,75.0 523.2,75.0 524.4,75.0 525.5,75.0 526.6,75.0 527.8,75.0 528.9,75.0 530.0,75.0 531.1,75.0 532.2,75.0 533.4,75.0 534.5,75.0 535.6,75.0 536.8,75.0 537.9,75.0 539.0,75.0 540.1,75.0 541.2,75.0 542.4,75.0 543.5,75.0 544.6,75.0 545.8,75.0 546.9,75.0 548.0,75.0 549.1,75.0 550.2,75.0 551.4,75.0 552.5,75.0 553.6,76.0 554.8,77.0 555.9,78.0 557.0,79.0 558.1,80.0 559.2,81.0 560.4,82.0 561.5,83.0 562.6,84.0 563.8,85.0 564.9,86.0 566.0,87.0 567.1,88.0 568.2,89.0 569.4,90.0 570.5,91.0 571.6,92.0 572.8,93.0 573.9,94.0 575.0,95.0 576.1,96.0 577.2,97.0 578.4,98.0 579.5,99.0 580.6,100.0 581.8,101.0 582.9,102.0 584.0,103.0 585.1,104.0 586.2,105.0 587.4,105.0 588.5,105.0 589.6,105.0 590.8,105.0 591.9,105.0 593.0,105.0 594.1,105.0 595.2,105.0 596.4,105.0 597.5,105.0 598.6,105.0 599.8,105.0 600.9,105.0 602.0,105.0 603.1,105.0 604.2,105.0 605.4,105.0 606.5,105.0 607.6,105.0 608.8,105.0 609.9,105.0 611.0,105.0 612.1,105.0 613.2,105.0 614.4,105.0 615.5,105.0 616.6,105.0 617.8,105.0 618.9,105.0 620.0,105.0"/>
+            <text class="d-text" x="210" y="112" text-anchor="middle" font-size="20">→</text>
+            <text class="d-text" x="420" y="112" text-anchor="middle" font-size="20">→</text>
+          </svg>
+          <figcaption>From ReLU hinges to a rectangle. A rising and a falling hinge add up to a ramp (a smoothed step);
+            subtracting a second ramp brings it back to zero. Four ReLU units give one rectangle.</figcaption>
+        </figure>
+
+        <div class="env lemma" id="lem-ramp">
+          <p>For $a < b$, the function
+            $$r_{a,b}(x) = \frac{\operatorname{ReLU}(x - a) - \operatorname{ReLU}(x - b)}{b - a}$$
+            equals $0$ for $x \leq a$, $\frac{x - a}{b - a}$ for $a \leq x \leq b$, and $1$ for $x \geq b$.</p>
+        </div>
+        <details class="proof" data-for="lem-ramp">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: $x \leq a$.</strong> Then $x - a \leq 0$ and $x - b < 0$, so both ReLUs are $0$.</p>
+            <p><strong>Step 2: $a \leq x \leq b$.</strong> Only the first ReLU is on:
+              $r_{a,b}(x) = \frac{(x - a) - 0}{b - a}$.</p>
+            <p><strong>Step 3: $x \geq b$.</strong> Both are on, and the $x$ cancels:
+              $$r_{a,b}(x) = \frac{(\cancel{x} - a) - (\cancel{x} - b)}{b - a} = \frac{b - a}{b - a} = 1 .$$</p>
+          </div>
+        </details>
+        <p>As $b \to a$ the ramp becomes a step at $a$, and $r_{a,b} - r_{c,d}$ (with $b \leq c$) is a rectangle. A sum of
+          narrow rectangles with heights $f(\text{midpoint})$ is a Riemann-sum picture of $f$; this is the usual intuition
+          for universal approximation. With sigmoid units the same picture works: $\sigma(k(x - t))$ tends to the step
+          $\mathbf 1\{x > t\}$ as $k \to \infty$ (for $x \neq t$), so two steep sigmoids make a rectangle. For ReLU there is
+          a sharper construction: instead of rectangles, use the hinges directly to build broken lines.</p>
+
+        <div class="env lemma" id="lem-pwl">
+          <p>Let $a = t_0 < t_1 < \dots < t_m = b$, and let $g : [a, b] \to \R$ be continuous and affine on each
+            $[t_{j-1}, t_j]$, with slope $s_j$. Then for all $x \in [a, b]$,
+            $$g(x) = g(a) + \sum_{j=1}^m v_j\,\operatorname{ReLU}(x - t_{j-1}), \qquad v_1 = s_1, \quad v_j = s_j - s_{j-1}\ (j \geq 2) .$$
+            So every continuous piecewise linear function on $[a, b]$ with $m$ pieces is a one-hidden-layer ReLU network
+            with $m$ hidden units.</p>
+        </div>
+        <details class="proof" data-for="lem-pwl">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Call the right-hand side $h(x)$.</p>
+            <p><strong>Step 1: same value at $a$.</strong> At $x = a = t_0$, every $x - t_{j-1} \leq 0$, so every ReLU is
+              $0$ and $h(a) = g(a)$.</p>
+            <p><strong>Step 2: $h$ is affine on each piece.</strong> On $(t_{k-1}, t_k)$, the unit $j$ is on
+              ($x > t_{j-1}$) exactly when $j \leq k$, and then it equals $x - t_{j-1}$. So
+              $$h(x) = g(a) + \sum_{j=1}^{k} v_j\,(x - t_{j-1}) \quad\text{on } (t_{k-1}, t_k),$$
+              an affine function of $x$.</p>
+            <p><strong>Step 3: the slopes telescope.</strong> The slope of $h$ on $(t_{k-1}, t_k)$ is
+              $$\sum_{j=1}^{k} v_j = s_1 + (s_2 - s_1) + (s_3 - s_2) + \dots + (s_k - s_{k-1}) = s_k ,$$
+              the slope of $g$ on the same piece.</p>
+            <p><strong>Step 4: conclude.</strong> $g$ and $h$ are continuous, agree at $a$ and have the same slope on each
+              piece, so $g - h$ is continuous, zero at $a$ and constant on each piece. Hence $g - h = 0$ on $[t_0, t_1]$,
+              then on $[t_1, t_2]$, and so on up to $b$.</p>
+          </div>
+        </details>
+
+        <h3 id="uat">The universal approximation theorem</h3>
+        <div class="env theorem" id="thm-uat-relu" data-name="Universal approximation, ReLU, one input">
+          <p>Let $f : [a, b] \to \R$ be continuous and $\varepsilon > 0$. There is a one-hidden-layer ReLU network
+            $f_\theta(x) = c + \sum_{j=1}^m v_j\operatorname{ReLU}(w_j x + b_j)$ such that
+            $$\sup_{x \in [a, b]}\,\big|f(x) - f_\theta(x)\big| < \varepsilon .$$</p>
+        </div>
+        <details class="proof" data-for="thm-uat-relu">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: uniform continuity.</strong> A continuous function on a closed bounded interval is uniformly
+              continuous: there is $\delta > 0$ such that
+              $$|x - x'| \leq \delta \implies |f(x) - f(x')| < \frac\varepsilon2 .$$</p>
+            <p><strong>Step 2: a grid.</strong> Choose $m$ with $(b - a)/m \leq \delta$ and let $t_j = a + j(b - a)/m$,
+              $j = 0, \dots, m$. Let $g$ be the broken line through the points $(t_j, f(t_j))$: affine on each
+              $[t_{j-1}, t_j]$ and equal to $f$ at the grid points.</p>
+            <p><strong>Step 3: the broken line is close to $f$.</strong> Take $x \in [t_{j-1}, t_j]$ and write
+              $x = \lambda t_{j-1} + (1 - \lambda)t_j$ with $\lambda \in [0, 1]$. Then
+              $g(x) = \lambda f(t_{j-1}) + (1 - \lambda)f(t_j)$, and
+              $$f(x) - g(x) = \lambda\big(f(x) - f(t_{j-1})\big) + (1 - \lambda)\big(f(x) - f(t_j)\big) .$$
+              Both $|x - t_{j-1}|$ and $|x - t_j|$ are at most $\delta$, so by Step 1
+              $$|f(x) - g(x)| < \lambda\frac\varepsilon2 + (1 - \lambda)\frac\varepsilon2 = \frac\varepsilon2 < \varepsilon .$$</p>
+            <p><strong>Step 4: the broken line is a network.</strong> By <a class="ref" href="#lem-pwl"></a>,
+              $$g(x) = f(a) + \sum_{j=1}^m v_j\operatorname{ReLU}(x - t_{j-1}) \quad\text{on } [a, b],$$
+              a network with $m$ hidden units, weights $w_j = 1$, biases $b_j = -t_{j-1}$ and $c = f(a)$.</p>
+          </div>
+        </details>
+
+        <p>The same holds in any dimension and for essentially any activation. We state it without proof.</p>
+        <div class="env theorem" id="thm-uat" data-name="Universal approximation theorem">
+          <p>Let $\sigma : \R \to \R$ be continuous and not a polynomial, and let $K \subset \R^p$ be closed and bounded.
+            For every continuous $f : K \to \R$ and every $\varepsilon > 0$ there exist $m$ and parameters
+            $\bw_j \in \R^p$, $b_j, v_j, c \in \R$ such that
+            $$\sup_{\bx \in K}\,\Big|f(\bx) - c - \sum_{j=1}^m v_j\,\sigma\big(\bw_j\T\bx + b_j\big)\Big| < \varepsilon .$$</p>
+        </div>
+        <p>The theorem covers sigmoid, tanh, ReLU and leaky ReLU. The condition "not a polynomial" cannot be dropped.</p>
+
+        <div class="env proposition" id="prop-poly-fails">
+          <p>If $\sigma$ is a polynomial of degree $d$, every one-hidden-layer network $f_\theta$ on $[0, 1]$ is a polynomial
+            of degree at most $d$, and there is $\varepsilon > 0$ such that no such network approximates $x^{d+1}$ within
+            $\varepsilon$, however many hidden units it has.</p>
+        </div>
+        <details class="proof" data-for="prop-poly-fails">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: each unit is a polynomial.</strong> If $\sigma(z) = \sum_{k=0}^d \beta_k z^k$, then
+              $\sigma(wx + b) = \sum_{k=0}^d \beta_k (wx + b)^k$ is a polynomial in $x$ of degree at most $d$.</p>
+            <p><strong>Step 2: so is the network.</strong> A linear combination of such units plus a constant stays in the
+              space $\mathcal P_d$ of polynomials of degree at most $d$, whatever $m$ is.</p>
+            <p><strong>Step 3: $x^{d+1}$ is at positive distance from $\mathcal P_d$.</strong> $\mathcal P_d$ is a
+              finite-dimensional subspace of the continuous functions on $[0, 1]$ with the norm
+              $\norm{u}_\infty = \sup_x|u(x)|$. Finite-dimensional subspaces are closed (a standard fact of analysis), and
+              $x^{d+1} \notin \mathcal P_d$. So
+              $$\varepsilon = \inf_{q \in \mathcal P_d}\ \sup_{x \in [0, 1]}\big|x^{d+1} - q(x)\big| > 0 ,$$
+              and no network is closer than $\varepsilon$ to $x^{d+1}$.</p>
+          </div>
+        </details>
+
+        <figure class="viz viz--wide" data-viz="nn-universal" id="fig-universal">
+          <div class="viz__stage"></div>
+          <figcaption>Universal approximation by hand: a one-hidden-layer network built from $m$ pieces, with no training.
+            The right panel shows the largest error on $[0, 1]$ as $m$ grows (log scale).
+            <strong>Try:</strong> (1) with ReLU hinges, increase $m$: the network is the broken line through $m + 1$ points of
+            the target, as in the proof of <a class="ref" href="#thm-uat-relu"></a>, and the error falls quickly; (2) tick
+            <em>Show the pieces</em>: each thin line is one hinge $v_j\operatorname{ReLU}(x - t_j)$; (3) switch to rectangles:
+            the staircase also converges, but much more slowly, and each rectangle costs 4 ReLU or 2 sigmoid units;
+            (4) make the edge width $\delta$ tiny: the steep sigmoids become exact steps; (5) the narrow bump and the wiggly
+            function need more pieces before the error drops.</figcaption>
+        </figure>
+
+        <h3 id="uat-limits">What the theorem does not say</h3>
+        <ul>
+          <li><strong>It is an existence result.</strong> It says suitable parameters exist, not how to find them. Finding
+            them from data is the job of gradient descent and backpropagation (next chapter), which may stop at a worse local
+            solution.</li>
+          <li><strong>It says nothing about generalisation.</strong> A network that can approximate anything can also fit
+            the noise in the training data. Controlling this (regularisation, early stopping, validation) is as important as
+            for any flexible model.</li>
+          <li><strong>The number of units may be huge.</strong> In the proof, the grid spacing must be small enough for the
+            function to vary by less than $\varepsilon/2$. With $p$ inputs a grid with spacing $\delta$ has about
+            $(1/\delta)^p$ cells: the curse of dimensionality of <a href="07-knn.html">Chapter 7</a> again. The theorem does
+            not say that <em>one</em> wide layer is a good architecture.</li>
+        </ul>
+
+        <h3 id="depth">Why depth?</h3>
+        <p>Deep networks are used in practice because composing layers can be far more economical than widening one layer.
+          The following example makes this precise in one dimension.</p>
+
+        <div class="env proposition" id="prop-pieces">
+          <p>A one-hidden-layer ReLU network with one input and $m$ hidden units is continuous and piecewise linear with
+            at most $m + 1$ linear pieces.</p>
+        </div>
+        <details class="proof" data-for="prop-pieces">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: each unit has at most one kink.</strong> If $w_j \neq 0$, the unit
+              $v_j\operatorname{ReLU}(w_j x + b_j)$ is affine on each side of $x = -b_j/w_j$. If $w_j = 0$ it is constant.</p>
+            <p><strong>Step 2: count.</strong> The at most $m$ kink points cut $\R$ into at most $m + 1$ intervals. On each
+              interval every unit is affine, hence so is their sum $f_\theta$. A sum of continuous functions is
+              continuous.</p>
+          </div>
+        </details>
+
+        <div class="env example" id="ex-sawtooth">
+          <p>Let $T(x) = 2\operatorname{ReLU}(x) - 4\operatorname{ReLU}\big(x - \tfrac12\big)$. On $[0, 1]$ this is the tent
+            map: $T(x) = 2x$ on $[0, \frac12]$ and $T(x) = 2 - 2x$ on $[\frac12, 1]$, and $T$ maps $[0, 1]$ onto $[0, 1]$.
+            The composition $T^{\circ L} = T \circ \dots \circ T$ ($L$ times) is a network with $L$ hidden layers of two
+            ReLU units each: $2L$ hidden units.</p>
+          <p><strong>Step 1: the claim.</strong> On $[0, 1]$, $T^{\circ L}$ has $2^L$ linear pieces, with slopes alternating
+            $+2^L, -2^L, +2^L, \dots, -2^L$ from left to right.</p>
+          <p><strong>Step 2: $L = 1$.</strong> $T$ has two pieces with slopes $+2, -2$.</p>
+          <p><strong>Step 3: left half.</strong> Assume the claim for $g = T^{\circ(L-1)}$. On $[0, \frac12]$,
+            $T^{\circ L}(x) = g(2x)$: the graph of $g$ squeezed into $[0, \frac12]$. It has the $2^{L-1}$ pieces of $g$,
+            with slopes multiplied by $2$: alternating $+2^L, \dots, -2^L$.</p>
+          <p><strong>Step 4: right half.</strong> On $[\frac12, 1]$, $T^{\circ L}(x) = g(2 - 2x)$: the graph of $g$ squeezed
+            and mirrored. It has $2^{L-1}$ pieces with slopes multiplied by $-2$, met in reverse order, so they alternate
+            again, starting with $(-2)(-2^{L-1}) = +2^L$.</p>
+          <p><strong>Step 5: count.</strong> At $x = \frac12$ the slope changes from $-2^L$ to $+2^L$, so no pieces merge:
+            $2^{L-1} + 2^{L-1} = 2^L$ pieces, alternating.</p>
+          <p><strong>Step 6: compare.</strong> By <a class="ref" href="#prop-pieces"></a>, a one-hidden-layer network needs
+            at least $2^L - 1$ hidden units to represent $T^{\circ L}$ exactly. The deep network uses $2L$. For $L = 20$:
+            $40$ units against more than a million.</p>
+        </div>
+        <p>Each layer folds the input space onto itself, and the next layer acts on all folds at once. Results of this kind
+          explain why depth helps; how to train deep networks well is the subject of the next chapter.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="in-practice">A first network on the two moons</h2>
+        <p>The figure below trains a one-hidden-layer network with $m$ hidden units and a sigmoid output on the two moons by
+          minimising the cross-entropy, as for logistic regression. With ReLU hidden units, each unit $j$ switches on across
+          the line $\bw_j\T\bx + b_j = 0$, so the output is piecewise linear and the decision boundary is a broken line whose
+          corners lie on these lines.</p>
+
+        <figure class="viz viz--wide" data-viz="nn-moons" id="fig-moons">
+          <div class="viz__stage"></div>
+          <figcaption>A one-hidden-layer network on the two moons (150 training points; the test error uses 400 new points),
+            trained by full-batch gradient descent with adaptive step sizes. How the gradients are computed is the subject of
+            the next chapter. <strong>Try:</strong> (1) press <em>Train</em> with ReLU and $m = 8$: the boundary bends around
+            the moons; (2) choose <em>Identity</em>: whatever $m$, the boundary stays a straight line, as
+            <a class="ref" href="#cor-linear-boundary"></a> predicts; (3) ReLU with $m = 1$ or $2$: too few units for the
+            shape; (4) tick the hidden-unit lines: the corners of the ReLU boundary sit on them; (5) press <em>New
+            initialisation</em> a few times: different starting points can end in different solutions, some of them
+            worse, because the loss is not convex.</figcaption>
+        </figure>
+
+        <p>In code, a network is a list of layers. In PyTorch, as in the labs:</p>
+        <div class="code" data-lang="python">
+<pre><code>import torch.nn as nn
+
+model = nn.Sequential(
+    nn.Linear(2, 16), nn.ReLU(),     # W(1): 16 × 2,  b(1): 16
+    nn.Linear(16, 16), nn.ReLU(),    # W(2): 16 × 16, b(2): 16
+    nn.Linear(16, 1),                # output logit; the sigmoid goes into the loss
+)
+sum(p.numel() for p in model.parameters())   # 48 + 272 + 17 = 337</code></pre>
+        </div>
+        <p>scikit-learn has a ready-made version for small problems:</p>
+        <div class="code" data-lang="python">
+<pre><code>from sklearn.datasets import make_moons
+from sklearn.neural_network import MLPClassifier
+
+X, y = make_moons(n_samples=300, noise=0.2, random_state=0)
+clf = MLPClassifier(hidden_layer_sizes=(16, 16), activation="relu",
+                    max_iter=2000, random_state=0).fit(X, y)</code></pre>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="practice">Strengths, limitations and connections</h2>
+        <ul>
+          <li><strong>Strengths.</strong> Fixed size and cost per prediction, whatever $N$; universal approximation; the
+            features are learned, which is decisive for raw inputs (images, sound, text); the same building blocks work for
+            regression and classification.</li>
+          <li><strong>Training is harder.</strong> The loss is not convex, results depend on the initialisation and on
+            optimisation settings, and gradients can vanish or units can die.</li>
+          <li><strong>Many parameters.</strong> Networks can overfit and need regularisation and validation; they usually
+            need more data than the methods of the previous chapters.</li>
+          <li><strong>Interpretability.</strong> Individual weights rarely have a meaning, unlike the coefficients of a
+            linear model or the splits of a single tree.</li>
+        </ul>
+        <p><strong>Connections.</strong> One neuron is linear or logistic regression. A one-hidden-layer network is a linear
+          model on learned features, where kernel methods use fixed ones. A ReLU network is piecewise linear, like a tree is
+          piecewise constant, but its pieces are not aligned with the axes. Next, we compute gradients with backpropagation
+          and train networks with many parameters.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-params">
+          <p>(a) Count the parameters of a network for $28 \times 28$ images with hidden layers of widths 256 and 128 and 10
+            outputs. (b) Kernel ridge regression on $N = 60\,000$ images needs the kernel matrix: how many entries? (c) Which
+            of the two counts grows if the training set doubles?</p>
+        </div>
+
+        <div class="env exercise" id="exo-forward">
+          <p>A network has two inputs, three ReLU hidden units and an identity output, with
+            $$\bW^{(1)} = \begin{pmatrix} 1 & 1 \\ 1 & -1 \\ -2 & 0 \end{pmatrix}, \quad
+            \bb^{(1)} = \begin{pmatrix} 0 \\ 0 \\ 1 \end{pmatrix}, \quad
+            \bW^{(2)} = \begin{pmatrix} 1 & -1 & 1 \end{pmatrix}, \quad b^{(2)} = 0 .$$
+            Compute the output at $\bx = (1, -1)$ and at $\bx = (2, 1)$. Which hidden units are active in each case?</p>
+        </div>
+
+        <div class="env exercise" id="exo-linear">
+          <p>(a) Using <a class="ref" href="#prop-collapse"></a>, write the two-layer linear network with
+            $\bW^{(1)} = \begin{pmatrix} 1 & 2 \end{pmatrix}$, $b^{(1)} = 1$, $\bW^{(2)} = \begin{pmatrix} 3 \\ -1 \end{pmatrix}$,
+            $\bb^{(2)} = \mathbf 0$ as a single affine map $\R^2 \to \R^2$. (b) Show that
+            $\operatorname{rank}\tilde\bW \leq \min_\ell n_\ell$. What does this mean for a linear network $\R^p \to \R^p$
+            whose middle layer has width $2$?</p>
+        </div>
+
+        <div class="env exercise" id="exo-tanh">
+          <p>Using $\tanh(z) = 2\sigma(2z) - 1$, show that every one-hidden-layer network with tanh units can be rewritten
+            exactly as a network with sigmoid units and the same number of hidden units. How must the weights, biases and the
+            output layer be changed?</p>
+        </div>
+
+        <div class="env exercise" id="exo-softmax">
+          <p>(a) Compute $\operatorname{softmax}(1, 2, 3)$. (b) Explain why computing $\operatorname{softmax}(1001, 1002, 1003)$
+            directly fails in floating-point arithmetic, and how <a class="ref" href="#prop-softmax"></a> fixes it. What is
+            the result? (c) What happens to $\operatorname{softmax}(t\mathbf z)$ as $t \to \infty$ and as $t \to 0$?</p>
+        </div>
+
+        <div class="env exercise" id="exo-relu-functions">
+          <p>Write each function exactly as a one-hidden-layer ReLU network (give $\bw_j, b_j, v_j, c$):
+            (a) $|x|$; (b) the hat function equal to $1 - |x|$ on $[-1, 1]$ and $0$ elsewhere;
+            (c) $\max(x_1, x_2)$ for $\bx \in \R^2$ (hint: $\max(x_1, x_2) = x_2 + \operatorname{ReLU}(x_1 - x_2)$, and
+            $x_2 = \operatorname{ReLU}(x_2) - \operatorname{ReLU}(-x_2)$).</p>
+        </div>
+
+        <div class="env exercise" id="exo-uat-count">
+          <p>Take $f(x) = \sin x$ on $[0, 2\pi]$ and $\varepsilon = 0.01$. (a) Using $|\sin x - \sin x'| \leq |x - x'|$,
+            how many hidden units does the construction in the proof of <a class="ref" href="#thm-uat-relu"></a> use?
+            (b) For twice differentiable $f$, the broken-line interpolant with spacing $h$ satisfies
+            $|f - g| \leq \frac{h^2}{8}\max|f''|$. How many units suffice now? (c) Which construction does the left panel of
+            <a class="ref" href="#fig-universal"></a> use, and how does its error behave as $m$ doubles?</p>
+        </div>
+
+        <div class="env exercise" id="exo-symmetry">
+          <p>(a) Show that exchanging two hidden units of a one-hidden-layer network (their rows of $\bW^{(1)}$, entries of
+            $\bb^{(1)}$, and columns of $\bW^{(2)}$) does not change $f_\theta$. (b) Deduce that if the training loss has a
+            minimiser $\theta^\ast$ whose hidden units are not all identical, it has at least two distinct minimisers.
+            (c) For a convex loss, the midpoint of two minimisers is again a minimiser. Explain, with a two-unit example, why
+            the midpoint of $\theta^\ast$ and its permuted copy is usually <em>not</em> a minimiser, so the loss is not
+            convex.</p>
+        </div>
+
+        <div class="env exercise" id="exo-dying">
+          <p>A ReLU unit has weights $\bw_j$ and bias $b_j$ with $\bw_j\T\bx_i + b_j < 0$ for every training input. (a) What
+            does it output on the training set? (b) Show that small changes of $\bw_j$ and $b_j$ do not change the network's
+            output on the training set, so the gradient of the training loss with respect to $(\bw_j, b_j)$ is zero. (c) Why
+            does the leaky ReLU not have this problem?</p>
+        </div>
+
+        <div class="env exercise" id="exo-moons">
+          <p>In <a class="ref" href="#fig-moons"></a>: (a) with the identity activation, explain using
+            <a class="ref" href="#cor-linear-boundary"></a> why the test error does not improve with $m$; (b) with ReLU and
+            $m = 2$, how many straight segments can the decision boundary have at most? (c) Train with $m = 32$ and compare
+            training and test error. What would you do next to reduce overfitting?</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>A neural network stacks layers $\ba^{(\ell)} = \sigma^{(\ell)}(\bW^{(\ell)}\ba^{(\ell-1)} + \bb^{(\ell)})$. It
+              has a fixed number of parameters, $\sum_\ell n_\ell(n_{\ell-1} + 1)$, and learns its own features.</li>
+            <li>One neuron with a sigmoid is logistic regression; the output layer of any network is a linear or logistic
+              model on the last hidden layer.</li>
+            <li>Without non-linear activations every network is affine, and no affine classifier solves XOR.</li>
+            <li>Sigmoid and tanh saturate ($\sigma' \leq \frac14$), which makes gradients vanish through many layers. ReLU
+              does not saturate for $z > 0$ but units can die; leaky ReLU fixes that.</li>
+            <li>The output activation matches the task: identity, sigmoid or softmax. Softmax is shift invariant and reduces
+              to the sigmoid for two classes.</li>
+            <li>One hidden layer can approximate any continuous function on a bounded set (for any continuous non-polynomial
+              activation). The theorem is existential, says nothing about training or generalisation, and may need very many
+              units; depth can be exponentially more economical.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-prob">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-prob">Probabilistic view: output layers and likelihoods</h2>
+          <p class="extra__intro">Each pairing of output activation and loss in <a class="ref" href="#output"></a> is
+            maximum likelihood for a probability model whose parameters are produced by the network.</p>
+
+          <div class="env proposition" id="prop-nn-likelihood">
+            <p>Let the training pairs be independent given the inputs. Then minimising the loss on the left is equivalent to
+              maximising the likelihood of the model on the right:</p>
+            <ul>
+              <li>squared error $\sum_i (y_i - f_\theta(\bx_i))^2$ $\iff$ $y \mid \bx \sim \mathcal N\big(f_\theta(\bx), s^2\big)$
+                with $s^2$ fixed;</li>
+              <li>binary cross-entropy $\iff$ $y \mid \bx \sim \operatorname{Bernoulli}\big(\sigma(z_\theta(\bx))\big)$;</li>
+              <li>cross-entropy $-\sum_i \log\operatorname{softmax}(\mathbf z_\theta(\bx_i))_{y_i}$ $\iff$
+                $y \mid \bx \sim \operatorname{Categorical}\big(\operatorname{softmax}(\mathbf z_\theta(\bx))\big)$.</li>
+            </ul>
+          </div>
+          <details class="proof" data-for="prop-nn-likelihood">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: the log-likelihood is a sum.</strong> By independence,
+                $$\log \prod_{i=1}^N p_\theta(y_i \mid \bx_i) = \sum_{i=1}^N \log p_\theta(y_i \mid \bx_i),$$
+                and maximising it is minimising $-\sum_i \log p_\theta(y_i \mid \bx_i)$.</p>
+              <p><strong>Step 2: Gaussian.</strong>
+                $$-\log p_\theta(y \mid \bx) = \frac{\big(y - f_\theta(\bx)\big)^2}{2s^2} + \underbrace{\tfrac12\log(2\pi s^2)}_{\text{does not depend on } \theta},$$
+                so the negative log-likelihood is the squared error up to a positive factor and a constant.</p>
+              <p><strong>Step 3: Bernoulli.</strong> With $p = \sigma(z_\theta(\bx))$,
+                $-\log p_\theta(y \mid \bx) = -y\log p - (1 - y)\log(1 - p)$, the binary cross-entropy.</p>
+              <p><strong>Step 4: categorical.</strong> $-\log p_\theta(y \mid \bx) = -\log\operatorname{softmax}(\mathbf z_\theta(\bx))_y$,
+                the cross-entropy.</p>
+            </div>
+          </details>
+          <p>So a network for classification is a model of $\P(y \mid \bx)$, exactly as logistic regression, with the linear
+            predictor replaced by a learned non-linear one. The Gaussian case also suggests extensions: a network can output
+            both a mean and a variance, and be trained by maximising the full Gaussian likelihood to predict its own
+            uncertainty.</p>
+
+          <div class="env exercise" id="exo-nn-hetero">
+            <p>A network outputs $\mu_\theta(\bx)$ and $s_\theta(\bx) > 0$, and $y \mid \bx \sim \mathcal N(\mu_\theta(\bx), s_\theta(\bx)^2)$.
+              Write the negative log-likelihood of the training set. What does the network gain by predicting a large
+              $s_\theta(\bx)$ where the data are noisy, and what stops it from making $s_\theta$ large everywhere?</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

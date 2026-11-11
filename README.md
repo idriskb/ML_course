@@ -32,9 +32,9 @@ by step, and watch the mathematics respond.
 | 7 | k-nearest neighbours | 14 | Distance-based prediction, model complexity, the curse of dimensionality |
 | 8 | Tree-based methods | 16–17 | Decision trees, splitting and pruning; bagging, random forests, gradient boosting |
 | 9 | Kernel methods | 19–20 | Feature maps, dual ridge regression, the kernel trick, kernel PCA |
-| | **Module 3 · Neural networks** *(coming soon)* | | |
-| 10 | Neural networks & backpropagation | 22 | Feedforward networks, activations, universal approximation, backpropagation |
-| 11 | Training neural networks | 23 | Optimisation and regularization for networks with many parameters |
+| | **Module 3 · Neural networks** | | |
+| 10 | Neural networks | 22 | Neurons and layers, activation functions, output layers and softmax, universal approximation, depth |
+| 11 | Backpropagation & training neural networks | 23 | Backpropagation; optimisation and regularization for networks with many parameters |
 | 12 | Autoencoders | 24 | Learning compressed representations without labels; the link with PCA |
 
 Module 1 builds the core ideas on linear models: a fixed set of parameters fitted by minimising a loss.

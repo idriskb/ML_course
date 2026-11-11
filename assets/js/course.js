@@ -53,12 +53,12 @@ window.COURSE = {
     { num: "9", slug: "09-kernels", part: "Module 2 · Nonlinear & non-parametric methods", status: "ready", sessions: "19–20",
       title: "Kernel methods",
       summary: "Feature maps, the dual of ridge regression, the kernel trick, kernel PCA." },
-    { num: "10", slug: "10-neural-networks", part: "Module 3 · Neural networks", status: "planned", sessions: "22",
-      title: "Neural networks & backpropagation",
-      summary: "Feedforward networks, activations and universal approximation; computing gradients by backpropagation." },
+    { num: "10", slug: "10-neural-networks", part: "Module 3 · Neural networks", status: "ready", sessions: "22",
+      title: "Neural networks",
+      summary: "Why networks after linear models, k-NN, trees and kernels; neurons, layers and activations; output layers and softmax; universal approximation and depth." },
     { num: "11", slug: "11-training-networks", part: "Module 3 · Neural networks", status: "planned", sessions: "23",
-      title: "Training neural networks",
-      summary: "Optimisation and regularization for networks with many parameters." },
+      title: "Backpropagation & training neural networks",
+      summary: "Computing gradients by backpropagation; optimisation and regularization for networks with many parameters." },
     { num: "12", slug: "12-autoencoders", part: "Module 3 · Neural networks", status: "planned", sessions: "24",
       title: "Autoencoders",
       summary: "Learning compressed representations without labels; the link with PCA." }
@@ -85,6 +85,10 @@ window.COURSE = {
     "\\bu": "\\mathbf{u}",
     "\\bz": "\\mathbf{z}",
     "\\tr": "\\operatorname{tr}",
-    "\\hatw": "\\hat{\\mathbf{w}}"
+    "\\hatw": "\\hat{\\mathbf{w}}",
+    "\\bW": "\\mathbf{W}",
+    "\\ba": "\\mathbf{a}",
+    "\\bb": "\\mathbf{b}",
+    "\\bh": "\\mathbf{h}"
   }
 };

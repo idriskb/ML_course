@@ -47,17 +47,28 @@ assets/js/viz/common.js    window.VIZ helpers for interactive figures
 assets/js/viz/<name>.js    one interactive figure per file
 assets/css/tokens.css, main.css   theme (do not hard-code colours anywhere)
 README.md                  course contents table: keep it in sync with course.js
+sitemap.xml                for Google; regenerate with `python3 tools/sitemap.py` (lists home + "ready" chapters)
 ```
 
 ## 4. Adding a chapter: checklist
 
 1. Copy `chapters/_template.html` to `chapters/NN-slug.html`; set `<title>Name — Machine Learning</title>`, a
-   `<meta name="description">`, and `data-chapter="NN-slug"` on `<body>`.
+   `<meta name="description">`, and `data-chapter="NN-slug"` on `<body>`. Fill in the SEO block in the head: replace `SLUG` in the
+   canonical and `og:url` links, and copy the title/description into `og:title`/`og:description` (unique per page:
+   the description is what Google shows in results).
 2. Add one `<script defer src="../assets/js/viz/X.js">` per figure, **after** `common.js`.
 3. In `course.js` set the chapter's `status: "ready"` and update `title`/`summary`. Update `README.md` (and the module
    heading if it says "coming soon").
 4. Need a new macro? Add it to `macros` in `course.js`.
 5. Verify (§9). Do not commit unless asked.
+
+**Drafting without publishing** (e.g. "make the content but don't publish yet"): write the page and figures but leave
+`status: "planned"` in `course.js` (the sidebar then shows "Coming soon" and does not link to the page; locally it still opens
+by URL), and do not commit or push. To publish: set `status: "ready"`, run `python3 tools/sitemap.py`, then commit and push to `main` (pushing to `main`
+publishes the site).
+
+**Status (2026-11-11):** chapters 0–10 are published. Chapters 11 (backprop and training) and 12 (autoencoders) are drafted
+but unpublished. No slide decks existed for sessions 23–24, so they were written from the plan in `course.js`.
 
 Analytics, the sidebar, TOC, pager and the "Chapter N · Module" eyebrow are all automatic. Leave `<p class="eyebrow"></p>` empty.
 
@@ -193,6 +204,19 @@ Module skeleton (copy this; see `kernel-ridge.js`, `nn-universal.js` and `nn-moo
   `T.path` or `T.curve`. Mark the boundary with 3px `T.text` dots wherever the sign changes. Copy from `nn-moons.js`.
 - **Animation**: `requestAnimationFrame` loop, N steps per frame, with Train/Pause and Reset buttons.
 - **Disabled inputs**: when a control doesn't apply, set `input.disabled = true` and show "—" in its `<output>`.
+- **Taller canvas**: add `style="height: 420px"` on the `<canvas>` (the default is 340px, or 300px inside `viz__grid2`).
+- **Neural networks in the browser: `nn-lib.js` (`VIZ.NN`)**. Load it after `common.js`. Gradients are checked against
+  finite differences (agreement to about 1e-8).
+  `NN.create(sizes, acts, seed)` (acts per layer: `relu|tanh|sigmoid|id`, variance-preserving init);
+  `NN.predict(net, x)`; `NN.forward(net, x, 0).as[l]` (activations of layer l, e.g. the code layer);
+  `NN.step(net, X, Y, opt)` = one full-batch Adam step, returns the loss, with
+  `opt = { loss: "bce"|"mse", lr, wd, drop, rng }` (`bce` = one output logit with labels `[0|1]`; `mse` = mean over points
+  of the squared Euclidean error); `NN.loss(net, X, Y, kind)`.
+  For training figures, copy the Train/Pause/Continue/"New initialisation" pattern from `nn-regularise.js` or `ae-digits.js`.
+  Keep per-frame work to a few million multiply-adds.
+- **Existing figure modules** (reuse rather than rewrite): ch 10 `nn-activations`, `nn-universal`, `nn-moons`;
+  ch 11 `nn-backprop` (step-by-step stepper), `nn-optimizers` (GD/momentum/Adam on a valley), `nn-regularise`;
+  ch 12 `ae-curve`, `ae-digits` (uses `digits-data.js`: 150 digits 0/3/4, `VIZ_DIGITS`).
 
 Prefer 2–3 figures per chapter: one for intuition about the core object, one showing the main theorem, one applying the
 method to a lab-style dataset (usually two moons). Check the numerics in Python before writing the caption's claims.
@@ -211,3 +235,13 @@ Screenshots: headless Chrome **ignores scroll and hash**. To screenshot one figu
 (`article.chapter>*:not(#id){display:none}`, hide header/sidebar/toc, `.layout{display:block}`, `main.content{width:900px}`),
 then `--screenshot=<scratch>/x.png --window-size=1000,900 "…/_preview.html?t=fig-x"`. **Delete the preview file afterwards**
 and `pkill -f "http.server 8765"`.
+
+- Preview helpers: the injected script can also click buttons after load (`?t=fig-x&a=next&n=6` clicks `[data-act=next]`
+  6 times). Use this to screenshot a stepper mid-way.
+- **Chrome caches JS between runs.** After editing a viz, screenshot with a fresh `--user-data-dir` (or delete the old one),
+  or you will see the old version.
+- `requestAnimationFrame` barely advances in headless mode, so animated training can't be checked by screenshot. To check
+  numerical claims, write a temporary `chapters/_test.html` that loads `common.js`/`nn-lib.js`, runs the loops synchronously
+  and writes the results into a `<pre>`; read them with `--dump-dom`; then delete it. Or reproduce the numbers in NumPy
+  (`pip3 install --target <scratch>/pylib numpy`).
+- Caption claims ("validation loss rises", "error falls below PCA") must have been checked numerically first.

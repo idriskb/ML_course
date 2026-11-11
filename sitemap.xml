@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://idriskb.github.io/ML_course/</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://idriskb.github.io/ML_course/chapters/00-style-guide.html</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://idriskb.github.io/ML_course/chapters/01-learning-problem.html</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://idriskb.github.io/ML_course/chapters/02-linear-regression.html</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://idriskb.github.io/ML_course/chapters/03-regularization.html</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://idriskb.github.io/ML_course/chapters/04-logistic-regression.html</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://idriskb.github.io/ML_course/chapters/05-pca.html</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://idriskb.github.io/ML_course/chapters/06-kmeans.html</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://idriskb.github.io/ML_course/chapters/07-knn.html</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://idriskb.github.io/ML_course/chapters/08-trees.html</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://idriskb.github.io/ML_course/chapters/09-kernels.html</loc><lastmod>2026-11-05</lastmod></url>
+  <url><loc>https://idriskb.github.io/ML_course/chapters/10-neural-networks.html</loc><lastmod>2026-11-11</lastmod></url>
+</urlset>

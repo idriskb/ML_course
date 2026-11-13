@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backpropagation & training neural networks — Machine Learning</title>
+  <meta name="description" content="Training neural networks: the backpropagation equations and their cost, vanishing and exploding gradients, initialisation, mini-batch SGD with momentum and Adam, and regularisation by weight decay, early stopping and dropout.">
+  <link rel="canonical" href="https://idriskb.github.io/ML_course/chapters/11-training-networks.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Machine Learning · Course notes">
+  <meta property="og:title" content="Backpropagation &amp; training neural networks — Machine Learning">
+  <meta property="og:description" content="Training neural networks: the backpropagation equations and their cost, vanishing and exploding gradients, initialisation, mini-batch SGD with momentum and Adam, and regularisation by weight decay, early stopping and dropout.">
+  <meta property="og:url" content="https://idriskb.github.io/ML_course/chapters/11-training-networks.html">
+  <meta name="twitter:card" content="summary">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/nn-lib.js"></script>
+  <script defer src="../assets/js/viz/nn-backprop.js"></script>
+  <script defer src="../assets/js/viz/nn-optimizers.js"></script>
+  <script defer src="../assets/js/viz/nn-regularise.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="11-training-networks">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Backpropagation &amp; training neural networks</h1>
+          <p class="lede">A network is trained like every model in this course: choose a loss and move the parameters
+            against its gradient. What is new is the scale. A network has thousands to billions of parameters arranged in
+            layers, and its loss is not convex. This chapter derives backpropagation, which computes all the partial
+            derivatives in about the cost of two forward passes, and then the practical tools that make training work:
+            careful initialisation, momentum and Adam, and regularisation by weight decay, early stopping and dropout.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>Derive the backpropagation equations from the chain rule and run them by hand on a small network.</li>
+            <li>Explain why backpropagation costs about as much as a forward pass, while finite differences cost one forward
+              pass per parameter.</li>
+            <li>Bound how gradients shrink or grow through layers, and choose an initialisation that breaks symmetry and
+              keeps activations at a stable scale.</li>
+            <li>State and interpret the updates of mini-batch SGD, momentum and Adam.</li>
+            <li>Regularise a network with weight decay, early stopping and dropout, and relate them to ridge regression.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="objective">The training problem</h2>
+        <p>We use the notation of <a href="10-neural-networks.html">Chapter 10</a>: layers $\ell = 1, \dots, L$ of widths
+          $n_\ell$, pre-activations $\mathbf z^{(\ell)} = \bW^{(\ell)}\ba^{(\ell-1)} + \bb^{(\ell)}$, activations
+          $\ba^{(\ell)} = \sigma^{(\ell)}(\mathbf z^{(\ell)})$, input $\ba^{(0)} = \bx$ and output $\ba^{(L)} = f_\theta(\bx)$.
+          For one training pair $(\bx_i, y_i)$, write $\mathcal L_i(\theta) = \mathcal L\big(f_\theta(\bx_i), y_i\big)$ for
+          its loss (squared error or cross-entropy). Training minimises the average loss
+          $$J(\theta) = \frac1N\sum_{i=1}^N \mathcal L_i(\theta)$$
+          by (stochastic) gradient descent, exactly as in <a href="02-linear-regression.html">Chapter 2</a>:
+          $$\theta \leftarrow \theta - \eta\,\nabla J(\theta), \qquad \nabla J(\theta) = \frac1N\sum_{i=1}^N \nabla\mathcal L_i(\theta) .$$
+          Two things differ from linear models. $J$ is not convex, so gradient descent finds a local solution that depends
+          on where it starts. And $\nabla\mathcal L_i$ is a vector with one entry per weight and bias of the network,
+          which we need an efficient way to compute.</p>
+
+        <p>A direct approach approximates each partial derivative by a <strong>finite difference</strong>,
+          $$\frac{\partial\mathcal L_i}{\partial\theta_k} \approx \frac{\mathcal L_i(\theta + \varepsilon\mathbf e_k) - \mathcal L_i(\theta - \varepsilon\mathbf e_k)}{2\varepsilon} .$$
+          This needs two forward passes <em>per parameter</em>. For a network with $10^5$ parameters, whose forward pass
+          costs about $10^5$ operations, one gradient would cost about $2 \times 10^{10}$ operations, and the result is
+          only approximate. Backpropagation computes the exact gradient for about three forward passes.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="backprop">Backpropagation</h2>
+        <p>Fix one training pair and drop the index $i$. The key quantity is the sensitivity of the loss to each
+          pre-activation.</p>
+
+        <div class="env definition" id="def-delta">
+          <p>The <strong>error signal</strong> of layer $\ell$ is the vector
+            $$\boldsymbol\delta^{(\ell)} = \frac{\partial\mathcal L}{\partial\mathbf z^{(\ell)}} \in \R^{n_\ell}, \qquad
+            \delta^{(\ell)}_j = \frac{\partial\mathcal L}{\partial z^{(\ell)}_j} .$$
+            It measures how much the loss would change if the pre-activation $z^{(\ell)}_j$ were nudged.</p>
+        </div>
+
+        <div class="env theorem" id="thm-backprop" data-name="Backpropagation">
+          <p>Let the output activation act entrywise. Writing $\odot$ for the entrywise product,</p>
+          <ul>
+            <li><strong>(BP1) output layer:</strong>
+              $\boldsymbol\delta^{(L)} = \sigma^{(L)\prime}\big(\mathbf z^{(L)}\big) \odot \dfrac{\partial\mathcal L}{\partial\ba^{(L)}}$;</li>
+            <li><strong>(BP2) backward recursion:</strong> for $\ell = L - 1, \dots, 1$,
+              $$\boldsymbol\delta^{(\ell)} = \sigma^{(\ell)\prime}\big(\mathbf z^{(\ell)}\big) \odot \Big(\bW^{(\ell+1)\top}\boldsymbol\delta^{(\ell+1)}\Big);$$</li>
+            <li><strong>(BP3) weights:</strong>
+              $\dfrac{\partial\mathcal L}{\partial W^{(\ell)}_{jk}} = \delta^{(\ell)}_j\,a^{(\ell-1)}_k$, that is,
+              $\dfrac{\partial\mathcal L}{\partial\bW^{(\ell)}} = \boldsymbol\delta^{(\ell)}\ba^{(\ell-1)\top}$;</li>
+            <li><strong>(BP4) biases:</strong> $\dfrac{\partial\mathcal L}{\partial\bb^{(\ell)}} = \boldsymbol\delta^{(\ell)}$.</li>
+          </ul>
+        </div>
+        <details class="proof" data-for="thm-backprop">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p>Everything follows from the chain rule, applied to how each variable influences the loss.</p>
+            <p><strong>Step 1: (BP1).</strong> The pre-activation $z^{(L)}_j$ affects $\mathcal L$ only through
+              $a^{(L)}_j = \sigma^{(L)}(z^{(L)}_j)$. Hence
+              $$\delta^{(L)}_j = \frac{\partial\mathcal L}{\partial a^{(L)}_j}\cdot\frac{\partial a^{(L)}_j}{\partial z^{(L)}_j}
+              = \frac{\partial\mathcal L}{\partial a^{(L)}_j}\,\sigma^{(L)\prime}\big(z^{(L)}_j\big) .$$</p>
+            <p><strong>Step 2: how $z^{(\ell)}_j$ reaches the loss.</strong> For $\ell < L$, $z^{(\ell)}_j$ affects
+              $\mathcal L$ only through $a^{(\ell)}_j$, and $a^{(\ell)}_j$ only through the next pre-activations
+              $$z^{(\ell+1)}_i = \sum_{k} W^{(\ell+1)}_{ik}\,a^{(\ell)}_k + b^{(\ell+1)}_i, \qquad
+              \frac{\partial z^{(\ell+1)}_i}{\partial a^{(\ell)}_j} = W^{(\ell+1)}_{ij}, \qquad i = 1, \dots, n_{\ell+1} .$$</p>
+            <p><strong>Step 3: (BP2).</strong> The multivariable chain rule sums over all these paths:
+              $$\delta^{(\ell)}_j = \sum_{i=1}^{n_{\ell+1}} \underbrace{\frac{\partial\mathcal L}{\partial z^{(\ell+1)}_i}}_{=\ \delta^{(\ell+1)}_i}
+              \cdot\underbrace{\frac{\partial z^{(\ell+1)}_i}{\partial a^{(\ell)}_j}}_{=\ W^{(\ell+1)}_{ij}}
+              \cdot\underbrace{\frac{\partial a^{(\ell)}_j}{\partial z^{(\ell)}_j}}_{=\ \sigma^{(\ell)\prime}(z^{(\ell)}_j)}
+              = \sigma^{(\ell)\prime}\big(z^{(\ell)}_j\big)\,\Big(\bW^{(\ell+1)\top}\boldsymbol\delta^{(\ell+1)}\Big)_j ,$$
+              since $\sum_i W^{(\ell+1)}_{ij}\delta^{(\ell+1)}_i$ is the $j$-th entry of $\bW^{(\ell+1)\top}\boldsymbol\delta^{(\ell+1)}$.</p>
+            <p><strong>Step 4: (BP3) and (BP4).</strong> The weight $W^{(\ell)}_{jk}$ and the bias $b^{(\ell)}_j$ affect
+              $\mathcal L$ only through $z^{(\ell)}_j = \sum_k W^{(\ell)}_{jk}a^{(\ell-1)}_k + b^{(\ell)}_j$, with
+              $$\frac{\partial z^{(\ell)}_j}{\partial W^{(\ell)}_{jk}} = a^{(\ell-1)}_k, \qquad \frac{\partial z^{(\ell)}_j}{\partial b^{(\ell)}_j} = 1 .$$
+              Multiply by $\delta^{(\ell)}_j = \partial\mathcal L/\partial z^{(\ell)}_j$.</p>
+          </div>
+        </details>
+
+        <p>The error signals flow <em>backwards</em>, from the output to the first layer, through the transposed weight
+          matrices: the same weights that carried activations forward carry sensitivities back. The output layer only
+          enters through $\boldsymbol\delta^{(L)}$, which is especially simple when the output activation and the loss are
+          matched as in Chapter 10.</p>
+
+        <div class="env proposition" id="prop-output-delta">
+          <p>(a) Identity output and $\mathcal L = \frac12\norm{\ba^{(L)} - \by}^2$: $\ \boldsymbol\delta^{(L)} = \ba^{(L)} - \by$.<br>
+            (b) Sigmoid output $p = \sigma(z^{(L)})$ and binary cross-entropy: $\ \delta^{(L)} = p - y$.<br>
+            (c) Softmax output $\mathbf p = \operatorname{softmax}(\mathbf z^{(L)})$ and cross-entropy
+            $\mathcal L = -\log p_y$: $\ \boldsymbol\delta^{(L)} = \mathbf p - \mathbf e_y$, where $\mathbf e_y$ is the
+            one-hot vector of the true class.</p>
+        </div>
+        <details class="proof" data-for="prop-output-delta">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: (a).</strong> $\partial\mathcal L/\partial\ba^{(L)} = \ba^{(L)} - \by$ and the identity has
+              derivative $1$; apply (BP1).</p>
+            <p><strong>Step 2: (b).</strong> With $\mathcal L = -y\log p - (1 - y)\log(1 - p)$ and $\sigma' = p(1 - p)$
+              (Chapter 10),
+              $$\delta^{(L)} = \Big(-\frac{y}{p} + \frac{1 - y}{1 - p}\Big)p(1 - p) = -y(1 - p) + (1 - y)p = p - y .$$</p>
+            <p><strong>Step 3: (c), write the loss in terms of $\mathbf z$.</strong> Softmax does not act entrywise, so we
+              differentiate directly:
+              $$\mathcal L = -\log\frac{e^{z_y}}{\sum_j e^{z_j}} = -z_y + \log\sum_{j=1}^K e^{z_j} .$$</p>
+            <p><strong>Step 4: differentiate.</strong>
+              $$\frac{\partial\mathcal L}{\partial z_k} = -\mathbf 1\{k = y\} + \frac{e^{z_k}}{\sum_j e^{z_j}} = p_k - (\mathbf e_y)_k .$$</p>
+          </div>
+        </details>
+        <p>In all three cases the output error signal is "prediction minus target", as for linear and logistic regression.
+          Mismatched pairs behave worse: with a sigmoid output and squared error, $\delta^{(L)} = (p - y)\,p(1 - p)$ is tiny
+          when the output saturates at the <em>wrong</em> value, so a confidently wrong network learns slowly
+          (<a class="ref" href="#exo-mismatch"></a>).</p>
+
+        <div class="env definition" id="def-bp-algorithm" data-name="Backpropagation algorithm, one example">
+          <ol>
+            <li><strong>Forward pass.</strong> For $\ell = 1, \dots, L$ compute and store $\mathbf z^{(\ell)}$ and $\ba^{(\ell)}$.</li>
+            <li><strong>Output error.</strong> Compute $\boldsymbol\delta^{(L)}$ (BP1, or <a class="ref" href="#prop-output-delta"></a>).</li>
+            <li><strong>Backward pass.</strong> For $\ell = L, \dots, 1$: record the gradients
+              $\boldsymbol\delta^{(\ell)}\ba^{(\ell-1)\top}$ and $\boldsymbol\delta^{(\ell)}$ (BP3, BP4); if $\ell > 1$,
+              compute $\boldsymbol\delta^{(\ell-1)}$ by (BP2).</li>
+          </ol>
+          <p>For a mini-batch, run this for each example and average the gradients.</p>
+        </div>
+
+        <div class="env example" id="ex-backprop">
+          <p>Take the network of the forward-pass example in Chapter 10: $\bW^{(1)} = \begin{pmatrix} 1 & -1 \\ 1 & 1 \end{pmatrix}$,
+            $\bb^{(1)} = (0, -1)$, ReLU hidden units, $\bW^{(2)} = (2, -1)$, $b^{(2)} = 0.5$, identity output, input
+            $\bx = (1, 2)$. Add the target $y = 1$ and the loss $\mathcal L = \frac12(\hat y - y)^2$. Compute the gradient
+            and take one step with $\eta = 0.1$.</p>
+          <p><strong>Step 1: forward pass (from Chapter 10).</strong>
+            $$\mathbf z^{(1)} = \begin{pmatrix} -1 \\ 2 \end{pmatrix}, \quad \ba^{(1)} = \begin{pmatrix} 0 \\ 2 \end{pmatrix}, \quad
+            \hat y = -1.5, \quad \mathcal L = \tfrac12(-2.5)^2 = 3.125 .$$</p>
+          <p><strong>Step 2: output error.</strong> By <a class="ref" href="#prop-output-delta"></a>(a),
+            $$\delta^{(2)} = \hat y - y = -2.5 .$$</p>
+          <p><strong>Step 3: hidden error (BP2).</strong> $\operatorname{ReLU}'(z) = \mathbf 1\{z > 0\}$ is $0$ for the first
+            unit and $1$ for the second:
+            $$\boldsymbol\delta^{(1)} = \begin{pmatrix} 0 \\ 1 \end{pmatrix} \odot \Big(\begin{pmatrix} 2 \\ -1 \end{pmatrix}(-2.5)\Big)
+            = \begin{pmatrix} 0 \\ 1 \end{pmatrix} \odot \begin{pmatrix} -5 \\ 2.5 \end{pmatrix} = \begin{pmatrix} 0 \\ 2.5 \end{pmatrix} .$$
+            The inactive unit receives no error signal.</p>
+          <p><strong>Step 4: gradients (BP3, BP4).</strong>
+            $$\frac{\partial\mathcal L}{\partial\bW^{(2)}} = \delta^{(2)}\ba^{(1)\top} = (0, -5), \qquad \frac{\partial\mathcal L}{\partial b^{(2)}} = -2.5,$$
+            $$\frac{\partial\mathcal L}{\partial\bW^{(1)}} = \boldsymbol\delta^{(1)}\bx\T = \begin{pmatrix} 0 & 0 \\ 2.5 & 5 \end{pmatrix}, \qquad
+            \frac{\partial\mathcal L}{\partial\bb^{(1)}} = \begin{pmatrix} 0 \\ 2.5 \end{pmatrix} .$$</p>
+          <p><strong>Step 5: one gradient step.</strong> With $\eta = 0.1$:
+            $\bW^{(2)} = (2, -0.5)$, $b^{(2)} = 0.75$, $\bW^{(1)} = \begin{pmatrix} 1 & -1 \\ 0.75 & 0.5 \end{pmatrix}$,
+            $\bb^{(1)} = (0, -1.25)$. A new forward pass gives $\mathbf z^{(1)} = (-1, 0.5)$, $\ba^{(1)} = (0, 0.5)$ and
+            $$\hat y = -0.5 \cdot 0.5 + 0.75 = 0.5, \qquad \mathcal L = \tfrac12(0.5 - 1)^2 = 0.125 .$$
+            One step reduced the loss from $3.125$ to $0.125$.</p>
+        </div>
+
+        <figure class="viz viz--wide" data-viz="nn-backprop" id="fig-backprop">
+          <div class="viz__stage"></div>
+          <figcaption>Backpropagation step by step on the network of <a class="ref" href="#ex-backprop"></a>. Each click
+            on <em>Next</em> performs one phase: forward through the hidden layer, the output, the loss, the output error
+            signal, the hidden error signals, the gradients, and the update.
+            <strong>Try:</strong> (1) step through once and compare every number with the example; (2) keep clicking: the
+            loss keeps decreasing; (3) set $x_1 = -2$: both hidden units become inactive, every hidden $\delta$ is $0$, and
+            only the output bias learns; (4) a large learning rate can overshoot and increase the loss.</figcaption>
+        </figure>
+
+        <h3 id="bp-cost">The cost of backpropagation</h3>
+        <div class="env proposition" id="prop-bp-cost">
+          <p>For one example, the forward pass of a network with widths $n_0, \dots, n_L$ uses about
+            $C = \sum_{\ell=1}^L n_\ell n_{\ell-1}$ multiplications, and the backward pass about $2C$. So the full gradient
+            costs about $3C$, of the order of the number of parameters, while finite differences cost about $2C$ per
+            parameter, of the order of $C^2$ in total.</p>
+        </div>
+        <details class="proof" data-for="prop-bp-cost">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: forward.</strong> $\bW^{(\ell)}\ba^{(\ell-1)}$ is an $n_\ell \times n_{\ell-1}$ matrix–vector
+              product: $n_\ell n_{\ell-1}$ multiplications. The activations add $O(n_\ell)$, which is smaller.</p>
+            <p><strong>Step 2: backward, error signals.</strong> (BP2) computes $\bW^{(\ell+1)\top}\boldsymbol\delta^{(\ell+1)}$,
+              again $n_{\ell+1}n_\ell$ multiplications, plus $O(n_\ell)$ for the entrywise product. Summing over layers gives
+              at most $C$.</p>
+            <p><strong>Step 3: backward, gradients.</strong> (BP3) forms the outer product
+              $\boldsymbol\delta^{(\ell)}\ba^{(\ell-1)\top}$: $n_\ell n_{\ell-1}$ multiplications, $C$ in total.</p>
+            <p><strong>Step 4: finite differences.</strong> There are about $C$ parameters (weights), and each needs two
+              forward passes of cost $C$.</p>
+          </div>
+        </details>
+        <p>This is why networks with millions of parameters can be trained at all. Backpropagation is a special case of
+          <strong>reverse-mode automatic differentiation</strong>: libraries such as PyTorch record the operations of the
+          forward pass and apply the chain rule backwards automatically (<code>loss.backward()</code>), for any architecture.
+          Finite differences remain useful for <em>checking</em> a hand-written gradient on a few coordinates.</p>
+
+        <div class="code" data-lang="python">
+<pre><code>import numpy as np
+
+def forward_backward(W1, b1, W2, b2, X, y):
+    """One hidden ReLU layer, sigmoid output, mean binary cross-entropy. X: N × p, y: N."""
+    Z1 = X @ W1.T + b1                  # N × m   pre-activations
+    A1 = np.maximum(Z1, 0)              # N × m   activations
+    p = 1 / (1 + np.exp(-(A1 @ W2 + b2)))   # N    output probabilities
+    N = len(y)
+    d2 = (p - y) / N                    # output error signal, averaged over the batch
+    gW2, gb2 = A1.T @ d2, d2.sum()      # BP3, BP4
+    D1 = np.outer(d2, W2) * (Z1 > 0)    # BP2:  N × m
+    gW1, gb1 = D1.T @ X, D1.sum(axis=0) # BP3, BP4
+    return gW1, gb1, gW2, gb2</code></pre>
+        </div>
+
+        <h3 id="vanishing-exploding">Vanishing and exploding gradients</h3>
+        <p>The recursion (BP2) multiplies the error signal by $\bW^{(\ell+1)\top}$ and by the derivatives $\sigma'$ at every
+          layer. Its size can therefore shrink or grow geometrically with depth. We write $\norm{\bW}$ for the operator norm,
+          the largest factor by which $\bW$ stretches a vector.</p>
+
+        <div class="env proposition" id="prop-delta-bound">
+          <p>If $|\sigma^{(k)\prime}| \leq s$ for all hidden layers, then for $\ell < L$
+            $$\norm{\boldsymbol\delta^{(\ell)}} \leq s^{L-\ell}\Big(\prod_{k=\ell+1}^{L}\norm{\bW^{(k)}}\Big)\norm{\boldsymbol\delta^{(L)}} .$$</p>
+        </div>
+        <details class="proof" data-for="prop-delta-bound">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: one layer.</strong> For vectors $\mathbf u, \mathbf v$,
+              $\norm{\mathbf u \odot \mathbf v} \leq \max_j|u_j|\,\norm{\mathbf v}$. Applied to (BP2), and using
+              $\norm{\bW\T} = \norm{\bW}$,
+              $$\norm{\boldsymbol\delta^{(\ell)}} \leq s\,\norm{\bW^{(\ell+1)\top}\boldsymbol\delta^{(\ell+1)}} \leq s\,\norm{\bW^{(\ell+1)}}\,\norm{\boldsymbol\delta^{(\ell+1)}} . \tag{1}$$</p>
+            <p><strong>Step 2: iterate.</strong> Apply (1) for $\ell, \ell + 1, \dots, L - 1$ and multiply the factors.</p>
+          </div>
+        </details>
+        <p>With sigmoid units $s = \frac14$, so unless the weights are large the early layers receive geometrically small
+          error signals: the <strong>vanishing gradient</strong> problem of Chapter 10, now for any width. Conversely, large
+          weights can make the error signals, and the updates, <strong>explode</strong>. Remedies: ReLU-type activations
+          ($s = 1$), an initialisation at the right scale (next section), and, against explosions, <strong>gradient
+          clipping</strong>, which rescales the gradient whenever its norm exceeds a threshold.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="initialisation">Initialisation</h2>
+        <p>Gradient descent needs a starting point $\theta^{(0)}$. For a convex loss any start works; for a network the
+          start matters, and two natural choices fail.</p>
+
+        <div class="env proposition" id="prop-symmetry">
+          <p>Suppose two hidden units $j$ and $j'$ of layer $\ell$ start with the same incoming weights and bias (rows $j$ and
+            $j'$ of $\bW^{(\ell)}$, entries of $\bb^{(\ell)}$) and the same outgoing weights (columns $j$ and $j'$ of
+            $\bW^{(\ell+1)}$). Then they remain identical after any number of gradient steps.</p>
+        </div>
+        <details class="proof" data-for="prop-symmetry">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: same forward values.</strong> Equal incoming weights and biases give
+              $z^{(\ell)}_j = z^{(\ell)}_{j'}$ and $a^{(\ell)}_j = a^{(\ell)}_{j'}$ for every input.</p>
+            <p><strong>Step 2: same error signals.</strong> By (BP2),
+              $\delta^{(\ell)}_j = \sigma'(z^{(\ell)}_j)\sum_i W^{(\ell+1)}_{ij}\delta^{(\ell+1)}_i$, and the same expression with
+              $j'$; the columns are equal and so are the $z$'s, hence $\delta^{(\ell)}_j = \delta^{(\ell)}_{j'}$.</p>
+            <p><strong>Step 3: same gradients.</strong> By (BP3), the gradients of the incoming weights are
+              $\delta^{(\ell)}_j\ba^{(\ell-1)\top}$ and $\delta^{(\ell)}_{j'}\ba^{(\ell-1)\top}$: equal. The gradients of the
+              outgoing weights $W^{(\ell+1)}_{ij}$ and $W^{(\ell+1)}_{ij'}$ are $\delta^{(\ell+1)}_i a^{(\ell)}_j$ and
+              $\delta^{(\ell+1)}_i a^{(\ell)}_{j'}$: equal. The bias gradients are equal too. Averaging over examples keeps
+              them equal.</p>
+            <p><strong>Step 4: induction.</strong> The update subtracts equal amounts from equal parameters, so the
+              hypothesis holds again after the step, and at every later step.</p>
+          </div>
+        </details>
+        <p>So initialising all weights to the same value (for instance zero) makes every hidden layer behave like a single
+          unit forever. Weights are therefore initialised <strong>at random</strong>, which breaks the symmetry. The second
+          question is the scale of the random weights.</p>
+
+        <div class="env proposition" id="prop-init-variance">
+          <p>Let $z = \sum_{k=1}^{n} w_k a_k$, where the weights $w_k$ are independent with mean $0$ and variance $v$, and are
+            independent of the inputs $a_k$, which all have the same second moment $\E[a_k^2]$. Then
+            $$\E[z] = 0, \qquad \Var(z) = n\,v\,\E[a_k^2] .$$
+            If moreover $a_k = \operatorname{ReLU}(u_k)$ for a pre-activation $u_k$ symmetric about $0$, then
+            $\E[a_k^2] = \frac12\Var(u_k)$ and $\Var(z) = \frac{n v}{2}\Var(u_k)$.</p>
+        </div>
+        <details class="proof" data-for="prop-init-variance">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: mean.</strong> By independence, $\E[w_ka_k] = \underbrace{\E[w_k]}_{=\ 0}\E[a_k] = 0$.</p>
+            <p><strong>Step 2: variance.</strong> Since $\E[z] = 0$,
+              $$\Var(z) = \E[z^2] = \sum_{k}\E[w_k^2]\,\E[a_k^2] + \sum_{k \neq k'}\underbrace{\E[w_k]\,\E[w_{k'}]}_{=\ 0}\,\E[a_ka_{k'}] = n\,v\,\E[a_k^2] .$$</p>
+            <p><strong>Step 3: ReLU.</strong> $\operatorname{ReLU}(u)^2 = u^2\,\mathbf 1\{u > 0\}$, and by symmetry the events
+              $u > 0$ and $u < 0$ contribute equally to $\E[u^2] = \Var(u)$, so $\E[\operatorname{ReLU}(u)^2] = \frac12\Var(u)$.</p>
+          </div>
+        </details>
+        <p>Through $L$ ReLU layers of width $n$ the variance of the pre-activations is multiplied by $(nv/2)^L$. It explodes
+          if $v > 2/n$ and vanishes if $v < 2/n$. The usual <strong>variance-preserving initialisations</strong> are therefore
+          $$\text{ReLU: } \Var(w) = \frac{2}{n_{\text{in}}}, \qquad \text{tanh: } \Var(w) = \frac{1}{n_{\text{in}}},$$
+          with $n_{\text{in}} = n_{\ell-1}$ the number of inputs of the unit (for tanh, $\tanh(u) \approx u$ near $0$, so
+          $\E[a^2] \approx \Var(u)$). Biases start at $0$. Deep learning libraries use such initialisations by default.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="optimisers">Optimisation algorithms</h2>
+        <p>Training uses the <strong>mini-batch SGD</strong> of <a href="02-linear-regression.html">Chapter 2</a>: at each
+          step, compute the gradient by backpropagation on a random mini-batch of $m$ examples (typically 32 to 256) and
+          update. One pass through the whole training set is an <strong>epoch</strong>. Two refinements are used almost
+          everywhere.</p>
+
+        <h3 id="momentum">Momentum</h3>
+        <div class="env definition" id="def-momentum">
+          <p><strong>Gradient descent with momentum</strong> keeps a velocity $\bv$ and updates, with
+            $\mathbf g_t$ the mini-batch gradient at $\theta_t$ and $0 \leq \beta < 1$,
+            $$\bv_{t+1} = \beta\,\bv_t + \mathbf g_t, \qquad \theta_{t+1} = \theta_t - \eta\,\bv_{t+1}, \qquad \bv_0 = \mathbf 0 .$$</p>
+        </div>
+        <div class="env proposition" id="prop-momentum">
+          <p>(a) $\bv_{t+1} = \sum_{k=0}^{t}\beta^{t-k}\mathbf g_k$: the velocity is an exponentially weighted sum of past
+            gradients.<br>
+            (b) If the gradient is constant, $\mathbf g_k = \mathbf g$, then $\bv_t \to \mathbf g/(1 - \beta)$: the effective
+            learning rate becomes $\eta/(1 - \beta)$, ten times larger for $\beta = 0.9$.<br>
+            (c) If it alternates, $\mathbf g_k = (-1)^k\mathbf g$, then $\norm{\bv_t} \leq \norm{\mathbf g}/(1 - \beta)$ but
+            $\bv_t$ alternates around $\pm\mathbf g/(1 + \beta)$: oscillating components are damped.</p>
+        </div>
+        <details class="proof" data-for="prop-momentum">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: unroll.</strong> By induction, $\bv_{t+1} = \beta\bv_t + \mathbf g_t = \beta(\beta\bv_{t-1} + \mathbf g_{t-1}) + \mathbf g_t = \dots = \sum_{k=0}^{t}\beta^{t-k}\mathbf g_k$.</p>
+            <p><strong>Step 2: constant gradient.</strong> A geometric sum:
+              $$\bv_{t+1} = \mathbf g\sum_{j=0}^{t}\beta^j = \mathbf g\,\frac{1 - \beta^{t+1}}{1 - \beta} \xrightarrow[t \to \infty]{} \frac{\mathbf g}{1 - \beta} .$$</p>
+            <p><strong>Step 3: alternating gradient.</strong> Now
+              $$\bv_{t+1} = \sum_{k=0}^{t}\beta^{t-k}(-1)^k\mathbf g = (-1)^t\,\mathbf g\sum_{j=0}^{t}(-\beta)^j = (-1)^t\,\mathbf g\,\frac{1 - (-\beta)^{t+1}}{1 + \beta},$$
+              which alternates in sign with size tending to $\norm{\mathbf g}/(1 + \beta)$.</p>
+          </div>
+        </details>
+        <p>In a long narrow valley the gradient points mostly across the valley and changes sign from step to step, with a
+          small consistent component along the valley floor. Momentum damps the first and accumulates the second, which is
+          exactly what plain gradient descent lacks.</p>
+
+        <h3 id="adam">Adam</h3>
+        <div class="env definition" id="def-adam" data-name="Adam">
+          <p>With $\beta_1 = 0.9$, $\beta_2 = 0.999$, $\varepsilon = 10^{-8}$ (defaults), $\mathbf m_0 = \mathbf s_0 = \mathbf 0$,
+            and all operations on vectors taken entrywise:
+            $$\mathbf m_t = \beta_1\mathbf m_{t-1} + (1 - \beta_1)\,\mathbf g_t, \qquad
+            \mathbf s_t = \beta_2\mathbf s_{t-1} + (1 - \beta_2)\,\mathbf g_t^2,$$
+            $$\hat{\mathbf m}_t = \frac{\mathbf m_t}{1 - \beta_1^t}, \qquad \hat{\mathbf s}_t = \frac{\mathbf s_t}{1 - \beta_2^t}, \qquad
+            \theta_t = \theta_{t-1} - \eta\,\frac{\hat{\mathbf m}_t}{\sqrt{\hat{\mathbf s}_t} + \varepsilon} .$$</p>
+        </div>
+        <p>$\mathbf m_t$ is a momentum (an average of gradients) and $\mathbf s_t$ an average of squared gradients. Each
+          parameter gets its own step size, $\eta$ divided by the typical size of its gradient.</p>
+
+        <div class="env proposition" id="prop-adam">
+          <p>(a) <em>Bias correction.</em> If $\mathbf g_k = \mathbf g$ for all $k$, then $\hat{\mathbf m}_t = \mathbf g$ and
+            $\hat{\mathbf s}_t = \mathbf g^2$ for every $t \geq 1$, and each coordinate moves by
+            $\eta\,|g_j|/(|g_j| + \varepsilon) \approx \eta$.<br>
+            (b) <em>Scale invariance.</em> Ignoring $\varepsilon$, multiplying the loss by a constant $c > 0$ does not change
+            the Adam iterates.</p>
+        </div>
+        <details class="proof" data-for="prop-adam">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: unroll $\mathbf m_t$.</strong> As for momentum,
+              $$\mathbf m_t = (1 - \beta_1)\sum_{k=1}^{t}\beta_1^{t-k}\mathbf g = (1 - \beta_1)\,\frac{1 - \beta_1^t}{1 - \beta_1}\,\mathbf g = (1 - \beta_1^t)\,\mathbf g,$$
+              so $\hat{\mathbf m}_t = \mathbf g$. The same computation with $\beta_2$ and $\mathbf g^2$ gives
+              $\hat{\mathbf s}_t = \mathbf g^2$, and $\sqrt{\hat{\mathbf s}_t} = |\mathbf g|$.</p>
+            <p><strong>Step 2: scale invariance.</strong> Replacing $J$ by $cJ$ replaces every $\mathbf g_k$ by $c\,\mathbf g_k$,
+              hence $\hat{\mathbf m}_t$ by $c\,\hat{\mathbf m}_t$ and $\sqrt{\hat{\mathbf s}_t}$ by $c\sqrt{\hat{\mathbf s}_t}$;
+              with $\varepsilon = 0$ the $c$ cancels in the update.</p>
+          </div>
+        </details>
+        <p>Without the correction, $\mathbf m_1 = 0.1\,\mathbf g_1$ would make the first steps ten times too small. Part (b)
+          explains why Adam needs less tuning than SGD: its step is about $\eta$ per coordinate whatever the scale of the
+          gradients. A learning rate of $10^{-3}$ is the usual starting point.</p>
+
+        <p><strong>Learning rate.</strong> As in Chapter 2, too large a learning rate makes the iterates diverge and too
+          small a rate makes progress slow. It is common to decrease it during training (a <strong>schedule</strong>: divide
+          by 10 at fixed epochs, or decay it smoothly), and sometimes to increase it gradually over the first steps
+          (<em>warm-up</em>).</p>
+
+        <figure class="viz viz--wide" data-viz="nn-optimizers" id="fig-optimizers">
+          <div class="viz__stage"></div>
+          <figcaption>Gradient descent, momentum and Adam on the curved valley $f(x, y) = (1 - x)^2 + 5(y - x^2)^2$, minimum
+            at $(1, 1)$ (ring). Full gradients, so the differences come from the update rules only.
+            <strong>Try:</strong> (1) press <em>Run</em>: gradient descent zig-zags across the valley and crawls along it;
+            momentum overshoots but reaches the minimum far sooner; (2) set $\beta = 0$: momentum becomes gradient descent;
+            (3) increase $\eta$ beyond about $0.04$: gradient descent diverges, as for a quadratic whose curvature exceeds
+            $2/\eta$; (4) click elsewhere to change the start; (5) Adam moves each coordinate by about $\eta$ per step,
+            whatever the size of the gradient.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="regularisation">Regularisation</h2>
+        <p>A network with many more parameters than training points can fit the training set perfectly, noise included.
+          As in <a href="03-regularization.html">Chapter 3</a> we monitor a <strong>validation set</strong> and use
+          regularisation to control the effective complexity.</p>
+
+        <h3 id="weight-decay">Weight decay</h3>
+        <div class="env definition" id="def-weight-decay">
+          <p><strong>Weight decay</strong> adds an L2 penalty on the weights (not the biases):
+            $$J_\lambda(\theta) = J(\theta) + \frac\lambda2\sum_{\ell=1}^L \norm{\bW^{(\ell)}}_F^2,
+            \qquad \norm{\bW}_F^2 = \sum_{j,k}W_{jk}^2 .$$</p>
+        </div>
+        <div class="env proposition" id="prop-weight-decay">
+          <p>A gradient step on $J_\lambda$ is a shrinkage followed by a gradient step on $J$:
+            $$\bW^{(\ell)} \leftarrow (1 - \eta\lambda)\,\bW^{(\ell)} - \eta\,\frac{\partial J}{\partial\bW^{(\ell)}} .$$</p>
+        </div>
+        <details class="proof" data-for="prop-weight-decay">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: gradient of the penalty.</strong> $\partial\big(\frac\lambda2 W_{jk}^2\big)/\partial W_{jk} = \lambda W_{jk}$,
+              so $\partial J_\lambda/\partial\bW^{(\ell)} = \partial J/\partial\bW^{(\ell)} + \lambda\bW^{(\ell)}$.</p>
+            <p><strong>Step 2: substitute.</strong>
+              $$\bW^{(\ell)} - \eta\Big(\frac{\partial J}{\partial\bW^{(\ell)}} + \lambda\bW^{(\ell)}\Big) = (1 - \eta\lambda)\bW^{(\ell)} - \eta\frac{\partial J}{\partial\bW^{(\ell)}} .$$</p>
+          </div>
+        </details>
+        <p>This is ridge regression's penalty applied to every layer: small weights give smoother functions (a ReLU network
+          with small weights has small slopes). $\lambda$ is chosen on the validation set. In PyTorch it is the
+          <code>weight_decay</code> argument of the optimiser.</p>
+
+        <h3 id="early-stopping">Early stopping</h3>
+        <div class="env definition" id="def-early-stopping">
+          <p><strong>Early stopping</strong>: evaluate the validation loss regularly during training (e.g. every epoch), keep a
+            copy of the parameters with the lowest validation loss so far, and stop when it has not improved for a fixed
+            number of evaluations (the <em>patience</em>). Return the saved parameters.</p>
+        </div>
+        <p>Training starts from small random weights, a simple function, and gradually fits more detail, first the main
+          trends and later the noise. Stopping early therefore limits complexity, much like a penalty. For least squares this
+          can be made exact.</p>
+
+        <div class="env proposition" id="prop-early-ridge">
+          <p>Let $\bX\T\bX = Q\operatorname{diag}(s_1, \dots, s_p)Q\T$ with $s_j > 0$, let $\hat\theta$ be the least-squares
+            solution, and run gradient descent on $\frac12\norm{\bX\theta - \by}^2$ from $\theta_0 = \mathbf 0$ with
+            $0 < \eta < 1/s_{\max}$. In the coordinates $\tilde\theta = Q\T\theta$,
+            $$\text{gradient descent after } t \text{ steps: } \tilde\theta_{t,j} = \big(1 - (1 - \eta s_j)^t\big)\,\tilde{\hat\theta}_j,
+            \qquad \text{ridge: } \tilde\theta_{\lambda,j} = \frac{s_j}{s_j + \lambda}\,\tilde{\hat\theta}_j .$$
+            Both keep the directions with large $s_j$ and shrink those with small $s_j$; for $\eta s_j \ll 1$ both factors are
+            about $t\eta s_j$ and $s_j/\lambda$, so $t$ steps act like $\lambda \approx 1/(\eta t)$.</p>
+        </div>
+        <details class="proof" data-for="prop-early-ridge">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: the error recursion.</strong> The gradient is $\bX\T(\bX\theta - \by)$ and
+              $\bX\T\by = \bX\T\bX\hat\theta$ (normal equations), so
+              $$\theta_{t+1} - \hat\theta = \theta_t - \hat\theta - \eta\bX\T\bX(\theta_t - \hat\theta) = (I - \eta\bX\T\bX)(\theta_t - \hat\theta) .$$</p>
+            <p><strong>Step 2: unroll from $\theta_0 = \mathbf 0$.</strong>
+              $$\theta_t = \hat\theta + (I - \eta\bX\T\bX)^t(\mathbf 0 - \hat\theta) = \big(I - (I - \eta\bX\T\bX)^t\big)\hat\theta .$$</p>
+            <p><strong>Step 3: diagonalise.</strong> $(I - \eta\bX\T\bX)^t = Q\operatorname{diag}\big((1 - \eta s_j)^t\big)Q\T$;
+              multiplying by $Q\T$ gives the first formula.</p>
+            <p><strong>Step 4: ridge.</strong> $\theta_\lambda = (\bX\T\bX + \lambda I)^{-1}\bX\T\bX\hat\theta = Q\operatorname{diag}\big(s_j/(s_j + \lambda)\big)Q\T\hat\theta$.</p>
+            <p><strong>Step 5: small $\eta s_j$.</strong> $(1 - \eta s_j)^t \approx 1 - t\eta s_j$ when $t\eta s_j \ll 1$, and
+              $s_j/(s_j + \lambda) \approx s_j/\lambda$ when $s_j \ll \lambda$.</p>
+          </div>
+        </details>
+
+        <h3 id="dropout">Dropout</h3>
+        <div class="env definition" id="def-dropout">
+          <p><strong>Dropout</strong> with rate $p$: at each training step and for each example, every hidden unit is kept
+            independently with probability $1 - p$ and set to zero otherwise, and the kept units are scaled up:
+            $$\tilde a_j = \frac{m_j}{1 - p}\,a_j, \qquad m_j = \begin{cases} 1 & \text{with probability } 1 - p, \\ 0 & \text{with probability } p. \end{cases}$$
+            At test time all units are used, with no scaling. Backpropagation simply multiplies the error signals by the same
+            mask.</p>
+        </div>
+        <div class="env proposition" id="prop-dropout-mean">
+          <p>For fixed $a_j$, $\E[\tilde a_j] = a_j$: on average, the next layer receives the same input as at test time.</p>
+        </div>
+        <details class="proof" data-for="prop-dropout-mean">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1.</strong> $\E[m_j] = 1 \cdot (1 - p) + 0 \cdot p = 1 - p$.</p>
+            <p><strong>Step 2.</strong> $\E[\tilde a_j] = \frac{a_j}{1 - p}\E[m_j] = a_j$.</p>
+          </div>
+        </details>
+        <p>Because any unit may be missing, no unit can rely on a few specific others, which discourages complicated
+          co-adaptations that fit noise. Each step trains a different random sub-network, so dropout also behaves like
+          training an ensemble of many thinned networks that share weights, an idea close to bagging in
+          <a href="08-trees.html">Chapter 8</a>. Typical rates are $p = 0.1$ to $0.5$.</p>
+
+        <p><strong>Other tools.</strong> <em>Data augmentation</em> enlarges the training set with transformed copies of
+          the inputs (shifted or rotated images, for example). <em>Batch normalisation</em> standardises each unit's
+          pre-activations over the mini-batch and then applies a learned scale and shift, which stabilises and speeds up the
+          training of deep networks.</p>
+
+        <figure class="viz viz--wide" data-viz="nn-regularise" id="fig-regularise">
+          <div class="viz__stage"></div>
+          <figcaption>A 2–64–1 ReLU network (257 parameters) trained with Adam on 40 noisy two-moons points; the validation
+            loss uses 400 new points. The dashed line marks the step with the lowest validation loss.
+            <strong>Try:</strong> (1) train with no regularisation: the training loss goes to almost zero while the
+            validation loss reaches a minimum early and then rises, and the boundary wraps around individual points;
+            (2) tick <em>Show the early-stopped network</em>: the boundary at the best validation step is much smoother;
+            (3) set weight decay $\lambda = 0.01$ and train again: the validation loss no longer rises and the boundary stays
+            smooth; (4) try dropout: it slows down overfitting; (5) $\lambda = 0.05$ is too strong: the model underfits.</figcaption>
+        </figure>
+
+        <!-- ============================================================ -->
+        <h2 id="recipe">A practical recipe</h2>
+        <ol>
+          <li><strong>Prepare the data.</strong> Standardise the inputs (as in Chapter 2); split into training, validation and
+            test sets.</li>
+          <li><strong>Start simple.</strong> One or two hidden layers of moderate width with ReLU, variance-preserving
+            initialisation, the output layer and loss matched to the task.</li>
+          <li><strong>Optimise.</strong> Adam with learning rate about $10^{-3}$ and mini-batches of 32 to 256. First check
+            that the network can overfit a small subset: if not, there is a bug or the learning rate is wrong.</li>
+          <li><strong>Watch both curves.</strong> Training and validation loss per epoch. Training loss not decreasing: change
+            the learning rate or the architecture. Validation loss rising: regularise (weight decay, dropout, more data) and
+            use early stopping.</li>
+          <li><strong>Tune</strong> width, depth, $\lambda$, $p$ and $\eta$ on the validation set; report the test error once
+            at the end.</li>
+        </ol>
+
+        <div class="code" data-lang="python">
+<pre><code>import copy, torch, torch.nn as nn
+
+model = nn.Sequential(nn.Linear(p, 64), nn.ReLU(), nn.Dropout(0.2), nn.Linear(64, 1))
+loss_fn = nn.BCEWithLogitsLoss()                       # sigmoid + binary cross-entropy
+opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
+
+best, best_state, patience = float("inf"), None, 0
+for epoch in range(200):
+    model.train()                                      # dropout on
+    for xb, yb in train_loader:                        # mini-batches
+        opt.zero_grad()
+        loss = loss_fn(model(xb).squeeze(1), yb)
+        loss.backward()                                # backpropagation
+        opt.step()                                     # Adam update
+    model.eval()                                       # dropout off
+    with torch.no_grad():
+        val = loss_fn(model(X_val).squeeze(1), y_val).item()
+    if val &lt; best:
+        best, best_state, patience = val, copy.deepcopy(model.state_dict()), 0
+    else:
+        patience += 1
+        if patience == 10:                             # early stopping
+            break
+model.load_state_dict(best_state)</code></pre>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="practice">Strengths, limitations and connections</h2>
+        <ul>
+          <li><strong>Backpropagation is exact and cheap</strong>: about three forward passes for the whole gradient, for any
+            architecture, which is what makes very large networks trainable.</li>
+          <li><strong>Optimisation is not guaranteed.</strong> The loss is not convex; results depend on the initialisation,
+            the learning rate and the optimiser. In practice, large networks trained with SGD or Adam usually reach good
+            solutions, but there is no general theorem.</li>
+          <li><strong>Many hyperparameters.</strong> Architecture, learning rate, batch size, $\lambda$, dropout rate,
+            number of epochs: all are chosen on validation data.</li>
+          <li><strong>Regularisation is essential</strong> once parameters outnumber examples; weight decay is ridge
+            regression for networks, and early stopping behaves like it too.</li>
+        </ul>
+        <p><strong>Connections.</strong> Gradient descent and SGD come from Chapter 2, the validation methodology and the L2
+          penalty from Chapter 3, the matched output losses from Chapter 4. Next, we train networks <em>without labels</em>:
+          an autoencoder learns to reproduce its input through a narrow layer, and in the linear case it recovers PCA.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-bp-hand">
+          <p>A network has one input, one hidden sigmoid unit and a sigmoid output with binary cross-entropy:
+            $h = \sigma(wx + b)$, $p = \sigma(vh + c)$. With $w = 1$, $b = 0$, $v = 2$, $c = -1$, $x = 1$, $y = 1$:
+            (a) run the forward pass; (b) compute $\delta^{(2)}$, $\delta^{(1)}$ and the four partial derivatives;
+            (c) check $\partial\mathcal L/\partial w$ with a finite difference, $\varepsilon = 10^{-4}$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-mismatch">
+          <p>(a) For a sigmoid output with squared error $\frac12(p - y)^2$, show that $\delta^{(L)} = (p - y)\,p(1 - p)$.
+            (b) Evaluate it and the cross-entropy version $p - y$ for $y = 1$ and $p = 0.001$. (c) Explain why the
+            cross-entropy is preferred for classification.</p>
+        </div>
+
+        <div class="env exercise" id="exo-bp-cost">
+          <p>For a network with widths $784, 256, 128, 10$: (a) count the multiplications of a forward pass;
+            (b) estimate the cost of one gradient by backpropagation and by finite differences; (c) how many times
+            more expensive are finite differences?</p>
+        </div>
+
+        <div class="env exercise" id="exo-zero-init">
+          <p>All weights and biases of a ReLU network are initialised to $0$, with the convention $\operatorname{ReLU}'(0) = 0$.
+            (a) Show that all hidden activations are $0$ and that every hidden error signal is $0$. (b) Which parameters
+            receive a non-zero gradient? (c) What does the network learn?</p>
+        </div>
+
+        <div class="env exercise" id="exo-init-depth">
+          <p>A ReLU network has 20 hidden layers of width $n = 256$. Using <a class="ref" href="#prop-init-variance"></a>, by
+            what factor is the variance of the pre-activations multiplied between the first and the last hidden layer if
+            $\Var(w) = 1/n$? If $\Var(w) = 4/n$? If $\Var(w) = 2/n$?</p>
+        </div>
+
+        <div class="env exercise" id="exo-momentum">
+          <p>(a) With $\beta = 0.9$ and a constant gradient, after how many steps is $\bv_t$ within $1\%$ of its limit?
+            (b) Run momentum by hand for three steps on $f(\theta) = \frac12\theta^2$ from $\theta_0 = 1$ with $\eta = 0.5$ and
+            $\beta = 0.5$, and compare with plain gradient descent.</p>
+        </div>
+
+        <div class="env exercise" id="exo-adam-scale">
+          <p>Two parameters have gradients of constant size $10^{-4}$ and $10^{2}$. How large are the plain gradient-descent
+            steps for each with $\eta = 10^{-3}$? How large are the Adam steps? Why is this useful for networks whose layers
+            have gradients of very different sizes?</p>
+        </div>
+
+        <div class="env exercise" id="exo-early-ridge">
+          <p>In <a class="ref" href="#prop-early-ridge"></a> take $\eta = 0.1$ and two directions with $s_1 = 5$ and
+            $s_2 = 0.01$. Compute the shrinkage factors of gradient descent after $t = 10$ and $t = 1000$ steps, and those of
+            ridge with $\lambda = 1/(\eta t)$. What does stopping early do to each direction?</p>
+        </div>
+
+        <div class="env exercise" id="exo-dropout">
+          <p>(a) Why are the kept units scaled by $1/(1 - p)$ during training? What would go wrong at test time without the
+            scaling? (b) A layer has 100 hidden units and $p = 0.5$: how many different sub-networks can a training step
+            use? (c) In <a class="ref" href="#fig-regularise"></a>, compare the effect of dropout and of weight decay on the
+            validation loss curve.</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>Backpropagation: $\boldsymbol\delta^{(\ell)} = \sigma'(\mathbf z^{(\ell)}) \odot \bW^{(\ell+1)\top}\boldsymbol\delta^{(\ell+1)}$,
+              $\partial\mathcal L/\partial\bW^{(\ell)} = \boldsymbol\delta^{(\ell)}\ba^{(\ell-1)\top}$,
+              $\partial\mathcal L/\partial\bb^{(\ell)} = \boldsymbol\delta^{(\ell)}$. With matched output and loss,
+              $\boldsymbol\delta^{(L)}$ is prediction minus target.</li>
+            <li>The whole gradient costs about three forward passes; finite differences cost one per parameter.</li>
+            <li>Error signals shrink or grow geometrically with depth. Random initialisation breaks symmetry;
+              $\Var(w) = 2/n_{\text{in}}$ (ReLU) or $1/n_{\text{in}}$ (tanh) keeps the scale stable.</li>
+            <li>Momentum accumulates consistent gradient directions and damps oscillations; Adam adapts a step size per
+              parameter and is insensitive to the scale of the loss.</li>
+            <li>Weight decay shrinks weights at every step (ridge); early stopping behaves like ridge with
+              $\lambda \approx 1/(\eta t)$; dropout trains random sub-networks and keeps the expected activations
+              unchanged.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-prob">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-prob">Probabilistic view: weight decay as a prior</h2>
+          <p class="extra__intro">In Chapter 3, ridge regression was the maximum a posteriori (MAP) estimate under a Gaussian
+            prior. The same holds for any network trained with a likelihood loss.</p>
+
+          <div class="env proposition" id="prop-wd-map">
+            <p>Let $N\,J(\theta) = -\sum_i\log p_\theta(y_i \mid \bx_i)$ be the negative log-likelihood (Chapter 10, Extra),
+              and put independent priors $W^{(\ell)}_{jk} \sim \mathcal N(0, \tau^2)$ on the weights and a flat prior on the
+              biases. Then the MAP estimate minimises $J_\lambda$ with $\lambda = 1/(N\tau^2)$.</p>
+          </div>
+          <details class="proof" data-for="prop-wd-map">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: the posterior.</strong> By Bayes' rule, $p(\theta \mid \text{data}) \propto p(\text{data} \mid \theta)\,p(\theta)$,
+                so maximising it is minimising
+                $$-\log p(\text{data} \mid \theta) - \log p(\theta) = N J(\theta) + \frac{1}{2\tau^2}\sum_{\ell}\norm{\bW^{(\ell)}}_F^2 + \text{const} .$$</p>
+              <p><strong>Step 2: divide by $N$.</strong> The minimiser does not change:
+                $$J(\theta) + \frac{1}{2N\tau^2}\sum_\ell\norm{\bW^{(\ell)}}_F^2 = J_\lambda(\theta), \qquad \lambda = \frac{1}{N\tau^2} .$$</p>
+            </div>
+          </details>
+          <p>A tighter prior (small $\tau$) means stronger weight decay, and with more data ($N$ large) the prior matters
+            less. Dropout also has probabilistic readings, for example as an approximation to averaging the predictions of
+            many networks; running dropout at test time and averaging several predictions gives a rough measure of
+            uncertainty.</p>
+
+          <div class="env exercise" id="exo-laplace-prior">
+            <p>Replace the Gaussian prior by the Laplace prior $p(w) \propto e^{-|w|/b}$. Which penalty does the MAP estimate
+              use? What does it do to the weights, by analogy with the lasso of Chapter 3?</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

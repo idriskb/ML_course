@@ -56,7 +56,7 @@ window.COURSE = {
     { num: "10", slug: "10-neural-networks", part: "Module 3 · Neural networks", status: "ready", sessions: "22",
       title: "Neural networks",
       summary: "Why networks after linear models, k-NN, trees and kernels; neurons, layers and activations; output layers and softmax; universal approximation and depth." },
-    { num: "11", slug: "11-training-networks", part: "Module 3 · Neural networks", status: "planned", sessions: "23",
+    { num: "11", slug: "11-training-networks", part: "Module 3 · Neural networks", status: "ready", sessions: "23",
       title: "Backpropagation & training neural networks",
       summary: "Computing gradients by backpropagation; optimisation and regularization for networks with many parameters." },
     { num: "12", slug: "12-autoencoders", part: "Module 3 · Neural networks", status: "planned", sessions: "24",

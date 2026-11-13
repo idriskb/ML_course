@@ -67,7 +67,7 @@ sitemap.xml                for Google; regenerate with `python3 tools/sitemap.py
 by URL), and do not commit or push. To publish: set `status: "ready"`, run `python3 tools/sitemap.py`, then commit and push to `main` (pushing to `main`
 publishes the site).
 
-**Status (2026-11-11):** chapters 0–10 are published. Chapters 11 (backprop and training) and 12 (autoencoders) are drafted
+**Status (2026-11-13):** chapters 0–11 are published. Chapter 12 (autoencoders) is drafted
 but unpublished. No slide decks existed for sessions 23–24, so they were written from the plan in `course.js`.
 
 Analytics, the sidebar, TOC, pager and the "Chapter N · Module" eyebrow are all automatic. Leave `<p class="eyebrow"></p>` empty.

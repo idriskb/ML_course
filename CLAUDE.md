@@ -52,8 +52,10 @@ sitemap.xml                for Google; regenerate with `python3 tools/sitemap.py
 
 ## 4. Adding a chapter: checklist
 
-1. Copy `chapters/_template.html` to `chapters/NN-slug.html`; set `<title>Name — Machine Learning</title>`, a
-   `<meta name="description">`, and `data-chapter="NN-slug"` on `<body>`. Fill in the SEO block in the head: replace `SLUG` in the
+1. Copy `chapters/_template.html` to `chapters/NN-slug.html`; set the `<title>` as `Topic: Key Term, Key Term & Key Term | ML Course Notes`
+   (the words students search for come first; Google cuts off the end after about 60 characters, so the suffix may be dropped) and a
+   `<meta name="description">` of at most 160 characters naming the concepts covered (e.g. "Linear regression derived step by step: ...").
+   `layout.js` deliberately does not touch `document.title`, so the static title is what Google indexes. Then set `data-chapter="NN-slug"` on `<body>`. Fill in the SEO block in the head: replace `SLUG` in the
    canonical and `og:url` links, and copy the title/description into `og:title`/`og:description` (unique per page:
    the description is what Google shows in results).
 2. Add one `<script defer src="../assets/js/viz/X.js">` per figure, **after** `common.js`.

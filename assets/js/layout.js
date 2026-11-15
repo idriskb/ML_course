@@ -230,7 +230,6 @@
     if (!current) return;
     const eyebrow = document.querySelector(".chapter-head .eyebrow");
     if (eyebrow && !eyebrow.textContent.trim()) eyebrow.textContent = `Chapter ${current.num} · ${current.part}`;
-    document.title = `${current.num}. ${current.title} — ${C.title}`;
   }
 
   function numberSections() {

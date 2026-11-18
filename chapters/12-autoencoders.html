@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Autoencoders: Linear Autoencoders, PCA &amp; Denoising | ML Course Notes</title>
+  <meta name="description" content="Autoencoders explained: encoders, decoders and the bottleneck, why a linear autoencoder recovers PCA, and non-linear and denoising autoencoders.">
+  <link rel="canonical" href="https://idriskb.github.io/ML_course/chapters/12-autoencoders.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Machine Learning · Course notes">
+  <meta property="og:title" content="Autoencoders: Linear Autoencoders, PCA &amp; Denoising | ML Course Notes">
+  <meta property="og:description" content="Autoencoders explained: encoders, decoders and the bottleneck, why a linear autoencoder recovers PCA, and non-linear and denoising autoencoders.">
+  <meta property="og:url" content="https://idriskb.github.io/ML_course/chapters/12-autoencoders.html">
+  <meta name="twitter:card" content="summary">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+  <script defer src="../assets/js/viz/common.js"></script>
+  <script defer src="../assets/js/viz/nn-lib.js"></script>
+  <script defer src="../assets/js/viz/digits-data.js"></script>
+  <script defer src="../assets/js/viz/ae-curve.js"></script>
+  <script defer src="../assets/js/viz/ae-digits.js"></script>
+</head>
+<body data-root="../" data-page="chapter" data-chapter="12-autoencoders">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow"></p>
+          <h1>Autoencoders</h1>
+          <p class="lede">PCA compresses data by projecting onto a few directions. An autoencoder compresses data with a
+            neural network: an encoder maps each input to a short code, a decoder maps the code back, and both are trained
+            so that the output reproduces the input. No labels are needed. We prove that a linear autoencoder learns exactly
+            the PCA subspace, and then see what non-linear autoencoders add: curved representations, denoising, and anomaly
+            detection.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            Learning objectives
+          </h2>
+          <ul>
+            <li>Define an autoencoder, its code and its reconstruction loss, and explain why a bottleneck is needed.</li>
+            <li>Prove that the best $k$-dimensional subspace for reconstruction is the PCA subspace.</li>
+            <li>Prove that a linear autoencoder attains exactly the PCA reconstruction error, and explain why its weights are
+              not unique.</li>
+            <li>Explain what non-linear encoders and decoders add, and compare autoencoders with PCA on curved data and on
+              digits.</li>
+            <li>Describe denoising autoencoders and the use of reconstruction error for anomaly detection.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="setup">Learning to reconstruct</h2>
+        <p>In <a href="05-pca.html">Chapter 5</a>, PCA summarised each data point $\bx \in \R^p$ by $k$ numbers, the scores
+          $\bz = U_k\T\bx$, and reconstructed it as $\hat\bx = U_k\bz$. Both maps are linear. An autoencoder keeps this
+          structure, a map to $k$ numbers and a map back, and lets both be neural networks.</p>
+
+        <div class="env definition" id="def-autoencoder">
+          <p>An <strong>autoencoder</strong> consists of an <strong>encoder</strong> $g_\phi : \R^p \to \R^k$ and a
+            <strong>decoder</strong> $h_\psi : \R^k \to \R^p$, both neural networks with parameters $\phi$ and $\psi$. The
+            <strong>code</strong> (or latent representation) of $\bx$ is $\bz = g_\phi(\bx)$ and its
+            <strong>reconstruction</strong> is $\hat\bx = h_\psi(g_\phi(\bx))$. Given unlabelled data
+            $\bx_1, \dots, \bx_n$, the parameters minimise the <strong>reconstruction error</strong>
+            $$J(\phi, \psi) = \frac1n\sum_{i=1}^n \norm{\bx_i - h_\psi\big(g_\phi(\bx_i)\big)}^2 .$$</p>
+        </div>
+
+        <figure class="numbered diagram" id="fig-ae">
+          <svg viewBox="0 0 640 230" role="img" aria-label="An autoencoder drawn as two trapezoids. The encoder narrows from the input x with p entries down to a short code z with k entries; the decoder widens from the code back to the reconstruction x-hat with p entries. The loss compares x and x-hat.">
+            <polygon class="d-panel" points="110,30 250,85 250,145 110,200"/>
+            <polygon class="d-panel" points="390,85 530,30 530,200 390,145"/>
+            <rect class="d-a" x="296" y="85" width="48" height="60" rx="6"/>
+            <text class="d-text" x="180" y="120" text-anchor="middle" font-weight="700">encoder g</text>
+            <text class="d-text" x="460" y="120" text-anchor="middle" font-weight="700">decoder h</text>
+            <line class="d-ink" stroke-width="1.5" x1="250" y1="115" x2="294" y2="115"/>
+            <line class="d-ink" stroke-width="1.5" x1="346" y1="115" x2="390" y2="115"/>
+            <text class="d-text" x="70" y="120" text-anchor="middle" font-weight="700">x ∈ ℝᵖ</text>
+            <text class="d-text" x="572" y="120" text-anchor="middle" font-weight="700">x̂ ∈ ℝᵖ</text>
+            <text class="d-label" x="320" y="72" text-anchor="middle">code z ∈ ℝᵏ</text>
+            <text class="d-label" x="320" y="165" text-anchor="middle">k &lt; p</text>
+            <text class="d-label" x="320" y="222" text-anchor="middle">loss: ‖x − x̂‖², no labels needed</text>
+          </svg>
+          <figcaption>An autoencoder. The encoder compresses the input to a code of size $k$ (the bottleneck), the decoder
+            expands it back, and training makes the output close to the input.</figcaption>
+        </figure>
+
+        <p>The input plays the role of the target, so this is supervised learning with $y = \bx$: the same networks,
+          backpropagation and optimisers as in <a href="11-training-networks.html">Chapter 11</a> apply unchanged. What
+          makes the task non-trivial is the <strong>bottleneck</strong>. If $k \geq p$, the encoder and decoder can both be
+          the identity and $J = 0$ without learning anything. With $k &lt; p$ (an <em>undercomplete</em> autoencoder) the
+          network is forced to keep, in $k$ numbers, whatever is most useful to rebuild the input: the main structure of the
+          data.</p>
+
+        <div class="env example" id="ex-ae-digits">
+          <p>For $8 \times 8$ images of digits ($p = 64$), an encoder $64 \to 32 \to 2$ and a decoder $2 \to 32 \to 64$ with
+            tanh hidden layers and linear code and output layers. The code of each image is a point in the plane, which can be
+            plotted like the first two PCA scores. By Chapter 10 the network has
+            $32 \cdot 65 + 2 \cdot 33 + 32 \cdot 3 + 64 \cdot 33 = 4\,354$ parameters.</p>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="linear-pca">Linear autoencoders and PCA</h2>
+        <p>Take the data centred, $\sum_i\bx_i = \mathbf 0$, with covariance $\Sigma = \frac1n\sum_i\bx_i\bx_i\T$ and
+          eigen-decomposition $\Sigma = U\Lambda U\T$, $\lambda_1 \geq \dots \geq \lambda_p \geq 0$, as in Chapter 5. A
+          <strong>linear autoencoder</strong> has no activations and no biases: an encoder matrix $E \in \R^{k \times p}$ and a
+          decoder matrix $D \in \R^{p \times k}$,
+          $$\bz = E\bx, \qquad \hat\bx = D\bz = DE\,\bx, \qquad J(E, D) = \frac1n\sum_{i=1}^n\norm{\bx_i - DE\,\bx_i}^2 .$$
+          Chapter 5 showed that projecting onto the first $k$ principal directions leaves the error
+          $\lambda_{k+1} + \dots + \lambda_p$. We first prove that no other subspace does better.</p>
+
+        <div class="env lemma" id="lem-subspace-error">
+          <p>Let $V \in \R^{p \times k}$ have orthonormal columns, spanning a subspace $S$. The orthogonal projection onto $S$
+            is $VV\T$, and
+            $$\frac1n\sum_{i=1}^n\norm{\bx_i - VV\T\bx_i}^2 = \tr(\Sigma) - \tr\big(V\T\Sigma V\big) .$$</p>
+        </div>
+        <details class="proof" data-for="lem-subspace-error">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: one point.</strong> Expand and use $V\T V = I_k$:
+              $$\norm{\bx - VV\T\bx}^2 = \norm{\bx}^2 - 2\,\bx\T VV\T\bx + \bx\T V\underbrace{V\T V}_{=\ I_k}V\T\bx = \norm{\bx}^2 - \norm{V\T\bx}^2 .$$</p>
+            <p><strong>Step 2: average.</strong> $\frac1n\sum_i\norm{\bx_i}^2 = \tr(\Sigma)$ as in Chapter 5, and
+              $$\frac1n\sum_i\norm{V\T\bx_i}^2 = \frac1n\sum_i\tr\big(V\T\bx_i\bx_i\T V\big) = \tr\big(V\T\Sigma V\big) .$$</p>
+          </div>
+        </details>
+
+        <div class="env theorem" id="thm-best-subspace" data-name="PCA gives the best subspace">
+          <p>For every $V \in \R^{p \times k}$ with orthonormal columns,
+            $$\tr\big(V\T\Sigma V\big) \leq \lambda_1 + \dots + \lambda_k ,$$
+            with equality for $V = U_k$. Hence the smallest reconstruction error of any $k$-dimensional subspace is
+            $\lambda_{k+1} + \dots + \lambda_p$, attained by the PCA subspace.</p>
+        </div>
+        <details class="proof" data-for="thm-best-subspace">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: expand in the eigenbasis.</strong> With $\Sigma = \sum_{j=1}^p\lambda_j\bu_j\bu_j\T$,
+              $$\tr\big(V\T\Sigma V\big) = \sum_{j=1}^p\lambda_j\,\tr\big(V\T\bu_j\bu_j\T V\big) = \sum_{j=1}^p\lambda_j\,c_j,
+              \qquad c_j = \norm{V\T\bu_j}^2 .$$</p>
+            <p><strong>Step 2: the weights $c_j$ lie in $[0, 1]$.</strong> $VV\T$ is an orthogonal projection, so
+              $c_j = \bu_j\T VV\T\bu_j = \norm{VV\T\bu_j}^2 \leq \norm{\bu_j}^2 = 1$.</p>
+            <p><strong>Step 3: they add up to $k$.</strong> $U$ is orthogonal, so
+              $$\sum_{j=1}^p c_j = \norm{V\T U}_F^2 = \tr\big(V\T UU\T V\big) = \tr\big(V\T V\big) = \tr(I_k) = k .$$</p>
+            <p><strong>Step 4: compare with $\lambda_1 + \dots + \lambda_k$.</strong>
+              $$\sum_{j=1}^p\lambda_jc_j - \sum_{j=1}^k\lambda_j
+              = \sum_{j=1}^k\lambda_j\underbrace{(c_j - 1)}_{\leq\ 0} + \sum_{j=k+1}^p\lambda_j\underbrace{c_j}_{\geq\ 0}
+              \leq \lambda_k\sum_{j=1}^k(c_j - 1) + \lambda_k\sum_{j=k+1}^p c_j ,$$
+              because $\lambda_j \geq \lambda_k$ in the first sum and $\lambda_j \leq \lambda_k$ in the second. The right-hand
+              side is
+              $$\lambda_k\Big(\underbrace{\sum_{j=1}^p c_j}_{=\ k} - k\Big) = 0 .$$</p>
+            <p><strong>Step 5: equality and conclusion.</strong> For $V = U_k$, $c_j = 1$ for $j \leq k$ and $0$ otherwise, so
+              equality holds. By <a class="ref" href="#lem-subspace-error"></a>, the error of $S$ is
+              $\tr(\Sigma) - \tr(V\T\Sigma V) \geq \sum_{j=1}^p\lambda_j - \sum_{j=1}^k\lambda_j$.</p>
+          </div>
+        </details>
+
+        <div class="env theorem" id="thm-linear-ae" data-name="Linear autoencoders learn PCA">
+          <p>For centred data and $k \leq p$,
+            $$\min_{E,\,D}\ J(E, D) = \lambda_{k+1} + \dots + \lambda_p ,$$
+            the PCA reconstruction error. The minimum is attained by $E = U_k\T$, $D = U_k$ (PCA itself), and also by
+            $E = AU_k\T$, $D = U_kA^{-1}$ for every invertible $A \in \R^{k \times k}$.</p>
+        </div>
+        <details class="proof" data-for="thm-linear-ae">
+          <summary>Proof</summary>
+          <div class="proof__body">
+            <p><strong>Step 1: the reconstructions lie in a $k$-dimensional subspace.</strong> Every $\hat\bx_i = D(E\bx_i)$ lies
+              in the column space of $D$, which has dimension at most $k$. Choose a $k$-dimensional subspace $S$ containing
+              it, with orthonormal basis $V$.</p>
+            <p><strong>Step 2: the projection is the closest point.</strong> For each $i$, $VV\T\bx_i$ is the point of $S$
+              closest to $\bx_i$ (Chapter 2, least squares is a projection), and $\hat\bx_i \in S$, so
+              $$\norm{\bx_i - \hat\bx_i}^2 \geq \norm{\bx_i - VV\T\bx_i}^2 .$$</p>
+            <p><strong>Step 3: lower bound.</strong> Average over $i$ and apply <a class="ref" href="#lem-subspace-error"></a>
+              and <a class="ref" href="#thm-best-subspace"></a>:
+              $$J(E, D) \geq \tr(\Sigma) - \tr\big(V\T\Sigma V\big) \geq \lambda_{k+1} + \dots + \lambda_p .$$</p>
+            <p><strong>Step 4: attained.</strong> With $E = U_k\T$, $D = U_k$, $DE = U_kU_k\T$ is the PCA reconstruction, whose
+              error is $\lambda_{k+1} + \dots + \lambda_p$ (Chapter 5).</p>
+            <p><strong>Step 5: not unique.</strong> For invertible $A$,
+              $$\big(U_kA^{-1}\big)\big(AU_k\T\big) = U_k\underbrace{A^{-1}A}_{=\ I_k}U_k\T = U_kU_k\T ,$$
+              the same reconstructions, hence the same error.</p>
+          </div>
+        </details>
+
+        <p>So a linear autoencoder trained by gradient descent can at best match PCA, and in practice it does reach PCA's error.
+          But it learns the principal <em>subspace</em>, not the principal <em>directions</em>: its code is
+          $\bz = AU_k\T\bx$, an arbitrary invertible linear transformation of the PCA scores. The coordinates of the code
+          need not be uncorrelated or ordered by variance, unlike PCA's. The equality of the two errors can be seen in
+          <a class="ref" href="#fig-ae-digits"></a> with the linear autoencoder.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="nonlinear">Non-linear autoencoders</h2>
+        <p>With non-linear activations, the set of possible reconstructions $\{h_\psi(\bz) : \bz \in \R^k\}$ is no longer a
+          subspace but a curved $k$-dimensional surface in $\R^p$ (a curve when $k = 1$). The encoder learns where on this
+          surface to send each point, and the decoder learns the surface. When the data lie near a curved low-dimensional
+          shape, a non-linear autoencoder can follow it, while PCA can only fit a flat subspace.</p>
+
+        <figure class="viz viz--wide" data-viz="ae-curve" id="fig-ae-curve">
+          <div class="viz__stage"></div>
+          <figcaption>Codes of size $k = 1$ for 120 points near a curve. Left: PCA; every reconstruction lies on the first
+            principal line. Right: a 2–16–1–16–2 tanh autoencoder; every reconstruction lies on the curve traced by the
+            decoder as the code varies.
+            <strong>Try:</strong> (1) press <em>Train</em>: the decoder's curve bends into the shape of the data and the
+            error falls far below PCA's; (2) switch to the wave; (3) press <em>New initialisation</em> a few times: some
+            runs fold the curve badly, a local minimum of a non-convex loss; (4) untick the error segments to see the curve
+            alone.</figcaption>
+        </figure>
+
+        <p>The extra flexibility has the usual price. The loss is not convex, the result depends on the initialisation, and a
+          very flexible decoder can memorise the training set instead of capturing its structure. The code is also not
+          unique: as for the linear case, any invertible transformation of the code can be absorbed by the decoder, so the
+          individual coordinates of $\bz$ have no fixed meaning.</p>
+
+        <figure class="viz viz--wide" data-viz="ae-digits" id="fig-ae-digits">
+          <div class="viz__stage"></div>
+          <figcaption>An autoencoder with a two-dimensional code on 150 handwritten digits (zeros, threes and fours; pixels
+            scaled to $[0, 1]$), compared with PCA with $k = 2$. Left: the code of each image. Right: originals and their
+            reconstructions from two numbers.
+            <strong>Try:</strong> (1) choose the linear autoencoder and train: its error converges to the PCA error, as
+            <a class="ref" href="#thm-linear-ae"></a> predicts, and its codes are a linear transformation (rotation and
+            stretch) of the PCA scores; (2) choose the non-linear autoencoder and train: its error falls well below PCA's and
+            the reconstructions are sharper; (3) compare the codes of the two: the three digits separate more cleanly.
+            These errors are measured on the training images; with only 150 images, part of the gain of the non-linear
+            network is memorisation, which a validation set would reveal.</figcaption>
+        </figure>
+
+        <h3 id="training-ae">Training and choosing the code size</h3>
+        <ul>
+          <li><strong>Loss.</strong> The squared error is standard. For inputs in $[0, 1]$, such as grey-level pixels, a
+            sigmoid output with the binary cross-entropy summed over pixels is also common.</li>
+          <li><strong>Architecture.</strong> Usually a mirror image: the decoder has the encoder's layer widths in reverse
+            order. The code layer has no activation (or a mild one), so that codes can take any value.</li>
+          <li><strong>Code size $k$.</strong> Plot the <em>validation</em> reconstruction error against $k$, as with the
+            explained variance in Chapter 5, and choose the point after which it stops improving much. Smaller $k$ means
+            more compression; for visualisation, $k = 2$ or $3$.</li>
+          <li><strong>Overfitting.</strong> Monitor the reconstruction error on held-out data and use the tools of
+            Chapter 11 (weight decay, early stopping).</li>
+        </ul>
+
+        <!-- ============================================================ -->
+        <h2 id="variants">Variants and uses</h2>
+
+        <h3 id="denoising">Denoising autoencoders</h3>
+        <div class="env definition" id="def-denoising">
+          <p>A <strong>denoising autoencoder</strong> is trained to reconstruct each clean input from a corrupted copy
+            $\tilde\bx_i$ (for example $\tilde\bx_i = \bx_i + \boldsymbol\varepsilon_i$ with small Gaussian noise, or $\bx_i$
+            with a random subset of its entries set to zero, drawn afresh at every step):
+            $$J(\phi, \psi) = \frac1n\sum_{i=1}^n\norm{\bx_i - h_\psi\big(g_\phi(\tilde\bx_i)\big)}^2 .$$</p>
+        </div>
+        <p>The identity no longer solves the problem, even without a bottleneck, because the input is not the target. To
+          remove the noise the network must learn what typical data look like and pull corrupted inputs back towards them.
+          The trained network can be used to clean noisy inputs, and its codes tend to be more robust features.</p>
+
+        <h3 id="anomaly">Anomaly detection</h3>
+        <p>An autoencoder trained on normal data reconstructs normal inputs well and unusual inputs poorly, because its
+          bottleneck only keeps the structure it has seen. The <strong>reconstruction error</strong>
+          $r(\bx) = \norm{\bx - \hat\bx}^2$ is therefore an anomaly score: flag $\bx$ if $r(\bx)$ exceeds a threshold, for
+          instance the 99th percentile of $r$ on validation data. Typical uses are fraud detection, monitoring of machines
+          and quality control. PCA can be used in the same way, with its own reconstruction error.</p>
+
+        <h3 id="other-uses">Other uses</h3>
+        <ul>
+          <li><strong>Dimensionality reduction and visualisation</strong>, as a non-linear alternative to PCA (and to kernel
+            PCA, <a href="09-kernels.html">Chapter 9</a>): plot the codes for $k = 2$.</li>
+          <li><strong>Feature learning.</strong> Train the autoencoder on plenty of unlabelled data, then use the encoder as
+            the first layers of a classifier trained on fewer labelled examples.</li>
+          <li><strong>Compression.</strong> Store or transmit the code instead of the input.</li>
+          <li><strong>Sparse autoencoders</strong> add a penalty such as $\mu\sum_i\norm{\bz_i}_1$ on the codes, so that each
+            input uses few active code units; this allows codes larger than $p$ without learning the identity.</li>
+        </ul>
+
+        <div class="code" data-lang="python">
+<pre><code>import torch, torch.nn as nn
+
+p, k = 64, 2
+encoder = nn.Sequential(nn.Linear(p, 32), nn.Tanh(), nn.Linear(32, k))
+decoder = nn.Sequential(nn.Linear(k, 32), nn.Tanh(), nn.Linear(32, p))
+params = list(encoder.parameters()) + list(decoder.parameters())
+opt = torch.optim.Adam(params, lr=1e-3)
+
+for epoch in range(500):
+    for xb in loader:                                   # unlabelled mini-batches
+        x_noisy = xb + 0.1 * torch.randn_like(xb)       # drop this line for a plain autoencoder
+        loss = ((decoder(encoder(x_noisy)) - xb) ** 2).sum(dim=1).mean()
+        opt.zero_grad(); loss.backward(); opt.step()
+
+codes = encoder(X).detach()                             # n × k representation</code></pre>
+        </div>
+
+        <!-- ============================================================ -->
+        <h2 id="practice">Strengths, limitations and connections</h2>
+        <ul>
+          <li><strong>Strengths.</strong> Learn from unlabelled data; non-linear, so they can follow curved structure; scale
+            to large data sets with mini-batch training; the encoder gives a reusable representation.</li>
+          <li><strong>Limitations.</strong> Non-convex training with a result that depends on initialisation; codes that are
+            not unique and whose coordinates have no fixed meaning (PCA's are ordered and uncorrelated); more hyperparameters
+            than PCA; a risk of memorising the training data.</li>
+          <li><strong>Not a generative model.</strong> Decoding an arbitrary code does not necessarily give a realistic input,
+            because nothing controls where the codes of the data lie. The variational autoencoder (Extra) fixes this.</li>
+        </ul>
+        <p><strong>Connections.</strong> The linear autoencoder <em>is</em> PCA (<a class="ref" href="#thm-linear-ae"></a>),
+          and the proof completes Chapter 5's statement that no other subspace does better. Kernel PCA (Chapter 9) and
+          autoencoders are two non-linear extensions: one fixes the feature map through a kernel, the other learns it, which
+          is the same contrast as between kernel methods and neural networks in Chapter 10. Each module of the course thus
+          ends with an unsupervised method: PCA and k-means, kernel PCA, and autoencoders.</p>
+
+        <!-- ============================================================ -->
+        <h2 id="exercises">Exercises</h2>
+
+        <div class="env exercise" id="exo-identity">
+          <p>Show that if $k \geq p$, a linear autoencoder can achieve $J = 0$ on any data set. What has it learned? Why does
+            a denoising autoencoder with $k \geq p$ not have this problem?</p>
+        </div>
+
+        <div class="env exercise" id="exo-ae-params">
+          <p>Count the parameters of the autoencoder of <a class="ref" href="#ex-ae-digits"></a> and check the total. How many
+            numbers does PCA with $k = 2$ store (directions and mean)?</p>
+        </div>
+
+        <div class="env exercise" id="exo-c-weights">
+          <p>In the proof of <a class="ref" href="#thm-best-subspace"></a>, compute the weights $c_j$ for $p = 3$, $k = 1$ and
+            $V = \frac{1}{\sqrt2}(\bu_1 + \bu_2)$. Check that they lie in $[0, 1]$ and add up to $1$, and compute
+            $\tr(V\T\Sigma V)$. Is it smaller than $\lambda_1$?</p>
+        </div>
+
+        <div class="env exercise" id="exo-nonunique">
+          <p>(a) For a linear autoencoder with $k = 2$ at its optimum, show that the code covariance
+            $\frac1n\sum_i\bz_i\bz_i\T$ equals $A\operatorname{diag}(\lambda_1, \lambda_2)A\T$. (b) Which choices of $A$ give
+            uncorrelated codes? (c) Explain why gradient descent has no reason to find $A = I$.</p>
+        </div>
+
+        <div class="env exercise" id="exo-bias">
+          <p>A linear autoencoder with biases, $\hat\bx = D(E\bx + \mathbf c) + \mathbf d$, is trained on <em>uncentred</em>
+            data with mean $\bar\bx$. Show that for fixed $E$ and $D$ the optimal total offset $D\mathbf c + \mathbf d$
+            makes the reconstruction error equal to that of the centred problem, and deduce that the optimum is again PCA
+            (on the centred data). (<em>Hint:</em> for fixed $M = DE$, minimise over the offset $\mathbf o$ in
+            $\frac1n\sum_i\norm{\bx_i - M\bx_i - \mathbf o}^2$.)</p>
+        </div>
+
+        <div class="env exercise" id="exo-anomaly">
+          <p>An autoencoder is trained on images of zeros and threes only. Explain why the images of fours are likely to have
+            a larger reconstruction error, and how you would choose a threshold to flag unusual images. What could make this
+            method fail?</p>
+        </div>
+
+        <div class="env exercise" id="exo-ae-vs-pca">
+          <p>Give one situation where you would prefer PCA to an autoencoder and one where you would prefer an autoencoder.
+            Consider the shape of the data, the amount of data, interpretability and computational cost.</p>
+        </div>
+
+        <div class="env exercise" id="exo-ae-figure">
+          <p>In <a class="ref" href="#fig-ae-curve"></a>, explain why PCA's error equals $\lambda_2$ of the data covariance,
+            and why the autoencoder can do much better. Would an autoencoder with a <em>linear</em> encoder and decoder do
+            better than PCA here?</p>
+        </div>
+
+        <section class="box takeaways" aria-labelledby="take-title">
+          <h2 class="box__title" id="take-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Key takeaways
+          </h2>
+          <ul>
+            <li>An autoencoder is an encoder $g_\phi$ and a decoder $h_\psi$ trained without labels to minimise
+              $\frac1n\sum_i\norm{\bx_i - h_\psi(g_\phi(\bx_i))}^2$; the bottleneck $k &lt; p$ (or noise in the input) is what
+              forces it to learn structure.</li>
+            <li>No $k$-dimensional subspace reconstructs better than the PCA subspace: the best error is
+              $\lambda_{k+1} + \dots + \lambda_p$.</li>
+            <li>A linear autoencoder reaches exactly this error; it learns the principal subspace, with codes equal to the PCA
+              scores up to an invertible linear map.</li>
+            <li>Non-linear autoencoders reconstruct along a learned curved surface, and can beat PCA by far on curved data,
+              at the price of non-convex training and less interpretable codes.</li>
+            <li>Denoising autoencoders reconstruct clean inputs from corrupted ones; the reconstruction error is an anomaly
+              score.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <section class="extra" aria-labelledby="extra-prob">
+          <p class="extra__tag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Extra material · not examined this year
+          </p>
+          <h2 id="extra-prob">Probabilistic view: variational autoencoders</h2>
+          <p class="extra__intro">A variational autoencoder (VAE) turns the autoencoder into a generative model, just as
+            probabilistic PCA (Chapter 5, Extra) turns PCA into one: codes have a prior distribution, so new data can be
+            generated by sampling a code and decoding it.</p>
+
+          <div class="env definition" id="def-vae">
+            <p>A <strong>variational autoencoder</strong> has a prior $\bz \sim \mathcal N(\mathbf 0, I_k)$, a decoder model
+              $p_\psi(\bx \mid \bz) = \mathcal N\big(h_\psi(\bz), s^2I_p\big)$, and an encoder that outputs a distribution over
+              codes, $q_\phi(\bz \mid \bx) = \mathcal N\big(\boldsymbol\mu_\phi(\bx), \operatorname{diag}\boldsymbol\sigma^2_\phi(\bx)\big)$.
+              It is trained by maximising, over $\phi$ and $\psi$, the sum over data points of the
+              <strong>evidence lower bound</strong>
+              $$\operatorname{ELBO}(\bx) = \E_{q_\phi(\bz \mid \bx)}\big[\log p_\psi(\bx \mid \bz)\big] - \operatorname{KL}\big(q_\phi(\bz \mid \bx)\,\big\|\,p(\bz)\big) .$$</p>
+          </div>
+
+          <div class="env proposition" id="prop-elbo">
+            <p>For every $\bx$ and every distribution $q$ on codes, $\log p_\psi(\bx) \geq \operatorname{ELBO}(\bx)$, where
+              $p_\psi(\bx) = \int p_\psi(\bx \mid \bz)\,p(\bz)\,d\bz$ is the likelihood of the generative model.</p>
+          </div>
+          <details class="proof" data-for="prop-elbo">
+            <summary>Proof</summary>
+            <div class="proof__body">
+              <p><strong>Step 1: insert $q$.</strong>
+                $$\log p_\psi(\bx) = \log\int q(\bz)\,\frac{p_\psi(\bx \mid \bz)\,p(\bz)}{q(\bz)}\,d\bz = \log\E_q\Big[\frac{p_\psi(\bx \mid \bz)\,p(\bz)}{q(\bz)}\Big] .$$</p>
+              <p><strong>Step 2: Jensen's inequality.</strong> $\log$ is concave, so $\log\E[Y] \geq \E[\log Y]$:
+                $$\log p_\psi(\bx) \geq \E_q\big[\log p_\psi(\bx \mid \bz)\big] + \E_q\Big[\log\frac{p(\bz)}{q(\bz)}\Big] .$$</p>
+              <p><strong>Step 3: recognise the KL divergence.</strong>
+                $\E_q[\log(p(\bz)/q(\bz))] = -\operatorname{KL}(q\,\|\,p)$.</p>
+            </div>
+          </details>
+          <p>The first term of the ELBO is a reconstruction term: with the Gaussian decoder it is, up to constants,
+            $-\frac{1}{2s^2}\E_q\norm{\bx - h_\psi(\bz)}^2$, the autoencoder loss evaluated at codes drawn around
+            $\boldsymbol\mu_\phi(\bx)$. The second term pulls each code distribution towards the prior, so that the codes of
+            the data fill the region where the prior samples, and decoding a random $\bz \sim \mathcal N(\mathbf 0, I)$
+            gives a plausible new input. In practice the expectation is estimated with one sample
+            $\bz = \boldsymbol\mu_\phi(\bx) + \boldsymbol\sigma_\phi(\bx) \odot \boldsymbol\varepsilon$,
+            $\boldsymbol\varepsilon \sim \mathcal N(\mathbf 0, I)$, which keeps $\bz$ a differentiable function of $\phi$ so that
+            backpropagation applies (the <em>reparametrisation trick</em>), and the KL term between two Gaussians has the
+            closed form $\frac12\sum_{j}\big(\mu_j^2 + \sigma_j^2 - 1 - \log\sigma_j^2\big)$.</p>
+
+          <div class="env exercise" id="exo-vae-kl">
+            <p>Show that for $k = 1$, $\operatorname{KL}\big(\mathcal N(\mu, \sigma^2)\,\|\,\mathcal N(0, 1)\big) = \frac12(\mu^2 + \sigma^2 - 1 - \log\sigma^2)$,
+              and that it is zero only for $\mu = 0$, $\sigma = 1$. What happens to the codes if this term is given a very
+              large weight?</p>
+          </div>
+        </section>
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

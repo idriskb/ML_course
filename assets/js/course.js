@@ -59,7 +59,7 @@ window.COURSE = {
     { num: "11", slug: "11-training-networks", part: "Module 3 · Neural networks", status: "ready", sessions: "23",
       title: "Backpropagation & training neural networks",
       summary: "Computing gradients by backpropagation; optimisation and regularization for networks with many parameters." },
-    { num: "12", slug: "12-autoencoders", part: "Module 3 · Neural networks", status: "planned", sessions: "24",
+    { num: "12", slug: "12-autoencoders", part: "Module 3 · Neural networks", status: "ready", sessions: "24",
       title: "Autoencoders",
       summary: "Learning compressed representations without labels; the link with PCA." }
   ],

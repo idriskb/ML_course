@@ -40,6 +40,8 @@ Students are the readers. Preview locally with `python3 -m http.server 8000`.
 ```
 index.html                 home page (course map built from course.js)
 chapters/NN-slug.html      one page per chapter; copy chapters/_template.html
+exercises/index.html       "Exercises" tab: one card per chapter that has exercises, grouped by module (built from course.js)
+exercises/NN-slug.html     the exercises of chapter NN-slug (see §4b)
 chapters/00-style-guide.html  every component in use (open only if something here is unclear)
 assets/js/course.js        chapter registry (title, summary, part, sub, sessions, status) + KaTeX macros
 assets/js/layout.js        header, sidebar, TOC, pager, numbering, refs, proofs, step reveal, KaTeX, analytics
@@ -47,7 +49,7 @@ assets/js/viz/common.js    window.VIZ helpers for interactive figures
 assets/js/viz/<name>.js    one interactive figure per file
 assets/css/tokens.css, main.css   theme (do not hard-code colours anywhere)
 README.md                  course contents table: keep it in sync with course.js
-sitemap.xml                for Google; regenerate with `python3 tools/sitemap.py` (lists home + "ready" chapters)
+sitemap.xml                for Google; regenerate with `python3 tools/sitemap.py` (lists home + "ready" chapters and their exercise pages)
 ```
 
 ## 4. Adding a chapter: checklist
@@ -71,7 +73,21 @@ publishes the site).
 
 **Status (2026-11-18):** chapters 0–12 are published (the whole course). No slide decks existed for sessions 23–24, so they were written from the plan in `course.js`.
 
-Analytics, the sidebar, TOC, pager and the "Chapter N · Module" eyebrow are all automatic. Leave `<p class="eyebrow"></p>` empty.
+Analytics, the sidebar, TOC, pager and the "Chapter N · Module" eyebrow are all automatic. The header is sticky on every page (`main.css`); the sidebar and TOC stick just below it (`--header-h`), and
+below 900px the Home / Chapters / Exercises links form a second header row. Leave `<p class="eyebrow"></p>` empty.
+
+## 4b. Exercise pages (the "Exercises" tab)
+
+One page per chapter, `exercises/NN-slug.html` with the chapter's slug (copy `exercises/07-knn.html`). Register it by adding
+`exercises: "N questions: …"` (the card summary) to the chapter's entry in `course.js`; the hub card, the sidebar's
+"Exercises" group and the prev/next pager then link it; chapters without it are not shown. Body:
+`data-root="../" data-page="exercises" data-set="NN-slug"`, so numbering uses the chapter number (Exercise 7.3, sections
+7.1 …). Eyebrow written by hand ("Exercises · Chapter N · Module …"). `h2` per difficulty level (or per topic with `h3`
+levels when a chapter has two topics, as in ch 8). Each question is a `div.env.exercise` (`data-name` = its title; no other
+numbered environment on the page) followed immediately by a `details.solution` in the proof style of §2: one
+`<strong>Step k: (a) title.</strong>` paragraph per part, key equations on display lines. Link to the chapter for
+background; link another exercise page by hand (`<a href="07-knn.html#exo-q1">Exercise 7.1</a>`), since `a.ref` only
+resolves on the same page. No takeaways or extra section. Check every number in Python first; avoid ties in k-NN data.
 
 ## 5. Page skeleton and chapter structure
 

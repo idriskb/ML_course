@@ -44,6 +44,19 @@ methods: PCA and k-means, kernel PCA, and autoencoders.
 
 Chapters are released over the term.
 
+## Exercises
+
+Exercises with step-by-step solutions, one page per chapter, under the **Exercises** tab (`exercises/`):
+
+| # | Chapter | Exercises |
+|---|---|---|
+| 7 | k-nearest neighbours | 11 questions: predictions by hand, the choice of k, scaling, the curse of dimensionality, choosing k, weighted k-NN |
+| 8 | Tree-based methods | 18 questions: splits, Gini and entropy by hand, reading a tree, overfitting, greedy growth; bagging, random forests, boosting |
+| 9 | Kernel methods | 11 questions: kernels as inner products, the kernel trick, polynomial and RBF kernels, kernel ridge, valid kernels |
+| 10 | Neural networks | 13 questions: forward pass by hand, parameter counts, softmax and cross-entropy, activations, ReLU networks, universal approximation, depth |
+| 11 | Backpropagation & training neural networks | 13 questions: backpropagation by hand, softmax error signals, learning rates, momentum and Adam, weight decay, dropout, early stopping |
+| 12 | Autoencoders | 12 questions: encoding by hand, linear autoencoders and PCA, choosing the code size, denoising, anomaly detection |
+
 ## Background
 
 You should be comfortable with:

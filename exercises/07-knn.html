@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>k-NN Exercises with Solutions: Choice of k, Scaling &amp; Curse of Dimensionality | ML Course Notes</title>
+  <meta name="description" content="k-nearest neighbours exercises with step-by-step solutions: predictions by hand, the choice of k, scaling, the curse of dimensionality, weighted k-NN.">
+  <link rel="canonical" href="https://idriskb.github.io/ML_course/exercises/07-knn.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Machine Learning · Course notes">
+  <meta property="og:title" content="k-NN Exercises with Solutions: Choice of k, Scaling &amp; Curse of Dimensionality | ML Course Notes">
+  <meta property="og:description" content="k-nearest neighbours exercises with step-by-step solutions: predictions by hand, the choice of k, scaling, the curse of dimensionality, weighted k-NN.">
+  <meta property="og:url" content="https://idriskb.github.io/ML_course/exercises/07-knn.html">
+  <meta name="twitter:card" content="summary">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+</head>
+<body data-root="../" data-page="exercises" data-set="07-knn">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow">Exercises · Chapter 7 · Module 2 · Nonlinear &amp; non-parametric methods</p>
+          <h1>Exercises: k-nearest neighbours</h1>
+          <p class="lede">Practice for <a href="../chapters/07-knn.html">Chapter 7</a>. Throughout, $N_k(\bx)$ is the set of the $k$ training points closest to $\bx$ and $N$ is the number of training points. The questions go from conceptual, to hand computations, to harder questions that link several ideas. Every exercise is followed by a collapsed solution: try the question first, then reveal the solution one step at a time.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>What you will practise</h2>
+          <ul>
+            <li>Computing k-NN predictions by hand for regression and classification.</li>
+            <li>Explaining how $k$ controls bias, variance and smoothness.</li>
+            <li>Explaining why features must be scaled and why high dimension hurts k-NN.</li>
+            <li>Choosing $k$ by cross-validation with a suitable metric.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="knn-core">Core conceptual questions</h2>
+
+        <div class="env exercise" id="exo-q1" data-name="Local prediction and non-parametric behaviour">
+          <p>Explain why k-nearest neighbours is considered a <strong>non-parametric</strong> method. In your answer,
+            discuss:</p>
+          <ol type="a">
+            <li>why the method does not estimate a fixed-dimensional parameter vector in the same way as linear
+              regression;</li>
+            <li>how prediction is made at a new point;</li>
+            <li>why the effective complexity of the model depends on the training sample.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q1">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) no fixed parameter vector.</strong> Linear regression summarises the data by
+              $\bw \in \R^{p+1}$. Once $\bw$ is estimated, the training set can be thrown away, and the size of $\bw$
+              does not change when $N$ grows. k-NN has no training step that produces such a vector: the "model" is
+              the training set itself, so what is stored grows with $N$.</p>
+            <p><strong>Step 2: (b) prediction at a new point.</strong> Given $\bx$, compute its distance to every
+              training point, keep the $k$ closest, and combine their outputs. For regression, the prediction is the average
+              $$\hat f_k(\bx) = \frac1k\sum_{i \in N_k(\bx)} y_i .$$
+              For classification, it is the majority class among the $k$ neighbours.</p>
+            <p><strong>Step 3: (c) complexity grows with the data.</strong> The prediction is a different local
+              average in each region of input space where the set of neighbours stays the same. With more training
+              points there are more such regions, so the fitted function can take more distinct shapes. Roughly, there
+              are about $N/k$ separate neighbourhoods (see
+              <a href="../chapters/07-knn.html#effective-parameters">Section 7.5.1</a>). The complexity is therefore
+              set by $N$ and $k$, not by a fixed number of parameters.</p>
+            <p><strong>Step 4: conclude.</strong> k-NN is non-parametric because it does not assume a fixed functional form with
+              finitely many parameters. Its flexibility grows with the amount of data.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q2" data-name="Regression vs classification in k-NN">
+          <p>Describe how the prediction rule changes when k-NN is used for (a) regression, (b) binary classification.
+            How would you interpret the output in each case?</p>
+        </div>
+        <details class="solution" data-for="exo-q2">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) regression.</strong> Average the neighbours' outputs:
+              $$\hat f_k(\bx) = \frac1k\sum_{i \in N_k(\bx)} y_i .$$
+              This is a local estimate of the mean of $y$ for inputs near $\bx$. It is a number on the same scale as $y$
+              and always lies between the smallest and the largest neighbour value.</p>
+            <p><strong>Step 2: (b) binary classification.</strong> With labels $y_i \in \{0, 1\}$, take the
+              proportion of neighbours in class 1,
+              $$\hat p_1(\bx) = \frac1k\sum_{i \in N_k(\bx)} \mathbf 1\{y_i = 1\},$$
+              and predict class 1 when $\hat p_1(\bx) > \frac12$ (majority vote).</p>
+            <p><strong>Step 3: interpretation.</strong> $\hat p_1(\bx)$ is the regression rule applied to the 0/1
+              labels. It is the fraction of nearby training points that belong to class 1, a rough confidence score
+              that only takes the values $0, \frac1k, \frac2k, \dots, 1$. The predicted class is the decision obtained by
+              thresholding this score. The threshold can be moved away from $\frac12$ when one type of error costs more
+              than the other.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q3" data-name="Role of the choice of k">
+          <p>Explain qualitatively how increasing $k$ affects (a) bias, (b) variance, (c) sensitivity to noise,
+            (d) smoothness of the prediction function.</p>
+        </div>
+        <details class="solution" data-for="exo-q3">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) bias increases.</strong> A larger $k$ averages over points that are farther from
+              $\bx$, where the true function may take different values. Peaks and valleys are flattened. At the
+              extreme $k = N$, the prediction is the constant $\bar y$ everywhere.</p>
+            <p><strong>Step 2: (b) variance decreases.</strong> The prediction averages $k$ outputs, each with its own
+              noise. Averaging $k$ independent noise terms of variance $\sigma^2$ gives
+              $$\Var\Big(\frac1k\sum_{i=1}^k \varepsilon_i\Big) = \frac{\sigma^2}{k},$$
+              so the prediction changes less from one training sample to another.</p>
+            <p><strong>Step 3: (c) less sensitive to noise.</strong> With $k = 1$ a single mislabelled or noisy point
+              decides the prediction in its whole neighbourhood. With large $k$ it is outvoted (classification) or
+              diluted by a factor $1/k$ (regression).</p>
+            <p><strong>Step 4: (d) smoother predictions.</strong> The prediction changes only when the set of
+              neighbours changes, and when one neighbour is swapped the average moves by about $1/k$ of the
+              difference. So larger $k$ gives smaller jumps: smoother regression curves and simpler decision
+              boundaries with fewer small islands.</p>
+            <p><strong>Step 5: conclude.</strong> Small $k$ means low bias and high variance (overfitting); large
+              $k$ means high bias and low variance (underfitting). $k$ is chosen in between by validation.</p>
+          </div>
+        </details>
+
+        <h2 id="knn-intermediate">Intermediate exercises</h2>
+
+        <div class="env exercise" id="exo-q4" data-name="k-NN regression by hand">
+          <p>Consider the one-dimensional dataset
+            $$(x_i, y_i) \in \{(0, 1), (1, 2), (2.5, 2), (4, 5), (7, 4)\}.$$
+            Use Euclidean distance.</p>
+          <ol type="a">
+            <li>Compute the prediction at $x = 3$ using $k = 1$.</li>
+            <li>Compute the prediction at $x = 3$ using $k = 3$.</li>
+            <li>Explain why the two predictions differ.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q4">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: distances to $x = 3$.</strong> In one dimension the distance is $|x_i - 3|$. Sorted
+              from nearest to farthest:</p>
+            <div class="table-wrap"><table>
+              <thead><tr><th scope="col">$x_i$</th><th scope="col">$y_i$</th><th scope="col">$|x_i - 3|$</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">$2.5$</th><td>$2$</td><td>$0.5$</td></tr>
+                <tr><th scope="row">$4$</th><td>$5$</td><td>$1$</td></tr>
+                <tr><th scope="row">$1$</th><td>$2$</td><td>$2$</td></tr>
+                <tr><th scope="row">$0$</th><td>$1$</td><td>$3$</td></tr>
+                <tr><th scope="row">$7$</th><td>$4$</td><td>$4$</td></tr>
+              </tbody>
+            </table></div>
+            <p>All distances are different, so there are no ties.</p>
+            <p><strong>Step 2: (a) $k = 1$.</strong> The nearest point is $x = 2.5$, so the prediction copies its output:
+              $$\hat f_1(3) = 2 .$$</p>
+            <p><strong>Step 3: (b) $k = 3$.</strong> The three nearest points are $x = 2.5$, $4$ and $1$, with outputs
+              $2$, $5$ and $2$:
+              $$\hat f_3(3) = \frac{2 + 5 + 2}{3} = 3 .$$</p>
+            <p><strong>Step 4: (c) why they differ.</strong> With $k = 1$ the prediction depends on a single point,
+              $x = 2.5$, and ignores the point $x = 4$ just on the other side, whose output $5$ is much higher. With
+              $k = 3$ the prediction averages outputs from both sides of $x = 3$, so it follows the overall trend
+              (the outputs grow with $x$). If the output at $x = 2.5$ were noisy, the 1-NN prediction would carry all
+              of that noise; the 3-NN prediction would carry only a third of it. This is the variance reduction from
+              averaging in <a class="ref" href="#exo-q3"></a>.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q5" data-name="k-NN classification by hand">
+          <p>Suppose the following labelled points are observed in $\R^2$:
+            $$(0, 0) \mapsto 0, \quad (1, 0) \mapsto 0, \quad (0, 1) \mapsto 1, \quad (1, 1) \mapsto 1, \quad (2, 1) \mapsto 1 .$$
+            For the new point $\bx_* = (1.2, 0.8)$:</p>
+          <ol type="a">
+            <li>determine the predicted class using $k = 1$;</li>
+            <li>determine the predicted class using $k = 3$;</li>
+            <li>explain how ties could arise in k-NN classification and give one reasonable tie-breaking strategy.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q5">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: squared distances.</strong> For example, for $(1, 1)$:
+              $$\norm{\bx_* - (1, 1)}^2 = (0.2)^2 + (-0.2)^2 = 0.08 .$$
+              Squared distances give the same ranking as distances, so we can compare them directly.</p>
+            <div class="table-wrap"><table>
+              <thead><tr><th scope="col">Point</th><th scope="col">Class</th><th scope="col">Squared distance</th><th scope="col">Distance</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">$(1, 1)$</th><td>1</td><td>$0.04 + 0.04 = 0.08$</td><td>$0.28$</td></tr>
+                <tr><th scope="row">$(1, 0)$</th><td>0</td><td>$0.04 + 0.64 = 0.68$</td><td>$0.82$</td></tr>
+                <tr><th scope="row">$(2, 1)$</th><td>1</td><td>$0.64 + 0.04 = 0.68$</td><td>$0.82$</td></tr>
+                <tr><th scope="row">$(0, 1)$</th><td>1</td><td>$1.44 + 0.04 = 1.48$</td><td>$1.22$</td></tr>
+                <tr><th scope="row">$(0, 0)$</th><td>0</td><td>$1.44 + 0.64 = 2.08$</td><td>$1.44$</td></tr>
+              </tbody>
+            </table></div>
+            <p><strong>Step 2: (a) $k = 1$.</strong> The nearest point is $(1, 1)$, of class 1, so
+              $$\hat y(\bx_*) = 1 .$$</p>
+            <p><strong>Step 3: (b) $k = 3$.</strong> The three nearest points are $(1, 1)$, $(1, 0)$ and $(2, 1)$.
+              The last two are tied in distance, but both are needed, so the tie does not matter. Their classes are
+              $1, 0, 1$:
+              $$\hat p_1(\bx_*) = \frac23 > \frac12 \quad\Longrightarrow\quad \hat y(\bx_*) = 1 .$$</p>
+            <p><strong>Step 4: (c) how ties arise.</strong> There are two kinds. (i) <em>Vote ties</em>: with an even
+              $k$ the votes can split equally. Here $k = 2$ gives the neighbours $(1, 1)$ and one of $(1, 0)$ or
+              $(2, 1)$, so possibly one vote for each class. With more than two classes, ties are possible even for odd $k$.
+              (ii) <em>Distance ties</em>: two candidates for the $k$-th neighbour are at the same distance, as
+              $(1, 0)$ and $(2, 1)$ are here.</p>
+            <p><strong>Step 5: tie-breaking.</strong> Reasonable strategies: use an odd $k$ for two classes (this removes
+              vote ties); break a vote tie with the class of the single nearest neighbour; or use distance-weighted votes
+              (<a class="ref" href="#exo-q9"></a>), which make exact ties very unlikely.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q6" data-name="Why scaling matters">
+          <p>A dataset has two features: $x_1$ = annual income in euros, and $x_2$ = customer satisfaction score from 1
+            to 10. Explain why applying k-NN directly to the raw variables may be problematic. What preprocessing step
+            would you apply, and why?</p>
+        </div>
+        <details class="solution" data-for="exo-q6">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: one feature dominates the distance.</strong> Income differences are in thousands of
+              euros, while satisfaction differences are at most 9. Take two customers whose incomes differ by
+              €1&#8239;000 and whose scores are 1 and 10:
+              $$d^2 = 1000^2 + 9^2 = 1\,000\,000 + 81 .$$
+              Satisfaction contributes less than $0.01\%$ of the squared distance.</p>
+            <p><strong>Step 2: consequence.</strong> The neighbours are chosen almost only by income. The
+              satisfaction score is ignored even if it is the most useful feature for prediction. The result also
+              depends on the units: measuring income in thousands of euros would change the neighbours.</p>
+            <p><strong>Step 3: the fix.</strong> Standardise each feature, $x_j \mapsto (x_j - \bar x_j)/s_j$, so that
+              both features have mean 0 and standard deviation 1 and contribute on comparable scales. Compute $\bar x_j$
+              and $s_j$ on the training data only, and apply them to the validation and test data. A pipeline does this
+              automatically:</p>
+<div class="code" data-lang="python">
+<pre><code>from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+
+model = make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=5))
+model.fit(X_train, y_train)</code></pre></div>
+            <p>Min–max scaling to $[0, 1]$ is a reasonable alternative. Income is often skewed, so a log transform
+              before standardising can also help.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-num-scaling" data-name="Scaling changes the nearest neighbour">
+          <p>A shop records the age (years) and annual income (euros) of three customers and whether they bought a
+            product (class 1) or not (class 0):</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th scope="col">Customer</th><th scope="col">Age</th><th scope="col">Income (€)</th><th scope="col">Class</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">A</th><td>25</td><td>40&#8239;000</td><td>0</td></tr>
+              <tr><th scope="row">B</th><td>50</td><td>41&#8239;000</td><td>1</td></tr>
+              <tr><th scope="row">C</th><td>40</td><td>60&#8239;000</td><td>1</td></tr>
+            </tbody>
+          </table></div>
+          <p>A new customer has age 27 and income €41&#8239;500.</p>
+          <ol type="a">
+            <li>Compute the Euclidean distance from the new customer to A, B and C using the raw features, and give the
+              1-NN prediction.</li>
+            <li>What fraction of the squared distance to B comes from income?</li>
+            <li>Standardise the features using the training standard deviations, 10 years for age and €10&#8239;000 for
+              income (subtracting the means does not change distances, so you only need to divide). Recompute the three
+              distances and the 1-NN prediction.</li>
+            <li>What does 3-NN predict in each case? Comment.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-num-scaling">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) raw distances.</strong> The differences from the new customer $(27, 41\,500)$ are
+              $(-2, -1500)$ for A, $(23, -500)$ for B and $(13, 18\,500)$ for C:
+              $$d_A = \sqrt{2^2 + 1500^2} = \sqrt{2\,250\,004} \approx 1500.0,$$
+              $$d_B = \sqrt{23^2 + 500^2} = \sqrt{250\,529} \approx 500.5,$$
+              $$d_C = \sqrt{13^2 + 18\,500^2} \approx 18\,500.0 .$$
+              The nearest customer is B, so the 1-NN prediction is <strong>class 1</strong>.</p>
+            <p><strong>Step 2: (b) income dominates.</strong> For B, income contributes
+              $$\frac{250\,000}{250\,529} \approx 99.8\%$$
+              of the squared distance. Age has almost no say: B is 23 years older than the new customer, but it is chosen
+              because its income is close.</p>
+            <p><strong>Step 3: (c) standardised distances.</strong> Divide age differences by 10 and income differences
+              by 10&#8239;000. A: $(-0.2, -0.15)$; B: $(2.3, -0.05)$; C: $(1.3, 1.85)$. Then
+              $$d_A = \sqrt{0.04 + 0.0225} = 0.25, \qquad d_B = \sqrt{5.29 + 0.0025} \approx 2.30, \qquad
+              d_C = \sqrt{1.69 + 3.4225} \approx 2.26 .$$
+              Now A is by far the nearest, and the 1-NN prediction is <strong>class 0</strong>.</p>
+            <p><strong>Step 4: (d) 3-NN.</strong> With only three training points, 3-NN uses all of them in both cases:
+              votes $0, 1, 1$, so it predicts class 1 whatever the scaling. Scaling matters through <em>which</em> points are
+              neighbours; when $k$ covers the whole training set the prediction is the majority class and the features are
+              ignored.</p>
+            <p><strong>Step 5: conclude.</strong> The raw 1-NN prediction was decided by the unit of income. After
+              standardising, the new customer's nearest neighbour is A, who is close in both age and income.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-num-loo" data-name="Choosing k by leave-one-out">
+          <p>Consider the one-dimensional data</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th scope="col">$x_i$</th><td>1</td><td>2</td><td>4</td><td>5</td><td>8</td><td>10</td></tr></thead>
+            <tbody><tr><th scope="row">$y_i$</th><td>2</td><td>4</td><td>3</td><td>7</td><td>8</td><td>6</td></tr></tbody>
+          </table></div>
+          <p>Leave-one-out cross-validation predicts each $y_i$ from the <em>other</em> five points, then averages the
+            squared errors.</p>
+          <ol type="a">
+            <li>Compute the leave-one-out predictions and the leave-one-out mean squared error for $k = 1$.</li>
+            <li>Do the same for $k = 3$.</li>
+            <li>Which $k$ would you choose? What is the training error of 1-NN on these data, and why is it useless for
+              choosing $k$?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-num-loo">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) $k = 1$.</strong> For each point, find the nearest <em>other</em> point:</p>
+            <div class="table-wrap"><table>
+              <thead><tr><th scope="col">Left out $x_i$</th><th scope="col">$y_i$</th><th scope="col">Nearest other point</th><th scope="col">Prediction</th><th scope="col">Squared error</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">1</th><td>2</td><td>$x = 2$</td><td>4</td><td>4</td></tr>
+                <tr><th scope="row">2</th><td>4</td><td>$x = 1$</td><td>2</td><td>4</td></tr>
+                <tr><th scope="row">4</th><td>3</td><td>$x = 5$</td><td>7</td><td>16</td></tr>
+                <tr><th scope="row">5</th><td>7</td><td>$x = 4$</td><td>3</td><td>16</td></tr>
+                <tr><th scope="row">8</th><td>8</td><td>$x = 10$</td><td>6</td><td>4</td></tr>
+                <tr><th scope="row">10</th><td>6</td><td>$x = 8$</td><td>8</td><td>4</td></tr>
+              </tbody>
+            </table></div>
+            <p>$$\mathrm{LOO}(1) = \frac{4 + 4 + 16 + 16 + 4 + 4}{6} = \frac{48}{6} = 8 .$$</p>
+            <p><strong>Step 2: (b) $k = 3$.</strong> Average the three nearest other points. (For $x = 5$ the points
+              $x = 2$ and $x = 8$ are both at distance 3, but both belong to the three nearest, so there is no ambiguity.)</p>
+            <div class="table-wrap"><table>
+              <thead><tr><th scope="col">Left out $x_i$</th><th scope="col">$y_i$</th><th scope="col">Three nearest</th><th scope="col">Prediction</th><th scope="col">Squared error</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">1</th><td>2</td><td>2, 4, 5</td><td>$(4 + 3 + 7)/3 = 14/3$</td><td>$64/9 \approx 7.11$</td></tr>
+                <tr><th scope="row">2</th><td>4</td><td>1, 4, 5</td><td>$(2 + 3 + 7)/3 = 4$</td><td>$0$</td></tr>
+                <tr><th scope="row">4</th><td>3</td><td>5, 2, 1</td><td>$(7 + 4 + 2)/3 = 13/3$</td><td>$16/9 \approx 1.78$</td></tr>
+                <tr><th scope="row">5</th><td>7</td><td>4, 2, 8</td><td>$(3 + 4 + 8)/3 = 5$</td><td>$4$</td></tr>
+                <tr><th scope="row">8</th><td>8</td><td>10, 5, 4</td><td>$(6 + 7 + 3)/3 = 16/3$</td><td>$64/9 \approx 7.11$</td></tr>
+                <tr><th scope="row">10</th><td>6</td><td>8, 5, 4</td><td>$(8 + 7 + 3)/3 = 6$</td><td>$0$</td></tr>
+              </tbody>
+            </table></div>
+            <p>$$\mathrm{LOO}(3) = \frac{1}{6}\Big(\frac{64}{9} + 0 + \frac{16}{9} + 4 + \frac{64}{9} + 0\Big) = \frac{1}{6}\cdot 20 = \frac{10}{3} \approx 3.33 .$$</p>
+            <p><strong>Step 3: (c) choose $k$.</strong> $k = 3$ has the smaller leave-one-out error
+              ($3.33 \lt 8$), so we choose $k = 3$. The training error of 1-NN is $0$: each training point is its own
+              nearest neighbour and the prediction copies its own $y_i$. It would always pick $k = 1$, whatever the data.
+              Leaving the point out is what makes the error an honest estimate of the error on new points.</p>
+          </div>
+        </details>
+
+        <h2 id="knn-challenging">Challenging questions</h2>
+
+        <div class="env exercise" id="exo-q7" data-name="Curse of dimensionality in k-NN">
+          <p>Explain why k-NN often performs poorly in high dimensions, even if the training sample is large. In your
+            answer, discuss distance concentration and the difficulty of defining meaningful neighbourhoods.</p>
+        </div>
+        <details class="solution" data-for="exo-q7">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: neighbourhoods are not local.</strong> Take data uniform in $[0, 1]^p$. A sub-cube that
+              contains a fraction $\alpha$ of the data has edge length
+              $$e_p(\alpha) = \alpha^{1/p} .$$
+              To capture $1\%$ of the data, the edge is $0.1$ for $p = 2$, $0.63$ for $p = 10$ and $0.95$ for
+              $p = 100$. In high dimension, the "neighbourhood" of $k$ points stretches across almost the whole range
+              of every feature (<a href="../chapters/07-knn.html#curse-cube">Section 7.6.1</a>).</p>
+            <p><strong>Step 2: distance concentration.</strong> For independent uniform points the squared distance $D$
+              has mean $p/6$, and its relative spread shrinks:
+              $$\frac{\sqrt{\Var(D)}}{\E[D]} \approx \frac{1.18}{\sqrt p} \xrightarrow[p \to \infty]{} 0 .$$
+              The nearest and the farthest training points end up at almost the same distance
+              (<a href="../chapters/07-knn.html#curse-concentration">Section 7.6.3</a>). The ranking of
+              "near" and "far" then carries little information.</p>
+            <p><strong>Step 3: why more data does not help enough.</strong> To keep the neighbourhood edge at a fixed
+              small length $e$, we need a fraction $e^p$ of the data to fall inside it, so the required $N$ grows
+              exponentially with $p$. A sample that is "large" for $p = 2$ is tiny for $p = 50$.</p>
+            <p><strong>Step 4: irrelevant features.</strong> Every feature counts equally in the Euclidean distance.
+              When most features are irrelevant, their noise dominates the distance and the chosen neighbours are close
+              in the useless directions, not in the ones that matter.</p>
+            <p><strong>Step 5: conclude.</strong> In high dimension, neighbours are neither close nor meaningfully
+              different from other points, so local averaging loses its justification. Remedies: feature selection,
+              dimensionality reduction (PCA, <a href="../chapters/05-pca.html">Chapter 5</a>), or models that learn
+              which directions matter.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q8" data-name="Model selection for k-NN">
+          <p>You must choose among $k \in \{1, 3, 5, 9, 15, 25\}$ for a classification problem.</p>
+          <ol type="a">
+            <li>Describe a validation strategy for selecting $k$.</li>
+            <li>Explain which evaluation metric you would use if the dataset were strongly imbalanced.</li>
+            <li>Why should the test set not be used to choose $k$?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q8">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) cross-validation on the training set.</strong> Split off a test set first and do not
+              touch it. On the remaining data, run $K$-fold cross-validation (for example $K = 5$, stratified so that each
+              fold keeps the class proportions). For each candidate $k$, fit on $K - 1$ folds, score on the held-out
+              fold, and average the $K$ scores. Choose the $k$ with the best average score; if two are close, prefer the
+              larger $k$ (the simpler model). Refit on all training data with that $k$. Scaling belongs inside the
+              pipeline so that it is learnt on the training folds only.</p>
+<div class="code" data-lang="python">
+<pre><code>from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
+
+pipe = Pipeline([("scale", StandardScaler()), ("knn", KNeighborsClassifier())])
+grid = {"knn__n_neighbors": [1, 3, 5, 9, 15, 25]}
+search = GridSearchCV(pipe, grid, cv=StratifiedKFold(5), scoring="f1")
+search.fit(X_train, y_train)
+print(search.best_params_)</code></pre></div>
+            <p><strong>Step 2: (b) metric for imbalanced data.</strong> Accuracy is misleading. With $95\%$ negatives,
+              predicting "negative" always gives $95\%$ accuracy and finds no positives. Use a metric that looks at the
+              minority class: recall (if missing positives is costly), precision, the F1 score, balanced accuracy, or the
+              area under the ROC or precision–recall curve computed from the scores $\hat p_1(\bx)$
+              (<a href="../chapters/04-logistic-regression.html">Chapter 4</a>).</p>
+            <p><strong>Step 3: (c) why not the test set.</strong> If $k$ is chosen to maximise the test score, the test
+              set has been used for fitting, since $k$ is a parameter of the model. The test score of the chosen $k$ is
+              then the best of six noisy scores, which is optimistically biased. It no longer estimates performance
+              on new data. The test set must be used once, at the end, for the final model.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q9" data-name="Weighted k-NN">
+          <p>Standard k-NN gives equal weight to the $k$ nearest points. A weighted version assigns larger weight to
+            closer observations.</p>
+          <ol type="a">
+            <li>Explain why this may improve predictions.</li>
+            <li>Propose one reasonable weighting scheme as a function of distance.</li>
+            <li>Discuss one possible disadvantage of heavily weighting the closest point.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q9">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) why weight.</strong> Among the $k$ neighbours, the closest ones are most similar to
+              $\bx$, so their outputs are the best guide to $f(\bx)$. When the $k$-th neighbour is much farther than the
+              first, equal weights let a distant point pull the prediction away (bias). Weights also make the prediction
+              change continuously as $\bx$ moves, and make exact vote ties unlikely.</p>
+            <p><strong>Step 2: (b) a scheme.</strong> Inverse-distance weights:
+              $$\hat f(\bx) = \frac{\sum_{i \in N_k(\bx)} w_i\, y_i}{\sum_{i \in N_k(\bx)} w_i}, \qquad
+              w_i = \frac{1}{d(\bx, \bx_i) + \varepsilon},$$
+              with a small $\varepsilon > 0$ to avoid dividing by zero. A smooth alternative is
+              $w_i = \exp\!\big(-d(\bx, \bx_i)^2 / (2h^2)\big)$ with a bandwidth $h$. In scikit-learn,
+              <code>KNeighborsRegressor(weights="distance")</code> uses $1/d$.</p>
+            <p><strong>Step 3: (c) disadvantage.</strong> If the closest point receives almost all the weight, the
+              method behaves like 1-NN whatever $k$ is: the variance returns and one noisy or mislabelled point decides
+              the prediction near it. With $w_i = 1/d$ and $\varepsilon = 0$, a test point that coincides with a training
+              point copies its label exactly. Strong weighting also adds a choice ($\varepsilon$ or $h$) that must be
+              tuned.</p>
+          </div>
+        </details>
+
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

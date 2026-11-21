@@ -8,6 +8,7 @@
      - resolves cross-references  <a class="ref" href="#thm-ols"></a>
      - renders math with KaTeX
    Every page sets  <body data-root="../" data-page="chapter" data-chapter="slug">
+   (exercise pages: data-page="exercises" data-set="<chapter slug>"; the list: data-page="exercises")
    ========================================================================== */
 (function () {
   "use strict";
@@ -28,6 +29,11 @@
   };
 
   const chapterHref = (c) => `${ROOT}chapters/${c.slug}.html`;
+  // Exercise pages: exercises/<chapter slug>.html, for chapters with an `exercises` summary.
+  const exHref = (c) => `${ROOT}exercises/${c.slug}.html`;
+  const EX = C.chapters.filter((c) => c.exercises && c.status === "ready");
+  const exChapter = PAGE === "exercises" ? C.chapters.find((c) => c.slug === body.dataset.set) : null;
+  const numbering = current || exChapter;   // "Exercise 7.3", sections 7.1 …
   const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
 
   function groupByPart(chapters) {
@@ -93,6 +99,7 @@
           <nav class="top-nav" aria-label="Site">
             ${navLink(`${ROOT}index.html`, "Home", "home")}
             ${navLink(`${ROOT}index.html#chapters`, "Chapters", "chapter")}
+            ${navLink(`${ROOT}exercises/index.html`, "Exercises", "exercises")}
           </nav>
           <button class="icon-btn theme-btn" type="button"></button>
         </div>
@@ -145,6 +152,18 @@
         html += "</ol>";
       });
     });
+
+    // Exercise pages (the "Exercises" tab), after the chapters.
+    if (EX.length) {
+      const cur = PAGE === "exercises" && !exChapter ? ' aria-current="page"' : "";
+      html += `<p class="sidebar__part" id="sb-ex">Exercises</p><ol aria-labelledby="sb-ex">
+        <li><a class="sidebar__link" href="${ROOT}exercises/index.html"${cur}><span class="sidebar__num">·</span><span>All exercises</span></a></li>`;
+      EX.forEach((c) => {
+        const a = exChapter === c ? ' aria-current="page"' : "";
+        html += `<li><a class="sidebar__link" href="${exHref(c)}"${a}><span class="sidebar__num">${esc(c.num)}</span><span>${esc(c.title)}</span></a></li>`;
+      });
+      html += "</ol>";
+    }
     nav.innerHTML = html;
   }
 
@@ -212,6 +231,31 @@
     mount.innerHTML = html;
   }
 
+  /* ---------------- Exercises page: one card per chapter that has exercises ---------------- */
+  function buildExerciseMap() {
+    const mount = document.getElementById("exercise-map");
+    if (!mount) return;
+    const check = svg('<path d="M20 6L9 17l-5-5"/>');
+    let html = "";
+    groupByPart(EX).forEach(([part, chapters], i) => {
+      html += `<section class="part" aria-labelledby="expart-${i}"><h3 class="part__title" id="expart-${i}">${esc(part)}</h3>`;
+      groupBySub(chapters).forEach(([sub, subChapters]) => {
+        if (sub) html += `<h4 class="part__sub">${esc(sub)}</h4>`;
+        html += '<ul class="cards">';
+        subChapters.forEach((c) => {
+          html += `<li><a class="card" href="${exHref(c)}">
+            <span class="card__num">CHAPTER ${esc(c.num)}</span>
+            <span class="card__title">${esc(c.title)}</span>
+            <span class="card__summary">${esc(c.exercises)}</span>
+            <span class="card__foot"><span class="badge">${check} Available</span></span></a></li>`;
+        });
+        html += "</ul>";
+      });
+      html += "</section>";
+    });
+    mount.innerHTML = html;
+  }
+
   /* ---------------- Chapter enhancements ---------------- */
   const usedIds = new Set();
   function slugify(text) {
@@ -236,7 +280,7 @@
     const article = document.querySelector("main article");
     if (!article) return;
     const numbered = article.classList.contains("chapter");
-    const prefix = current ? `${current.num}.` : "";
+    const prefix = numbering ? `${numbering.num}.` : "";
     let h2 = 0, h3 = 0;
 
     contentHeadings(article).forEach((h) => {
@@ -261,7 +305,7 @@
   function numberEnvironments() {
     const article = document.querySelector("article.chapter");
     if (!article) return;
-    const prefix = current ? `${current.num}.` : "";
+    const prefix = numbering ? `${numbering.num}.` : "";
     let n = 0;
 
     article.querySelectorAll(".env").forEach((env) => {
@@ -491,6 +535,15 @@
 
   function buildPager() {
     const mount = document.getElementById("pager");
+    if (mount && exChapter) {   // exercise pages: previous / next chapter with exercises
+      const i = EX.indexOf(exChapter), prev = EX[i - 1], next = EX[i + 1];
+      const link = (c, cls, dir) => `<a class="pager__${cls}" href="${exHref(c)}"><span class="pager__dir">${dir}</span><span class="pager__title">Exercises ${esc(c.num)}. ${esc(c.title)}</span></a>`;
+      mount.classList.add("pager");
+      mount.setAttribute("aria-label", "Exercise navigation");
+      mount.innerHTML = (prev ? link(prev, "prev", "← Previous") : "") + (next ? link(next, "next", "Next →") : "");
+      if (!prev && !next) mount.remove();
+      return;
+    }
     if (!mount || !current) return;
     const ready = C.chapters.filter((c) => c.status === "ready");
     const i = ready.indexOf(current);
@@ -557,6 +610,7 @@
   buildFooter();
   setupDrawer();
   buildCourseMap();
+  buildExerciseMap();
   fillChapterHead();
   numberSections();
   numberEnvironments();

@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backpropagation Exercises with Solutions: Gradients, Adam &amp; Dropout | ML Course Notes</title>
+  <meta name="description" content="Backpropagation exercises with step-by-step solutions: gradients by hand, softmax error signals, learning rates, Adam, weight decay, dropout, early stopping.">
+  <link rel="canonical" href="https://idriskb.github.io/ML_course/exercises/11-training-networks.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Machine Learning · Course notes">
+  <meta property="og:title" content="Backpropagation Exercises with Solutions: Gradients, Adam &amp; Dropout | ML Course Notes">
+  <meta property="og:description" content="Backpropagation exercises with step-by-step solutions: gradients by hand, softmax error signals, learning rates, Adam, weight decay, dropout, early stopping.">
+  <meta property="og:url" content="https://idriskb.github.io/ML_course/exercises/11-training-networks.html">
+  <meta name="twitter:card" content="summary">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+</head>
+<body data-root="../" data-page="exercises" data-set="11-training-networks">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow">Exercises · Chapter 11 · Module 3 · Neural networks</p>
+          <h1>Exercises: backpropagation and training</h1>
+          <p class="lede">Practice for <a href="../chapters/11-training-networks.html">Chapter 11</a>. The error signal of layer $\ell$ is $\boldsymbol\delta^{(\ell)} = \partial\mathcal L/\partial\mathbf z^{(\ell)}$; backpropagation computes it from the output backwards with $\boldsymbol\delta^{(\ell)} = \sigma^{(\ell)\prime}(\mathbf z^{(\ell)}) \odot \bW^{(\ell+1)\top}\boldsymbol\delta^{(\ell+1)}$, and the gradients are $\partial\mathcal L/\partial\bW^{(\ell)} = \boldsymbol\delta^{(\ell)}\ba^{(\ell-1)\top}$ and $\partial\mathcal L/\partial\bb^{(\ell)} = \boldsymbol\delta^{(\ell)}$. Every exercise is followed by a collapsed solution: try the question first, then reveal the solution one step at a time.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>What you will practise</h2>
+          <ul>
+            <li>Running backpropagation by hand and checking a gradient with a finite difference.</li>
+            <li>Computing output error signals for squared error, sigmoid and softmax outputs.</li>
+            <li>Predicting how the learning rate affects gradient descent, and computing momentum and Adam steps.</li>
+            <li>Computing the effect of weight decay, dropout and early stopping.</li>
+            <li>Diagnosing common training failures from loss curves.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="bp-core">Core conceptual questions</h2>
+
+        <div class="env exercise" id="exo-train-problem" data-name="The training problem">
+          <p>Training a network minimises $J(\theta) = \frac1N\sum_i \mathcal L_i(\theta)$ by gradient descent.</p>
+          <ol type="a">
+            <li>Why is there no closed-form solution, as there is for linear regression?</li>
+            <li>What does it mean that $J$ is not convex, and what are two practical consequences?</li>
+            <li>Why is computing each partial derivative by a finite difference not an option for a real network?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-train-problem">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) no closed form.</strong> For linear regression the gradient is linear in $\bw$, so
+              setting it to zero gives a linear system (the normal equations). In a network, the parameters enter through
+              compositions of non-linear functions, $f_\theta(\bx) = \sigma(\bW^{(2)}\sigma(\bW^{(1)}\bx + \bb^{(1)}) + \dots)$,
+              and $\nabla J(\theta) = \mathbf 0$ is a non-linear system with no formula for its solution. We must
+              iterate.</p>
+            <p><strong>Step 2: (b) non-convexity.</strong> A convex function has no bad local minima: every local minimum is
+              global. $J$ is not convex: for instance, swapping two hidden units gives the same function and the same loss,
+              but the midpoint of the two parameter vectors is usually a worse network. Consequences: (i) gradient descent
+              can end in different solutions depending on the initialisation and the random mini-batches, so results vary
+              from run to run; (ii) the initialisation and the optimiser matter, and it is worth trying several seeds.</p>
+            <p><strong>Step 3: (c) finite differences.</strong> One central difference costs two forward passes per
+              parameter. A network with $10^5$ parameters and a forward pass of about $10^5$ multiplications needs about
+              $$2 \times 10^5 \times 10^5 = 2 \times 10^{10}$$
+              operations for one approximate gradient. Backpropagation gives the exact gradient for about three forward
+              passes, $3 \times 10^5$ operations.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-bp-idea" data-name="What backpropagation computes">
+          <ol type="a">
+            <li>What does the error signal $\delta^{(\ell)}_j$ measure, in words?</li>
+            <li>Why does the computation go <em>backwards</em>, from the output to the input?</li>
+            <li>Why must the forward pass store the activations of every layer, and what does this cost in memory?</li>
+            <li>Why is the gradient of a weight $W^{(\ell)}_{jk}$ the product $\delta^{(\ell)}_j a^{(\ell-1)}_k$?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-bp-idea">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) meaning.</strong> $\delta^{(\ell)}_j = \partial\mathcal L/\partial z^{(\ell)}_j$ is the
+              sensitivity of the loss to the pre-activation of unit $j$: if $z^{(\ell)}_j$ increases by a small $\varepsilon$,
+              the loss changes by about $\delta^{(\ell)}_j\varepsilon$. A large $|\delta|$ means the unit matters a lot for the
+              current error; its sign says in which direction to push the unit.</p>
+            <p><strong>Step 2: (b) backwards.</strong> The loss depends on layer $\ell$ only through layer $\ell + 1$. By the
+              chain rule, $\boldsymbol\delta^{(\ell)}$ is computed from $\boldsymbol\delta^{(\ell+1)}$:
+              $$\boldsymbol\delta^{(\ell)} = \sigma^{(\ell)\prime}\big(\mathbf z^{(\ell)}\big) \odot \bW^{(\ell+1)\top}\boldsymbol\delta^{(\ell+1)} .$$
+              Starting from the output, where $\boldsymbol\delta^{(L)}$ is known directly, each layer reuses the work of the
+              layer above. Going forwards would require a separate chain-rule computation for every parameter.</p>
+            <p><strong>Step 3: (c) memory.</strong> The backward formulas use $\mathbf z^{(\ell)}$ (in $\sigma'$) and
+              $\ba^{(\ell-1)}$ (in the weight gradient), which were computed in the forward pass. Storing them costs memory
+              proportional to the total number of units times the batch size. This, not the number of parameters, is often
+              what limits the batch size on a GPU.</p>
+            <p><strong>Step 4: (d) the weight gradient.</strong> $W^{(\ell)}_{jk}$ affects the loss only through
+              $z^{(\ell)}_j = \sum_k W^{(\ell)}_{jk}a^{(\ell-1)}_k + b^{(\ell)}_j$, and
+              $\partial z^{(\ell)}_j/\partial W^{(\ell)}_{jk} = a^{(\ell-1)}_k$. So
+              $$\frac{\partial\mathcal L}{\partial W^{(\ell)}_{jk}} = \frac{\partial\mathcal L}{\partial z^{(\ell)}_j}\cdot\frac{\partial z^{(\ell)}_j}{\partial W^{(\ell)}_{jk}} = \delta^{(\ell)}_j\,a^{(\ell-1)}_k .$$
+              A weight changes a lot when its unit matters (large $\delta$) <em>and</em> its input is active (large $a$).</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-optimisers" data-name="Comparing optimisers">
+          <p>Explain in words what problem each of the following addresses, compared with plain gradient descent on the full
+            training set: (a) mini-batch stochastic gradient descent; (b) momentum; (c) Adam.</p>
+        </div>
+        <details class="solution" data-for="exo-optimisers">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) mini-batches.</strong> The full gradient averages over all $N$ examples, which is
+              expensive when $N$ is large. A mini-batch of, say, 64 examples gives an unbiased but noisy estimate at a tiny
+              fraction of the cost, so we can take many more steps for the same computation. The noise also helps the
+              optimiser move away from poor flat regions.</p>
+            <p><strong>Step 2: (b) momentum.</strong> In a long narrow valley the gradient points mostly across the valley,
+              so gradient descent zig-zags and advances slowly along it. Momentum keeps a running sum of past gradients,
+              $\bv_{t+1} = \beta\bv_t + \mathbf g_t$: the components that change sign (across the valley) cancel, and the
+              consistent component (along the valley) builds up. It also smooths mini-batch noise.</p>
+            <p><strong>Step 3: (c) Adam.</strong> Different parameters can have gradients of very different sizes, and a
+              single learning rate is too large for some and too small for others. Adam divides each parameter's average
+              gradient by the square root of its average squared gradient, so every parameter moves by roughly $\eta$ per step
+              whatever the scale of its gradient. It also includes momentum. It works well with little tuning, which is why
+              it is the default for networks.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-reg-tools" data-name="Three ways to regularise a network">
+          <p>For weight decay, early stopping and dropout, explain how each one reduces overfitting, and what
+            hyperparameter controls it.</p>
+        </div>
+        <details class="solution" data-for="exo-reg-tools">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: weight decay.</strong> It adds $\frac\lambda2\sum_\ell\norm{\bW^{(\ell)}}_F^2$ to the loss, as
+              ridge does for linear regression. Each step shrinks the weights by the factor $1 - \eta\lambda$ before the usual
+              gradient step, which keeps the weights small and the network's function smoother. Controlled by
+              $\lambda$.</p>
+            <p><strong>Step 2: early stopping.</strong> Training starts from small weights and the network becomes more
+              complex as training goes on. Monitoring the validation loss and keeping the parameters where it was lowest
+              stops before the network starts fitting noise. Controlled by the patience (and the maximum number of epochs);
+              it costs nothing extra and is almost always used.</p>
+            <p><strong>Step 3: dropout.</strong> During training each hidden unit is set to zero with probability $p$, at
+              random, at every step. The network cannot rely on any single unit or on precise combinations of units, so it
+              learns redundant, more robust features; it behaves like an average of many thinned sub-networks. Controlled by
+              the rate $p$ (typically $0.1$ to $0.5$).</p>
+            <p><strong>Step 4: conclude.</strong> All three trade a little training fit for lower variance. Their strength
+              ($\lambda$, patience, $p$) is chosen on a validation set, never on the test set.</p>
+          </div>
+        </details>
+
+        <!-- ============================================================ -->
+        <h2 id="bp-intermediate">Intermediate exercises</h2>
+
+        <div class="env exercise" id="exo-bp-relu" data-name="Backpropagation by hand in a ReLU network">
+          <p>A network has two inputs, two ReLU hidden units and an identity output, with loss
+            $\mathcal L = \frac12(\hat y - y)^2$ and parameters
+            $$\bW^{(1)} = \begin{pmatrix} 1 & 1 \\ 1 & -1 \end{pmatrix}, \quad \bb^{(1)} = \begin{pmatrix} 0 \\ 0 \end{pmatrix}, \quad
+            \bW^{(2)} = \begin{pmatrix} 1 & 2 \end{pmatrix}, \quad b^{(2)} = 0.5 .$$
+            The training example is $\bx = (1, 2)$, $y = 3$.</p>
+          <ol type="a">
+            <li>Run the forward pass and compute the loss.</li>
+            <li>Compute $\delta^{(2)}$ and $\boldsymbol\delta^{(1)}$.</li>
+            <li>Compute all the gradients: $\partial\mathcal L/\partial\bW^{(2)}$, $\partial\mathcal L/\partial b^{(2)}$,
+              $\partial\mathcal L/\partial\bW^{(1)}$, $\partial\mathcal L/\partial\bb^{(1)}$.</li>
+            <li>Take one gradient step with $\eta = 0.1$ and compute the new prediction and loss.</li>
+            <li>Check $\partial\mathcal L/\partial W^{(1)}_{11}$ with a central finite difference.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-bp-relu">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) forward pass.</strong>
+              $$\mathbf z^{(1)} = \begin{pmatrix} 1 + 2 \\ 1 - 2 \end{pmatrix} = \begin{pmatrix} 3 \\ -1 \end{pmatrix}, \qquad
+              \ba^{(1)} = \begin{pmatrix} 3 \\ 0 \end{pmatrix}, \qquad
+              \hat y = 1(3) + 2(0) + 0.5 = 3.5,$$
+              $$\mathcal L = \tfrac12(3.5 - 3)^2 = 0.125 .$$</p>
+            <p><strong>Step 2: (b) error signals.</strong> For an identity output with squared error,
+              $$\delta^{(2)} = \hat y - y = 0.5 .$$
+              Then, with $\operatorname{ReLU}'(3) = 1$ and $\operatorname{ReLU}'(-1) = 0$,
+              $$\boldsymbol\delta^{(1)} = \begin{pmatrix} 1 \\ 0 \end{pmatrix} \odot \begin{pmatrix} 1 \\ 2 \end{pmatrix}(0.5)
+              = \begin{pmatrix} 0.5 \\ 0 \end{pmatrix} .$$</p>
+            <p><strong>Step 3: (c) gradients.</strong> Using $\partial\mathcal L/\partial\bW^{(\ell)} = \boldsymbol\delta^{(\ell)}\ba^{(\ell-1)\top}$ and
+              $\partial\mathcal L/\partial\bb^{(\ell)} = \boldsymbol\delta^{(\ell)}$:
+              $$\frac{\partial\mathcal L}{\partial\bW^{(2)}} = 0.5\,(3,\ 0) = (1.5,\ 0), \qquad \frac{\partial\mathcal L}{\partial b^{(2)}} = 0.5,$$
+              $$\frac{\partial\mathcal L}{\partial\bW^{(1)}} = \begin{pmatrix} 0.5 \\ 0 \end{pmatrix}(1,\ 2) = \begin{pmatrix} 0.5 & 1 \\ 0 & 0 \end{pmatrix}, \qquad
+              \frac{\partial\mathcal L}{\partial\bb^{(1)}} = \begin{pmatrix} 0.5 \\ 0 \end{pmatrix} .$$
+              The inactive unit 2 receives no gradient on its incoming weights, and its outgoing weight gets none either
+              (its activation is 0).</p>
+            <p><strong>Step 4: (d) one step.</strong> Subtract $0.1$ times each gradient:
+              $$\bW^{(1)} = \begin{pmatrix} 0.95 & 0.9 \\ 1 & -1 \end{pmatrix}, \quad \bb^{(1)} = \begin{pmatrix} -0.05 \\ 0 \end{pmatrix}, \quad
+              \bW^{(2)} = (0.85,\ 2), \quad b^{(2)} = 0.45 .$$
+              Now $z^{(1)}_1 = 0.95 + 1.8 - 0.05 = 2.7$ and unit 2 is still off, so
+              $$\hat y = 0.85(2.7) + 0.45 = 2.745, \qquad \mathcal L = \tfrac12(0.255)^2 \approx 0.033 .$$
+              The loss fell from $0.125$ to $0.033$. (The prediction overshot slightly below 3: the step was a little too
+              large for this example.)</p>
+            <p><strong>Step 5: (e) finite-difference check.</strong> Changing $W^{(1)}_{11}$ by $\pm\varepsilon$ changes
+              $z^{(1)}_1$ and $\hat y$ by $\pm\varepsilon$ (since $x_1 = 1$ and $W^{(2)}_1 = 1$), so $\hat y = 3.5 \pm \varepsilon$ and
+              $$\frac{\tfrac12(0.5 + \varepsilon)^2 - \tfrac12(0.5 - \varepsilon)^2}{2\varepsilon} = \frac{2 \cdot 0.5\,\varepsilon}{2\varepsilon} = 0.5,$$
+              in agreement with backpropagation.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-bp-softmax" data-name="The error signal of a softmax output">
+          <p>The last hidden layer of a three-class network has activations $\ba^{(L-1)} = (1, 2)$, and the output logits are
+            $\mathbf z^{(L)} = (1, 0, -1)$. The true class is $y = 2$. The loss is the cross-entropy $-\log p_y$.</p>
+          <ol type="a">
+            <li>Compute $\mathbf p = \operatorname{softmax}(\mathbf z^{(L)})$ and the loss.</li>
+            <li>Compute $\boldsymbol\delta^{(L)} = \mathbf p - \mathbf e_y$. Why do its entries sum to 0?</li>
+            <li>Compute the gradient of the loss with respect to the $3 \times 2$ output weight matrix.</li>
+            <li>After a small gradient step, which logits go up and which go down?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-bp-softmax">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) probabilities.</strong> $e^1 + e^0 + e^{-1} \approx 2.718 + 1 + 0.368 = 4.086$, so
+              $$\mathbf p \approx (0.665,\ 0.245,\ 0.090), \qquad \mathcal L = -\log 0.245 \approx 1.41 .$$</p>
+            <p><strong>Step 2: (b) the error signal.</strong> With $\mathbf e_2 = (0, 1, 0)$:
+              $$\boldsymbol\delta^{(L)} = (0.665,\ 0.245 - 1,\ 0.090) = (0.665,\ -0.755,\ 0.090) .$$
+              The entries sum to $\sum_k p_k - 1 = 0$, because the probabilities sum to 1. Raising all logits together does
+              not change the softmax, so the gradient has no component along $(1, 1, 1)$.</p>
+            <p><strong>Step 3: (c) the weight gradient.</strong> $\partial\mathcal L/\partial\bW^{(L)} = \boldsymbol\delta^{(L)}\ba^{(L-1)\top}$:
+              $$\begin{pmatrix} 0.665 \\ -0.755 \\ 0.090 \end{pmatrix}\begin{pmatrix} 1 & 2 \end{pmatrix}
+              = \begin{pmatrix} 0.665 & 1.330 \\ -0.755 & -1.510 \\ 0.090 & 0.180 \end{pmatrix} .$$</p>
+            <p><strong>Step 4: (d) direction.</strong> The step subtracts $\eta$ times the gradient. Row 2 has a negative
+              gradient, so the weights into logit 2 increase and $z_2$ goes up; rows 1 and 3 have positive gradients, so
+              $z_1$ and $z_3$ go down, $z_1$ the most because the network wrongly gave class 1 the highest probability.
+              The step moves probability towards the true class.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-lr-ravine" data-name="The learning rate in a narrow valley">
+          <p>Gradient descent minimises $J(\theta) = \frac12\theta_1^2 + 5\theta_2^2$ from $\theta = (1, 1)$.</p>
+          <ol type="a">
+            <li>Show that one step multiplies $\theta_1$ by $1 - \eta$ and $\theta_2$ by $1 - 10\eta$.</li>
+            <li>Compute three steps for $\eta = 0.15$ and for $\eta = 0.25$.</li>
+            <li>For which $\eta$ does gradient descent converge? Why is the progress along $\theta_1$ then slow?</li>
+            <li>How do momentum and Adam help here?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-lr-ravine">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) one step.</strong> $\nabla J = (\theta_1,\ 10\theta_2)$, so
+              $$\theta_1 \leftarrow \theta_1 - \eta\theta_1 = (1 - \eta)\theta_1, \qquad \theta_2 \leftarrow \theta_2 - 10\eta\theta_2 = (1 - 10\eta)\theta_2 .$$</p>
+            <p><strong>Step 2: (b) three steps.</strong></p>
+            <div class="table-wrap"><table>
+              <thead><tr><th scope="col">Step</th><th scope="col">$\eta = 0.15$: $(\theta_1, \theta_2)$</th><th scope="col">$\eta = 0.25$: $(\theta_1, \theta_2)$</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">1</th><td>$(0.85,\ -0.5)$</td><td>$(0.75,\ -1.5)$</td></tr>
+                <tr><th scope="row">2</th><td>$(0.723,\ 0.25)$</td><td>$(0.563,\ 2.25)$</td></tr>
+                <tr><th scope="row">3</th><td>$(0.614,\ -0.125)$</td><td>$(0.422,\ -3.375)$</td></tr>
+              </tbody>
+            </table></div>
+            <p>With $\eta = 0.15$, $\theta_2$ flips sign but shrinks: it zig-zags across the valley. With $\eta = 0.25$ the
+              factor is $-1.5$ and $\theta_2$ explodes: gradient descent diverges.</p>
+            <p><strong>Step 3: (c) convergence.</strong> We need $|1 - \eta| \lt 1$ and $|1 - 10\eta| \lt 1$, that is
+              $$0 \lt \eta \lt 0.2 .$$
+              The steep direction $\theta_2$ caps the learning rate. The flat direction $\theta_1$ would tolerate a much
+              larger step, but with $\eta \lt 0.2$ it only shrinks by a factor above $0.8$ per step: with $\eta = 0.15$,
+              $\theta_1$ still equals $0.85^{20} \approx 0.04$ after 20 steps.</p>
+            <p><strong>Step 4: (d) momentum and Adam.</strong> Momentum averages the gradients: the zig-zagging $\theta_2$
+              components cancel, while the steady $\theta_1$ components add up and speed up progress along the valley.
+              Adam divides each coordinate's step by its own gradient scale, so both directions move at a similar rate
+              and the steep direction no longer dictates a tiny learning rate for the flat one.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-adam-steps" data-name="The first steps of Adam">
+          <p>A parameter receives the same gradient $g = 0.5$ at every step. Use the default Adam settings
+            $\beta_1 = 0.9$, $\beta_2 = 0.999$, and ignore $\varepsilon$.</p>
+          <ol type="a">
+            <li>Compute $m_1$, $s_1$, the bias-corrected $\hat m_1$, $\hat s_1$, and the first step size in units of $\eta$.</li>
+            <li>Repeat for step 2.</li>
+            <li>What would the first step be without the bias correction?</li>
+            <li>Repeat (a) with $g = 0.005$. What do you notice?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-adam-steps">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) step 1.</strong> Starting from $m_0 = s_0 = 0$:
+              $$m_1 = 0.1 \times 0.5 = 0.05, \qquad s_1 = 0.001 \times 0.25 = 0.00025,$$
+              $$\hat m_1 = \frac{0.05}{1 - 0.9} = 0.5, \qquad \hat s_1 = \frac{0.00025}{1 - 0.999} = 0.25, \qquad
+              \text{step} = \eta\,\frac{\hat m_1}{\sqrt{\hat s_1}} = \eta\,\frac{0.5}{0.5} = \eta .$$</p>
+            <p><strong>Step 2: (b) step 2.</strong>
+              $$m_2 = 0.9(0.05) + 0.05 = 0.095, \qquad s_2 = 0.999(0.00025) + 0.00025 \approx 0.0004998,$$
+              $$\hat m_2 = \frac{0.095}{1 - 0.9^2} = \frac{0.095}{0.19} = 0.5, \qquad \hat s_2 = \frac{0.0004998}{1 - 0.999^2} = \frac{0.0004998}{0.001999} \approx 0.25,$$
+              so the step is again $\eta$. With a constant gradient, the corrected averages equal $g$ and $g^2$ exactly.</p>
+            <p><strong>Step 3: (c) without correction.</strong>
+              $$\eta\,\frac{m_1}{\sqrt{s_1}} = \eta\,\frac{0.05}{0.0158} \approx 3.16\,\eta .$$
+              Both averages start at 0, but $s$ forgets its start much more slowly than $m$, so $\sqrt{s_t}$ is
+              underestimated more and the early steps would be about 3 to 5 times too large. The bias correction removes this.</p>
+            <p><strong>Step 4: (d) a 100 times smaller gradient.</strong> $\hat m_1 = 0.005$ and $\hat s_1 = 0.000025$, so
+              the step is $\eta\cdot 0.005/0.005 = \eta$ again. Adam's step does not depend on the scale of the gradient,
+              only on its consistency: a parameter with tiny gradients moves as fast as one with large gradients.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-wd-dropout-num" data-name="Weight decay and dropout in numbers">
+          <ol type="a">
+            <li>A weight equals $W = 2$, and $\partial J/\partial W = 0.5$. Compute one gradient step with $\eta = 0.1$,
+              without weight decay and with weight decay $\lambda = 0.1$.</li>
+            <li>If the data gradient were 0 for 100 steps, what would weight decay alone do to $W = 2$?</li>
+            <li>A hidden layer has activations $\ba = (2,\ 0.4,\ 1,\ 3)$ and dropout rate $p = 0.25$. The random mask is
+              $(1, 0, 1, 1)$. What does the next layer receive? What does it receive at test time?</li>
+            <li>Check that the expected input to the next layer is the same in training and at test time, for the sum of the
+              four values.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-wd-dropout-num">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) one step.</strong> Without decay, $W \leftarrow 2 - 0.1(0.5) = 1.95$. With decay the
+              weight is first shrunk by $1 - \eta\lambda = 0.99$:
+              $$W \leftarrow 0.99 \times 2 - 0.1 \times 0.5 = 1.98 - 0.05 = 1.93 .$$</p>
+            <p><strong>Step 2: (b) decay alone.</strong> Each step multiplies $W$ by 0.99:
+              $$2 \times 0.99^{100} \approx 0.73 .$$
+              A weight that the data do not support shrinks steadily towards 0.</p>
+            <p><strong>Step 3: (c) dropout.</strong> Kept units are divided by $1 - p = 0.75$:
+              $$\tilde\ba = \Big(\frac{2}{0.75},\ 0,\ \frac{1}{0.75},\ \frac{3}{0.75}\Big) \approx (2.667,\ 0,\ 1.333,\ 4) .$$
+              At test time there is no dropout and no scaling: the next layer receives $(2, 0.4, 1, 3)$.</p>
+            <p><strong>Step 4: (d) expectations.</strong> Each $\tilde a_j$ equals $a_j/0.75$ with probability 0.75 and 0
+              otherwise, so $\E[\tilde a_j] = 0.75 \cdot a_j/0.75 = a_j$. Hence the expected sum is
+              $$2 + 0.4 + 1 + 3 = 6.4,$$
+              the test-time sum. This particular mask gave $8.0$: individual training steps are noisy, but correct on
+              average.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-early-table" data-name="Early stopping from a table of losses">
+          <p>A network is trained for up to 10 epochs. The losses after each epoch are:</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th scope="col">Epoch</th><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td><td>10</td></tr></thead>
+            <tbody>
+              <tr><th scope="row">Training</th><td>0.88</td><td>0.66</td><td>0.52</td><td>0.43</td><td>0.37</td><td>0.32</td><td>0.28</td><td>0.24</td><td>0.21</td><td>0.18</td></tr>
+              <tr><th scope="row">Validation</th><td>0.90</td><td>0.70</td><td>0.58</td><td>0.52</td><td>0.50</td><td>0.51</td><td>0.49</td><td>0.53</td><td>0.55</td><td>0.58</td></tr>
+            </tbody>
+          </table></div>
+          <ol type="a">
+            <li>With a patience of 3 epochs, after which epoch does training stop, and which parameters are returned?</li>
+            <li>Repeat with a patience of 1 epoch. What is the drawback of a very small patience?</li>
+            <li>From which epoch is the network clearly overfitting? Why should the final performance be reported on a
+              separate test set rather than as the best validation loss?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-early-table">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) patience 3.</strong> The best validation loss is updated at epochs 1 to 5 (0.50), not at
+              6 (0.51), then again at 7 (0.49). Epochs 8, 9 and 10 do not improve on 0.49, so after the third of them,
+              <strong>epoch 10</strong>, training stops, and the parameters saved at <strong>epoch 7</strong> are returned.</p>
+            <p><strong>Step 2: (b) patience 1.</strong> Epoch 6 does not improve on epoch 5, so training stops after
+              epoch 6 and returns the parameters of <strong>epoch 5</strong> (validation loss 0.50). The better model at
+              epoch 7 is never reached. The validation loss is noisy, and a tiny patience mistakes a small bump for the start
+              of overfitting.</p>
+            <p><strong>Step 3: (c) overfitting.</strong> From epoch 8 the training loss keeps falling (0.24, 0.21, 0.18)
+              while the validation loss rises steadily (0.53, 0.55, 0.58): the network is fitting noise in the training set.
+              The best validation loss was chosen as the minimum over many epochs, so it is optimistically biased, as when
+              a hyperparameter is chosen on a validation set. An untouched test set gives an honest estimate.</p>
+          </div>
+        </details>
+
+        <!-- ============================================================ -->
+        <h2 id="bp-challenging">Challenging questions</h2>
+
+        <div class="env exercise" id="exo-bp-matrix" data-name="Backpropagation in matrix form">
+          <p>Let $f(\bx) = \bW^{(2)}\operatorname{ReLU}(\bW^{(1)}\bx)$ with $\bx \in \R^p$, $\bW^{(1)} \in \R^{m \times p}$,
+            $\bW^{(2)} \in \R^{1 \times m}$ (no biases), and $\mathcal L = \frac12(f(\bx) - y)^2$.</p>
+          <ol type="a">
+            <li>Derive $\partial\mathcal L/\partial\bW^{(2)}$ and $\partial\mathcal L/\partial\bW^{(1)}$ using the chain rule,
+              and check that the shapes match the parameters.</li>
+            <li>Show that if a hidden unit is inactive for every training example, neither its incoming weights nor its
+              outgoing weight ever change.</li>
+            <li>Show that if all entries of $\bW^{(2)}$ start at 0, then $\bW^{(1)}$ does not change at the first step.
+              Does training get stuck?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-bp-matrix">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) forward quantities.</strong> Write $\mathbf z = \bW^{(1)}\bx \in \R^m$,
+              $\mathbf h = \operatorname{ReLU}(\mathbf z)$, $f = \bW^{(2)}\mathbf h$, and $r = f - y$. Then
+              $\partial\mathcal L/\partial f = r$.</p>
+            <p><strong>Step 2: (a) output weights.</strong> $f = \sum_j W^{(2)}_j h_j$, so
+              $$\frac{\partial\mathcal L}{\partial\bW^{(2)}} = r\,\mathbf h\T \in \R^{1 \times m} .$$</p>
+            <p><strong>Step 3: (a) hidden weights.</strong> The error signal of the hidden layer is
+              $$\boldsymbol\delta^{(1)} = \frac{\partial\mathcal L}{\partial\mathbf z} = \mathbf 1\{\mathbf z > 0\} \odot \bW^{(2)\top} r \in \R^m,$$
+              and $z_j = \sum_k W^{(1)}_{jk}x_k$ gives $\partial z_j/\partial W^{(1)}_{jk} = x_k$, so
+              $$\frac{\partial\mathcal L}{\partial\bW^{(1)}} = \boldsymbol\delta^{(1)}\bx\T \in \R^{m \times p} . \tag{1}$$
+              Both shapes match $\bW^{(2)}$ and $\bW^{(1)}$.</p>
+            <p><strong>Step 4: (b) a dead unit.</strong> If $z_j \le 0$ for every example, then $h_j = 0$, so the $j$-th entry of
+              $r\mathbf h\T$ is 0, and $\delta^{(1)}_j = 0$, so row $j$ of (1) is 0. Averaging over examples keeps them 0.
+              The unit's weights never change and it stays dead: this is the "dying ReLU" problem.</p>
+            <p><strong>Step 5: (c) zero output weights.</strong> With $\bW^{(2)} = \mathbf 0$, $\boldsymbol\delta^{(1)} = \mathbf 0$, so by
+              (1) $\bW^{(1)}$ does not move at step 1. But $\partial\mathcal L/\partial\bW^{(2)} = r\mathbf h\T$ is not zero (as
+              long as $\mathbf h \ne \mathbf 0$ and $r \ne 0$), so $\bW^{(2)}$ becomes non-zero and from step 2 on
+              $\bW^{(1)}$ moves too. Training is not stuck, unlike when <em>all</em> weights start at 0, where every hidden
+              activation is 0 and nothing but the biases can move.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-vanish-bound" data-name="Vanishing and exploding error signals">
+          <p>A network has $L = 10$ layers, and every weight matrix has norm $\norm{\bW^{(k)}} = 2$. Use the bound
+            $\norm{\boldsymbol\delta^{(\ell)}} \le s^{L-\ell}\big(\prod_{k=\ell+1}^L\norm{\bW^{(k)}}\big)\norm{\boldsymbol\delta^{(L)}}$, where
+            $s$ bounds $|\sigma'|$.</p>
+          <ol type="a">
+            <li>For sigmoid hidden units ($s = \frac14$), bound $\norm{\boldsymbol\delta^{(1)}}/\norm{\boldsymbol\delta^{(L)}}$.</li>
+            <li>For ReLU hidden units ($s = 1$), compute the same bound. What can go wrong now?</li>
+            <li>What choice of weight scale makes the ReLU bound equal to 1, and how is this related to the initialisation
+              $\Var(w) = 2/n$?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-vanish-bound">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) sigmoid.</strong> From $\ell = 1$ to $L = 10$ there are 9 factors, each at most
+              $s\norm{\bW} = \frac14 \cdot 2 = \frac12$:
+              $$\frac{\norm{\boldsymbol\delta^{(1)}}}{\norm{\boldsymbol\delta^{(L)}}} \le \Big(\frac12\Big)^9 \approx 0.002 .$$
+              The first layer's gradients are at least 500 times smaller than the last layer's: it learns very slowly
+              (vanishing gradients).</p>
+            <p><strong>Step 2: (b) ReLU.</strong> Each factor is at most $1 \cdot 2 = 2$, so the bound is
+              $$2^9 = 512 .$$
+              The bound is only an upper bound, but it shows the risk: when the weights are too large, error signals can
+              grow layer after layer (exploding gradients), causing huge steps and a loss that jumps or becomes
+              <code>nan</code>.</p>
+            <p><strong>Step 3: (c) the right scale.</strong> The product is $1$ when $s\norm{\bW^{(k)}} = 1$ for every layer;
+              signals then neither shrink nor grow systematically. The initialisation $\Var(w) = 2/n$ for ReLU layers has the
+              same aim in the forward direction: it keeps the variance of the pre-activations constant from layer to layer
+              (the factor $\frac12$ lost by ReLU is compensated by the 2). Starting at this scale keeps both activations and
+              error signals in a healthy range.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-debug-training" data-name="Diagnosing training from the loss">
+          <p>A binary classifier is trained with binary cross-entropy. For each symptom, give a likely cause and a fix.</p>
+          <ol type="a">
+            <li>After a few steps the loss becomes <code>nan</code>.</li>
+            <li>The training loss stays at about $0.693$ for many epochs.</li>
+            <li>The training loss falls to almost 0 while the validation loss rises after epoch 15.</li>
+            <li>Training and validation losses are both high and close to each other, and stop improving.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-debug-training">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) <code>nan</code>.</strong> The steps are too large: the parameters diverge as in
+              <a class="ref" href="#exo-lr-ravine"></a> with $\eta = 0.25$, or gradients explode
+              (<a class="ref" href="#exo-vanish-bound"></a>). Another cause is taking $\log$ of a probability rounded to 0.
+              Fixes: lower the learning rate, standardise the inputs, use <code>BCEWithLogitsLoss</code> on logits rather than
+              <code>log</code> of a sigmoid output.</p>
+            <p><strong>Step 2: (b) stuck at $0.693$.</strong> $0.693 = \log 2$ is the loss of always predicting
+              $p = 0.5$: the network has learnt nothing. Possible causes: learning rate far too small, all weights
+              initialised to 0 (symmetry: nothing can move), dead ReLU units, or labels not matched to the inputs. Fixes:
+              random initialisation at the right scale, a larger learning rate (or Adam), and a check that a tiny model can
+              overfit a handful of examples.</p>
+            <p><strong>Step 3: (c) overfitting.</strong> The network has enough capacity to memorise the training set.
+              Fixes: early stopping at the minimum of the validation loss, weight decay, dropout, a smaller network, or more
+              data.</p>
+            <p><strong>Step 4: (d) underfitting.</strong> The model is too simple or too constrained for the task, or
+              training is too slow to reach a good solution. Fixes: a wider or deeper network, less regularisation (smaller
+              $\lambda$ or dropout rate), more epochs, or a better-tuned learning rate.</p>
+          </div>
+        </details>
+
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

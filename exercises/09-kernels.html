@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kernel Methods Exercises with Solutions: Kernel Trick, RBF &amp; Kernel Ridge | ML Course Notes</title>
+  <meta name="description" content="Kernel exercises with step-by-step solutions: kernels as inner products, the kernel trick, polynomial and RBF kernels, kernel ridge regression, valid kernels.">
+  <link rel="canonical" href="https://idriskb.github.io/ML_course/exercises/09-kernels.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Machine Learning · Course notes">
+  <meta property="og:title" content="Kernel Methods Exercises with Solutions: Kernel Trick, RBF &amp; Kernel Ridge | ML Course Notes">
+  <meta property="og:description" content="Kernel exercises with step-by-step solutions: kernels as inner products, the kernel trick, polynomial and RBF kernels, kernel ridge regression, valid kernels.">
+  <meta property="og:url" content="https://idriskb.github.io/ML_course/exercises/09-kernels.html">
+  <meta name="twitter:card" content="summary">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+</head>
+<body data-root="../" data-page="exercises" data-set="09-kernels">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow">Exercises · Chapter 9 · Module 2 · Nonlinear &amp; non-parametric methods</p>
+          <h1>Exercises: kernel methods</h1>
+          <p class="lede">Practice for <a href="../chapters/09-kernels.html">Chapter 9</a>. A kernel is a function $k(\bx, \bx') = \phi(\bx)\T\phi(\bx')$ for some feature map $\phi$; on training points $\bx_1, \dots, \bx_N$ its Gram matrix is $K_{ij} = k(\bx_i, \bx_j)$. Every exercise is followed by a collapsed solution: try the question first, then reveal the solution one step at a time.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>What you will practise</h2>
+          <ul>
+            <li>Evaluating a kernel and recovering its feature map.</li>
+            <li>Explaining the kernel trick and why positive semidefiniteness matters.</li>
+            <li>Interpreting kernel ridge regression and the roles of $\sigma$ and $\lambda$.</li>
+            <li>Deciding whether a function is a valid kernel.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="kernels-core">Core conceptual questions</h2>
+
+        <div class="env exercise" id="exo-q25" data-name="Motivation for kernels">
+          <p>Explain why linear models may fail when the true relationship between inputs and outputs is nonlinear. How
+            do kernel methods address this without explicitly constructing a huge feature expansion?</p>
+        </div>
+        <details class="solution" data-for="exo-q25">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: linear models underfit curved relationships.</strong> A linear model
+              $\hat f(\bx) = w_0 + \bw\T\bx$ can only represent planes. If $y = x^2 + \varepsilon$ on $[-1, 1]$, the best
+              line is nearly flat and misses the curve everywhere. More data does not help: the error is bias, not
+              variance.</p>
+            <p><strong>Step 2: the classical fix is expensive.</strong> Add nonlinear features $\phi(\bx)$, such as all
+              monomials up to degree $d$, and fit a linear model in $\phi(\bx)$. But there are
+              $$\binom{p + d}{d}$$
+              monomials of degree at most $d$ in $p$ variables. For $p = 100$ and $d = 3$ that is $176\,851$ features,
+              and for the Gaussian kernel the feature space is infinite-dimensional.</p>
+            <p><strong>Step 3: the kernel idea.</strong> Ridge regression in feature space can be written so that the
+              data enter only through inner products $\phi(\bx_i)\T\phi(\bx_j)$ (the dual form,
+              <a href="../chapters/09-kernels.html#dual">Section 9.2</a>). Replace each inner product by a kernel
+              $k(\bx_i, \bx_j)$ that is cheap to evaluate directly. The model then becomes
+              $$\hat f(\bx) = \sum_{i=1}^N \alpha_i\,k(\bx_i, \bx) .$$</p>
+            <p><strong>Step 4: conclude.</strong> The model is linear in the (huge) feature space and nonlinear in
+              $\bx$. All computations use the $N \times N$ matrix $K$, so the cost depends on $N$ and not on the number of
+              features.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q26" data-name="Kernel as inner product">
+          <p>What does it mean to say that a kernel function $k(\bx, \bx')$ represents an inner product in some feature
+            space? Why is positive semidefiniteness important?</p>
+        </div>
+        <details class="solution" data-for="exo-q26">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: the meaning.</strong> There is a feature map $\phi$, possibly into an
+              infinite-dimensional space, such that
+              $$k(\bx, \bx') = \phi(\bx)\T\phi(\bx') \quad\text{for all } \bx, \bx' .$$
+              So $k$ measures similarity as an inner product: it is large when $\phi(\bx)$ and $\phi(\bx')$ point in the
+              same direction. It also defines lengths and distances in feature space, for example
+              $\norm{\phi(\bx) - \phi(\bx')}^2 = k(\bx, \bx) - 2k(\bx, \bx') + k(\bx', \bx')$.</p>
+            <p><strong>Step 2: inner products give PSD Gram matrices.</strong> If $k$ is an inner product, then for any
+              points and any $\bv \in \R^N$,
+              $$\bv\T K\bv = \sum_{i, j} v_i v_j\,\phi(\bx_i)\T\phi(\bx_j) = \Big\| \sum_i v_i\,\phi(\bx_i) \Big\|^2 \ge 0 .$$
+              So every Gram matrix is symmetric positive semidefinite. Conversely, a symmetric function whose Gram matrices
+              are always PSD is an inner product in some feature space (stated without proof).</p>
+            <p><strong>Step 3: why it matters.</strong> PSD is the test of whether a proposed similarity is a valid
+              kernel. It also makes the algorithms work: $K + \lambda I$ has eigenvalues $\ge \lambda > 0$, so kernel
+              ridge regression has a unique solution, and the objective is convex. With a matrix $K$ that is not PSD,
+              "squared lengths" $\bv\T K\bv$ can be negative, $K + \lambda I$ can be singular, and the minimisation
+              may have no minimum.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q27" data-name="The kernel trick">
+          <p>State the kernel trick in your own words. Why is it computationally attractive?</p>
+        </div>
+        <details class="solution" data-for="exo-q27">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: the statement.</strong> If an algorithm uses the data only through inner products
+              $\bx_i\T\bx_j$, replace every inner product by $k(\bx_i, \bx_j)$. The algorithm then runs as if the data had
+              been mapped by $\phi$ into feature space, without $\phi$ ever being computed.</p>
+            <p><strong>Step 2: cheap inner products.</strong> For the polynomial kernel $(1 + \bx\T\bx')^d$, evaluating
+              $k$ costs one inner product in $\R^p$ (about $p$ operations) plus a power. The explicit feature vector has
+              $\binom{p+d}{d}$ entries, roughly $p^d/d!$, so computing $\phi(\bx)\T\phi(\bx')$ directly costs that much. For
+              the Gaussian kernel, explicit features are not even possible: there are infinitely many.</p>
+            <p><strong>Step 3: the cost of fitting.</strong> Kernel ridge regression needs the $N \times N$ matrix $K$
+              ($O(N^2 p)$ to build) and a linear solve ($O(N^3)$). This depends on $N$, not on the dimension of the
+              feature space. That is attractive when the feature space is large and $N$ is moderate. For very large $N$,
+              the $N^3$ cost becomes the bottleneck.</p>
+          </div>
+        </details>
+
+        <h2 id="kernels-intermediate">Intermediate exercises</h2>
+
+        <div class="env exercise" id="exo-q28" data-name="Polynomial kernel">
+          <p>Consider the polynomial kernel $k(\bx, \bx') = (1 + \bx\T\bx')^2$.</p>
+          <ol type="a">
+            <li>Compute $k(\bx, \bx')$ when $\bx = (1, 2)\T$ and $\bx' = (0, 3)\T$.</li>
+            <li>Explain qualitatively what kinds of nonlinear terms this kernel captures.</li>
+            <li>Why can this be useful compared with plain linear regression in the original input variables?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q28">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) evaluate.</strong>
+              $$\bx\T\bx' = 1\cdot 0 + 2\cdot 3 = 6, \qquad k(\bx, \bx') = (1 + 6)^2 = 49 .$$</p>
+            <p><strong>Step 2: (b) expand the kernel.</strong> For $\bx = (x_1, x_2)$,
+              $$(1 + x_1x_1' + x_2x_2')^2 = 1 + 2x_1x_1' + 2x_2x_2' + x_1^2x_1'^2 + x_2^2x_2'^2 + 2x_1x_2\,x_1'x_2' .$$
+              This is $\phi(\bx)\T\phi(\bx')$ for
+              $$\phi(\bx) = \big(1,\ \sqrt2\,x_1,\ \sqrt2\,x_2,\ x_1^2,\ x_2^2,\ \sqrt2\,x_1x_2\big) . \tag{1}$$
+              The kernel therefore captures a constant, the linear terms, the squares $x_j^2$ and the interaction
+              $x_1x_2$: all monomials of degree at most 2.</p>
+            <p><strong>Step 3: check (a) with (1).</strong> $\phi(1, 2) = (1, \sqrt2, 2\sqrt2, 1, 4, 2\sqrt2)$ and
+              $\phi(0, 3) = (1, 0, 3\sqrt2, 0, 9, 0)$, so
+              $$\phi(\bx)\T\phi(\bx') = 1 + 0 + 12 + 0 + 36 + 0 = 49 . \;\checkmark$$</p>
+            <p><strong>Step 4: (c) why it is useful.</strong> A model $\hat f(\bx) = \sum_i \alpha_i\,k(\bx_i, \bx)$
+              is any quadratic function of $\bx$. It can fit curvature (a U-shaped effect of $x_1$) and interactions
+              (the effect of $x_1$ depends on $x_2$), and as a classifier it gives conic boundaries (ellipses, parabolas,
+              hyperbolas) instead of straight lines. Plain linear regression in $(x_1, x_2)$ cannot represent any of
+              these.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q29" data-name="RBF kernel intuition">
+          <p>The Gaussian kernel is
+            $$k(\bx, \bx') = \exp\Big(-\frac{\norm{\bx - \bx'}^2}{2\sigma^2}\Big) .$$</p>
+          <ol type="a">
+            <li>What happens to $k(\bx, \bx')$ when the two points are very close?</li>
+            <li>What happens when they are very far apart?</li>
+            <li>Explain qualitatively what role $\sigma$ plays.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q29">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) close points.</strong> As $\norm{\bx - \bx'} \to 0$, the exponent tends to 0, so
+              $$k(\bx, \bx') \to e^0 = 1,$$
+              the largest possible value: the points are maximally similar.</p>
+            <p><strong>Step 2: (b) distant points.</strong> As $\norm{\bx - \bx'} \to \infty$, the exponent tends to
+              $-\infty$, so $k(\bx, \bx') \to 0$. Distant points do not influence each other. The kernel is always in
+              $(0, 1]$.</p>
+            <p><strong>Step 3: (c) $\sigma$ is a length scale.</strong> $\sigma$ sets which distances count as "close".
+              At distance $\sigma$ the kernel is $e^{-1/2} \approx 0.61$; at distance $3\sigma$ it is
+              $e^{-4.5} \approx 0.011$. So each training point influences predictions within a few $\sigma$ of
+              itself.</p>
+            <p><strong>Step 4: the effect of $\sigma$ on the fit.</strong> Small $\sigma$: each point influences
+              only a tiny neighbourhood, $K$ is close to the identity, and the fit is wiggly and can memorise the
+              training data (low bias, high variance). Large $\sigma$: every point influences everything, all entries
+              of $K$ approach 1, and the fit becomes very smooth, almost constant (high bias, low variance). $\sigma$ is
+              tuned by cross-validation, together with $\lambda$. In scikit-learn, <code>gamma</code> $= 1/(2\sigma^2)$.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q30" data-name="Kernel ridge regression">
+          <p>The prediction rule of kernel ridge regression can be written as
+            $$\hat y(\bx) = \sum_{i=1}^N \alpha_i\,k(\bx_i, \bx) .$$
+            Explain (a) what the coefficients $\alpha_i$ represent, (b) why predictions depend on similarities to
+            training points, (c) how the regularisation parameter affects smoothness and overfitting.</p>
+        </div>
+        <details class="solution" data-for="exo-q30">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) the coefficients.</strong> $\alpha_i$ is the weight of training point $i$ in the
+              prediction: the height of the bump $k(\bx_i, \cdot)$ centred at $\bx_i$. They solve
+              $$\boldsymbol\alpha = (K + \lambda I_N)^{-1}\by .$$
+              They are the dual coefficients: in feature space, the weight vector is
+              $\bw = \sum_i \alpha_i\,\phi(\bx_i)$, a combination of the mapped training points.</p>
+            <p><strong>Step 2: (b) similarities.</strong> The prediction is a weighted sum of $k(\bx_i, \bx)$, the
+              similarity between the new point and each training point. For the Gaussian kernel, training points far from
+              $\bx$ have $k(\bx_i, \bx) \approx 0$ and contribute almost nothing, so the prediction is driven by nearby
+              training points, as in k-NN but with smooth weights. The training set must be kept to make predictions.</p>
+            <p><strong>Step 3: (c) small $\lambda$.</strong> As $\lambda \to 0$ (with $K$ invertible),
+              $\boldsymbol\alpha \to K^{-1}\by$ and the training predictions $K\boldsymbol\alpha \to \by$: the fit
+              interpolates every point, noise included. The $\alpha_i$ become large, with alternating signs, and the curve
+              is wiggly: overfitting.</p>
+            <p><strong>Step 4: (c) large $\lambda$.</strong> As $\lambda$ grows, $\boldsymbol\alpha \approx \by/\lambda
+              \to \mathbf 0$. The coefficients shrink and the fit becomes flatter and smoother, eventually the constant
+              (the mean, once $\by$ is centred): underfitting. Larger $\lambda$ penalises $\norm{\bw}^2$ in feature space
+              more, which is what makes the function smoother. $\lambda$ is chosen by cross-validation.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-num-rbf" data-name="Gaussian kernel values and the effect of σ">
+          <p>Consider the three points $\ba = (0, 0)$, $\bb = (1, 0)$ and $\mathbf c = (2, 2)$ and the Gaussian kernel
+            $k(\bx, \bx') = \exp\big(-\norm{\bx - \bx'}^2/(2\sigma^2)\big)$.</p>
+          <ol type="a">
+            <li>Compute the three squared distances $\norm{\ba - \bb}^2$, $\norm{\ba - \mathbf c}^2$,
+              $\norm{\bb - \mathbf c}^2$.</li>
+            <li>For $\sigma = 1$, write the $3 \times 3$ Gram matrix.</li>
+            <li>Show that $\norm{\phi(\bx) - \phi(\bx')}^2 = 2 - 2k(\bx, \bx')$ for this kernel, and compute the three squared
+              distances in feature space for $\sigma = 1$.</li>
+            <li>Recompute $k(\ba, \bb)$ for $\sigma = 0.5$ and $\sigma = 2$. What happens to the similarities?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-num-rbf">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) squared distances.</strong>
+              $$\norm{\ba - \bb}^2 = 1, \qquad \norm{\ba - \mathbf c}^2 = 4 + 4 = 8, \qquad \norm{\bb - \mathbf c}^2 = 1 + 4 = 5 .$$</p>
+            <p><strong>Step 2: (b) Gram matrix for $\sigma = 1$.</strong> $k = e^{-d^2/2}$, so
+              $k(\ba, \bb) = e^{-0.5} \approx 0.607$, $k(\ba, \mathbf c) = e^{-4} \approx 0.018$,
+              $k(\bb, \mathbf c) = e^{-2.5} \approx 0.082$, and every point has $k(\bx, \bx) = 1$:
+              $$K \approx \begin{pmatrix} 1 & 0.607 & 0.018 \\ 0.607 & 1 & 0.082 \\ 0.018 & 0.082 & 1 \end{pmatrix} .$$</p>
+            <p><strong>Step 3: (c) distances in feature space.</strong> Expand and use $k(\bx, \bx) = 1$:
+              $$\norm{\phi(\bx) - \phi(\bx')}^2 = \underbrace{k(\bx, \bx)}_{=\ 1} - 2k(\bx, \bx') + \underbrace{k(\bx', \bx')}_{=\ 1} = 2 - 2k(\bx, \bx') .$$
+              So $\ba, \bb$: $2 - 1.213 = 0.787$; $\ba, \mathbf c$: $2 - 0.037 = 1.963$; $\bb, \mathbf c$: $2 - 0.164 = 1.836$.
+              Every point is at distance 1 from the origin of feature space, and no two points are ever more than
+              $\sqrt 2$ apart: far-apart inputs all look "equally far".</p>
+            <p><strong>Step 4: (d) changing $\sigma$.</strong> For $\sigma = 0.5$, $k(\ba, \bb) = e^{-1/(2 \cdot 0.25)} = e^{-2} \approx 0.135$,
+              and the other two are essentially 0 ($e^{-16}$ and $e^{-10}$): $K$ is almost the identity, each point is
+              similar only to itself. For $\sigma = 2$, $k(\ba, \bb) = e^{-1/8} \approx 0.882$ (and
+              $k(\ba, \mathbf c) = e^{-1} \approx 0.368$, $k(\bb, \mathbf c) = e^{-5/8} \approx 0.535$): all points look
+              similar. Small $\sigma$ gives very local, wiggly fits; large $\sigma$ gives smooth, nearly constant fits.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-num-krr" data-name="Kernel ridge regression with two points">
+          <p>Fit kernel ridge regression with the Gaussian kernel ($\sigma = 1$) and $\lambda = 0.5$ to two points:
+            $x_1 = 0,\ y_1 = 1$ and $x_2 = 1,\ y_2 = 3$. Use $e^{-1/2} \approx 0.6065$.</p>
+          <ol type="a">
+            <li>Write $K$ and $K + \lambda I$.</li>
+            <li>Compute $\boldsymbol\alpha = (K + \lambda I)^{-1}\by$.</li>
+            <li>Compute the predictions at $x = 0$, $x = 0.5$, $x = 1$ and $x = 3$.</li>
+            <li>Compare the predictions at the training points with $y_1, y_2$, and explain the prediction at $x = 3$.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-num-krr">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) the matrices.</strong> $k(0, 1) = e^{-1/2} \approx 0.6065$, so
+              $$K = \begin{pmatrix} 1 & 0.6065 \\ 0.6065 & 1 \end{pmatrix}, \qquad
+              K + 0.5\,I = \begin{pmatrix} 1.5 & 0.6065 \\ 0.6065 & 1.5 \end{pmatrix} .$$</p>
+            <p><strong>Step 2: (b) solve for $\boldsymbol\alpha$.</strong> The determinant is
+              $1.5^2 - 0.6065^2 = 2.25 - 0.3679 = 1.8821$, and the inverse of a $2 \times 2$ matrix gives
+              $$\boldsymbol\alpha = \frac{1}{1.8821}\begin{pmatrix} 1.5 & -0.6065 \\ -0.6065 & 1.5 \end{pmatrix}\begin{pmatrix} 1 \\ 3 \end{pmatrix}
+              = \frac{1}{1.8821}\begin{pmatrix} -0.3196 \\ 3.8935 \end{pmatrix} \approx \begin{pmatrix} -0.170 \\ 2.069 \end{pmatrix} .$$</p>
+            <p><strong>Step 3: (c) predictions.</strong> $\hat y(x) = \alpha_1 e^{-x^2/2} + \alpha_2 e^{-(x-1)^2/2}$:</p>
+            <div class="table-wrap"><table>
+              <thead><tr><th scope="col">$x$</th><th scope="col">$k(0, x)$</th><th scope="col">$k(1, x)$</th><th scope="col">$\hat y(x)$</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">0</th><td>1</td><td>0.607</td><td>1.08</td></tr>
+                <tr><th scope="row">0.5</th><td>0.882</td><td>0.882</td><td>1.68</td></tr>
+                <tr><th scope="row">1</th><td>0.607</td><td>1</td><td>1.97</td></tr>
+                <tr><th scope="row">3</th><td>0.011</td><td>0.135</td><td>0.28</td></tr>
+              </tbody>
+            </table></div>
+            <p><strong>Step 4: (d) interpretation.</strong> At the training points the fit gives $1.08$ and $1.97$
+              instead of $1$ and $3$: the penalty $\lambda$ shrinks the coefficients, so the fit does not interpolate.
+              (With $\lambda \to 0$ it would reproduce $1$ and $3$ exactly.) At $x = 3$ both kernel values are small, so the
+              prediction falls towards $0$: far from the data, an RBF model returns to $0$. This is why $\by$ is centred
+              before fitting; then the prediction far away returns to the mean of $\by$ instead.</p>
+          </div>
+        </details>
+
+        <h2 id="kernels-challenging">Challenging questions</h2>
+
+        <div class="env exercise" id="exo-q31" data-name="Valid kernels">
+          <p>For each of the following functions, discuss whether it is a plausible valid kernel and justify briefly:
+            $$k_1(\bx, \bx') = \bx\T\bx', \qquad k_2(\bx, \bx') = (1 + \bx\T\bx')^3, \qquad k_3(\bx, \bx') = -\norm{\bx - \bx'}^2 .$$
+            You do not need to prove every claim fully, but your explanation should rely on the ideas of inner products
+            and positive semidefinite Gram matrices.</p>
+        </div>
+        <details class="solution" data-for="exo-q31">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: $k_1$ is valid.</strong> It is an inner product with $\phi(\bx) = \bx$. Its Gram matrix is
+              $K = \bX\bX\T$, and
+              $$\bv\T\bX\bX\T\bv = \norm{\bX\T\bv}^2 \ge 0 .$$</p>
+            <p><strong>Step 2: $k_2$ is valid.</strong> $1 + \bx\T\bx'$ is a kernel (the inner product of $(1, \bx)$ with
+              $(1, \bx')$). Products of kernels are kernels
+              (<a href="../chapters/09-kernels.html#valid-kernels">Section 9.3.1</a>), so its cube is a kernel. Explicitly,
+              expanding the cube gives an inner product of feature vectors made of all monomials of degree at most 3,
+              with positive weights.</p>
+            <p><strong>Step 3: $k_3$ is not valid: diagonal.</strong> For any kernel,
+              $k(\bx, \bx) = \norm{\phi(\bx)}^2 \ge 0$, and $k(\bx, \bx) = 0$ would force $\phi(\bx) = \mathbf 0$ and hence
+              $k(\bx, \bx') = 0$ for every $\bx'$. Here $k_3(\bx, \bx) = 0$ for every $\bx$, yet $k_3(\bx, \bx') \ne 0$ when
+              $\bx \ne \bx'$. Contradiction.</p>
+            <p><strong>Step 4: $k_3$: an explicit Gram matrix.</strong> Take two points with
+              $d = \norm{\bx_1 - \bx_2}^2 > 0$:
+              $$K = \begin{pmatrix} 0 & -d \\ -d & 0 \end{pmatrix}, \qquad
+              \bv = \begin{pmatrix} 1 \\ 1 \end{pmatrix}: \quad \bv\T K\bv = -2d \lt 0 .$$
+              $K$ has the eigenvalue $-d \lt 0$, so it is not PSD.</p>
+            <p><strong>Step 5: conclude.</strong> $k_1$ and $k_2$ are valid kernels; $k_3$ is not. Its opposite
+              $\norm{\bx - \bx'}^2$ is a squared distance (a dissimilarity), and the way to turn it into a valid
+              similarity is the Gaussian kernel $\exp(-\norm{\bx - \bx'}^2/(2\sigma^2))$.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q32" data-name="Kernel choice and bias–variance">
+          <p>Explain how moving from a linear kernel to a polynomial kernel of high degree, or to a very narrow RBF kernel,
+            changes model flexibility. Relate your answer to bias, variance, and overfitting.</p>
+        </div>
+        <details class="solution" data-for="exo-q32">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: linear kernel.</strong> $k(\bx, \bx') = \bx\T\bx'$ gives ordinary ridge regression: only
+              linear functions. Low flexibility, high bias if the truth is curved, low variance.</p>
+            <p><strong>Step 2: high-degree polynomial kernel.</strong> $(1 + \bx\T\bx')^d$ allows every polynomial of
+              degree at most $d$. As $d$ grows the model can bend more, so bias falls. But high-degree polynomials
+              oscillate strongly between data points and explode outside the data range, so variance rises.</p>
+            <p><strong>Step 3: very narrow RBF kernel.</strong> As $\sigma \to 0$, $k(\bx_i, \bx_j) \to 0$ for
+              $i \ne j$, so $K \to I_N$. Each training point only "sees" itself. The fit puts a narrow spike on each
+              training point and falls back to 0 between them
+              (<a href="../chapters/09-kernels.html#kernel-geometry">Section 9.3.2</a>). It reproduces the training data
+              but predicts nothing useful elsewhere: memorisation.</p>
+            <p><strong>Step 4: conclude.</strong> Both moves increase flexibility: lower bias, higher variance, and a
+              risk of overfitting (training error falls while test error rises). Regularisation ($\lambda$) counteracts
+              this. The degree or $\sigma$ and $\lambda$ should be chosen together by cross-validation, not by training
+              error.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q33" data-name="Why kernels are non-parametric">
+          <p>In what sense are kernel methods often considered non-parametric, even though kernel ridge regression solves
+            for a finite coefficient vector $\boldsymbol\alpha \in \R^N$? Explain carefully.</p>
+        </div>
+        <details class="solution" data-for="exo-q33">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: the number of parameters grows with the data.</strong> $\boldsymbol\alpha$ is finite for
+              a given dataset, but it has one entry per training point. With $2N$ points there are $2N$ coefficients.
+              A parametric model such as linear regression has a fixed number $p + 1$ of parameters, whatever
+              $N$ is.</p>
+            <p><strong>Step 2: the training data are part of the model.</strong> Predicting with
+              $\hat y(\bx) = \sum_i \alpha_i\,k(\bx_i, \bx)$ needs all the training inputs $\bx_i$, not just
+              $\boldsymbol\alpha$. This is the same situation as k-NN (<a href="07-knn.html#exo-q1">Exercise 7.1</a>).</p>
+            <p><strong>Step 3: the function class is not fixed in advance.</strong> For the Gaussian kernel the feature
+              space is infinite-dimensional: the fit is a linear model with infinitely many parameters $\bw$, of which
+              the $N$ numbers $\alpha_i$ are only a finite representation (through $\bw = \sum_i \alpha_i\phi(\bx_i)$).
+              With more data, more bumps are placed in more places, so the set of functions the model can represent
+              grows with $N$.</p>
+            <p><strong>Step 4: conclude.</strong> "Non-parametric" does not mean "no parameters". It means the model is
+              not restricted to a fixed, finite-dimensional family set before seeing the data: its complexity is set by
+              the data (and by $\lambda$, $\sigma$). A polynomial kernel of fixed degree $d$ is the exception: its feature
+              space is finite, so for large $N$ it behaves like an ordinary parametric model with
+              $\binom{p+d}{d}$ parameters.</p>
+          </div>
+        </details>
+
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Autoencoder Exercises with Solutions: PCA, Code Size &amp; Anomaly Detection | ML Course Notes</title>
+  <meta name="description" content="Autoencoder exercises with step-by-step solutions: encoding by hand, linear autoencoders and PCA, choosing the code size, denoising, anomaly detection.">
+  <link rel="canonical" href="https://idriskb.github.io/ML_course/exercises/12-autoencoders.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Machine Learning · Course notes">
+  <meta property="og:title" content="Autoencoder Exercises with Solutions: PCA, Code Size &amp; Anomaly Detection | ML Course Notes">
+  <meta property="og:description" content="Autoencoder exercises with step-by-step solutions: encoding by hand, linear autoencoders and PCA, choosing the code size, denoising, anomaly detection.">
+  <meta property="og:url" content="https://idriskb.github.io/ML_course/exercises/12-autoencoders.html">
+  <meta name="twitter:card" content="summary">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+</head>
+<body data-root="../" data-page="exercises" data-set="12-autoencoders">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow">Exercises · Chapter 12 · Module 3 · Neural networks</p>
+          <h1>Exercises: autoencoders</h1>
+          <p class="lede">Practice for <a href="../chapters/12-autoencoders.html">Chapter 12</a>. An autoencoder has an encoder $g_\phi : \R^p \to \R^k$ and a decoder $h_\psi : \R^k \to \R^p$, and minimises the reconstruction error $J = \frac1n\sum_i\norm{\bx_i - h_\psi(g_\phi(\bx_i))}^2$ on unlabelled data $\bx_1, \dots, \bx_n$. Every exercise is followed by a collapsed solution: try the question first, then reveal the solution one step at a time.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>What you will practise</h2>
+          <ul>
+            <li>Encoding and reconstructing points by hand, and computing the reconstruction error.</li>
+            <li>Relating linear autoencoders to PCA through the eigenvalues of the covariance matrix.</li>
+            <li>Counting parameters and choosing the code size from a validation curve.</li>
+            <li>Using reconstruction errors for denoising and anomaly detection.</li>
+            <li>Recognising when a non-linear autoencoder can beat PCA, and what it cannot do.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="ae-core">Core conceptual questions</h2>
+
+        <div class="env exercise" id="exo-ae-idea" data-name="Learning without labels">
+          <ol type="a">
+            <li>An autoencoder is trained to output its own input. What is the "label" of each training point, and why is
+              this called unsupervised learning?</li>
+            <li>Why must the code size $k$ be smaller than $p$ for a plain autoencoder? What would a network with
+              $k \ge p$ be able to learn?</li>
+            <li>After training, which part of the network is usually kept, and what is it used for?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-ae-idea">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) no labels.</strong> The target of $\bx_i$ is $\bx_i$ itself, so only the inputs are
+              needed. Nobody has to annotate the data, which is why autoencoders can use large unlabelled datasets. The
+              goal is not to predict a quantity but to discover structure: a short description $\bz$ from which $\bx$ can
+              be rebuilt.</p>
+            <p><strong>Step 2: (b) the bottleneck.</strong> With $k \ge p$ the encoder can copy $\bx$ into the code and the
+              decoder can copy it back: the identity map achieves $J = 0$ and has learned nothing about the data. With
+              $k \lt p$ the identity is impossible, so the network must keep the directions (or the curved coordinates)
+              along which the data vary most and discard the rest.</p>
+            <p><strong>Step 3: (c) what is kept.</strong> Usually the encoder: it maps each input to its code
+              $\bz = g_\phi(\bx) \in \R^k$, a compressed representation used for visualisation ($k = 2$), as features for a
+              later model, or for compression. The full network is kept when the reconstruction itself is needed, as in
+              denoising and anomaly detection.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-ae-pca-concept" data-name="Autoencoders and PCA">
+          <ol type="a">
+            <li>What does a linear autoencoder (no activations) learn on centred data?</li>
+            <li>Does it learn the principal directions themselves? Explain.</li>
+            <li>What changes when the encoder and decoder are non-linear? What do we lose compared with PCA?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-ae-pca-concept">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) the PCA subspace.</strong> A linear autoencoder reconstructs $\hat\bx = DE\bx$, a point in
+              the $k$-dimensional subspace spanned by the columns of $D$. Its smallest possible error is
+              $$\lambda_{k+1} + \dots + \lambda_p,$$
+              the PCA error, reached when the reconstructions are the projections onto the span of the first $k$ principal
+              directions.</p>
+            <p><strong>Step 2: (b) not the directions themselves.</strong> If $E$ and $D$ are optimal, so are $AE$ and
+              $DA^{-1}$ for any invertible $k \times k$ matrix $A$, because $DA^{-1}AE = DE$. The <em>subspace</em> is the PCA
+              subspace, but the codes are any invertible linear transformation of the PCA scores: rotated, stretched,
+              correlated. Gradient descent has no reason to pick the principal axes.</p>
+            <p><strong>Step 3: (c) non-linear autoencoders.</strong> The set of reconstructions becomes a curved
+              $k$-dimensional surface, which can follow data lying near a curve or a curved sheet, and the error can fall well
+              below PCA's. The price: no closed form (iterative, non-convex training that depends on the initialisation),
+              more hyperparameters, possible memorisation of the training set, and codes whose coordinates have no fixed
+              meaning or order, unlike the ordered, uncorrelated principal components.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-ae-uses" data-name="Why the variants work">
+          <p>Explain the idea behind each use: (a) a denoising autoencoder; (b) anomaly detection with the reconstruction
+            error; (c) using the encoder as features for a classifier trained on few labels.</p>
+        </div>
+        <details class="solution" data-for="exo-ae-uses">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) denoising.</strong> The network receives a corrupted copy $\tilde\bx$ but must output the
+              clean $\bx$. Copying the input no longer works, even without a bottleneck, because input and target differ.
+              To remove the corruption the network has to learn what typical inputs look like and pull corrupted ones back
+              towards them.</p>
+            <p><strong>Step 2: (b) anomalies.</strong> Trained only on normal data, the bottleneck keeps the structure of
+              normal inputs. A normal input is reconstructed well. An unusual input does not fit that structure, so its
+              reconstruction is pulled towards something normal and the error $\norm{\bx - \hat\bx}^2$ is large. Flag inputs
+              whose error exceeds a threshold set on normal validation data.</p>
+            <p><strong>Step 3: (c) feature learning.</strong> Unlabelled data are often plentiful, labels scarce. The
+              autoencoder learns, from all the unlabelled data, a code that keeps the main structure of the inputs. A simple
+              classifier (for example logistic regression) on these few-dimensional codes needs far fewer labelled examples
+              than one on the raw $p$ features, because it has far fewer parameters to estimate.</p>
+          </div>
+        </details>
+
+        <!-- ============================================================ -->
+        <h2 id="ae-intermediate">Intermediate exercises</h2>
+
+        <div class="env exercise" id="exo-ae-hand" data-name="A linear autoencoder by hand">
+          <p>A linear autoencoder on $\R^2$ with code size $k = 1$ has encoder $z = \bu\T\bx$ and decoder $\hat\bx = \bu z$,
+            with $\bu = \frac{1}{\sqrt2}(1, 1)$.</p>
+          <ol type="a">
+            <li>Encode and reconstruct the points $(2, 2)$, $(1, 3)$ and $(3, -1)$.</li>
+            <li>Compute each squared reconstruction error and their mean $J$.</li>
+            <li>Describe geometrically what the autoencoder does.</li>
+            <li>Replace the encoder by $z = 2\bu\T\bx$ and the decoder by $\hat\bx = \frac12\bu z$. Compute the new code and
+              reconstruction of $(1, 3)$. What does this show?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-ae-hand">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) codes and reconstructions.</strong> $z = (x_1 + x_2)/\sqrt2$ and
+              $\hat\bx = \frac{z}{\sqrt2}(1, 1) = \frac{x_1 + x_2}{2}(1, 1)$:</p>
+            <div class="table-wrap"><table>
+              <thead><tr><th scope="col">$\bx$</th><th scope="col">$z$</th><th scope="col">$\hat\bx$</th><th scope="col">$\norm{\bx - \hat\bx}^2$</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">$(2, 2)$</th><td>$4/\sqrt2 \approx 2.83$</td><td>$(2, 2)$</td><td>$0$</td></tr>
+                <tr><th scope="row">$(1, 3)$</th><td>$4/\sqrt2 \approx 2.83$</td><td>$(2, 2)$</td><td>$1 + 1 = 2$</td></tr>
+                <tr><th scope="row">$(3, -1)$</th><td>$2/\sqrt2 \approx 1.41$</td><td>$(1, 1)$</td><td>$4 + 4 = 8$</td></tr>
+              </tbody>
+            </table></div>
+            <p><strong>Step 2: (b) the mean error.</strong>
+              $$J = \frac{0 + 2 + 8}{3} = \frac{10}{3} \approx 3.33 .$$</p>
+            <p><strong>Step 3: (c) geometry.</strong> $\hat\bx = \bu\bu\T\bx$ is the orthogonal projection onto the line
+              $x_1 = x_2$. Points on the line, like $(2, 2)$, are reconstructed exactly; the error is the squared distance to
+              the line. $(1, 3)$ and $(2, 2)$ get the same code: the autoencoder cannot tell them apart.</p>
+            <p><strong>Step 4: (d) a rescaled code.</strong> For $(1, 3)$, $z = 2 \cdot 4/\sqrt2 \approx 5.66$, twice the
+              old code, and
+              $$\hat\bx = \tfrac12\bu z = \tfrac12 \cdot \tfrac{1}{\sqrt2} \cdot \tfrac{8}{\sqrt2}\,(1, 1) = (2, 2),$$
+              the same reconstruction. Any rescaling of the code can be undone by the decoder, so the reconstruction error
+              cannot fix the scale (or, for $k \ge 2$, the rotation) of the code.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-ae-count" data-name="Parameters and compression">
+          <p>For the $8 \times 8$ digits ($p = 64$), an autoencoder has encoder $64 \to 16 \to 4$ and a mirror decoder
+            $4 \to 16 \to 64$, all layers with biases.</p>
+          <ol type="a">
+            <li>Count the parameters of each of the four layers and the total.</li>
+            <li>How many numbers does PCA with $k = 4$ store (directions and mean)?</li>
+            <li>Each image is stored as its code. By what factor is the dataset compressed? What else must be kept to
+              decompress it?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-ae-count">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) layer by layer.</strong> A layer $n_{\rm in} \to n_{\rm out}$ has
+              $n_{\rm out}(n_{\rm in} + 1)$ parameters:
+              $$16 \cdot 65 + 4 \cdot 17 + 16 \cdot 5 + 64 \cdot 17 = 1040 + 68 + 80 + 1088 = 2276 .$$</p>
+            <p><strong>Step 2: (b) PCA.</strong> Four directions in $\R^{64}$ and the mean vector:
+              $$4 \times 64 + 64 = 320 .$$
+              The autoencoder has about seven times as many parameters.</p>
+            <p><strong>Step 3: (c) compression.</strong> Each image goes from 64 numbers to 4, a factor of
+              $$\frac{64}{4} = 16 .$$
+              To decompress, the decoder (its $80 + 1088 = 1168$ parameters) must be kept as well; for PCA, the 320 numbers
+              above. For a large dataset this fixed cost is small compared with the savings.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-ae-eigen" data-name="Reconstruction error from the eigenvalues">
+          <p>Centred data in $\R^5$ have covariance eigenvalues $\lambda = (5,\ 2,\ 0.6,\ 0.3,\ 0.1)$.</p>
+          <ol type="a">
+            <li>What is the smallest reconstruction error a <em>linear</em> autoencoder can reach with $k = 1, 2, 3, 4$?</li>
+            <li>What fraction of the variance does each $k$ keep? Which $k$ is the smallest that keeps at least $90\%$?</li>
+            <li>A non-linear autoencoder with $k = 2$ reaches a validation error of $0.5$. Is this possible? What does it
+              tell you about the data?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-ae-eigen">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) the linear optimum.</strong> The best linear autoencoder with code size $k$ reaches the PCA
+              error $\lambda_{k+1} + \dots + \lambda_p$:
+              $$k = 1:\ 3.0, \qquad k = 2:\ 1.0, \qquad k = 3:\ 0.4, \qquad k = 4:\ 0.1 .$$</p>
+            <p><strong>Step 2: (b) variance kept.</strong> The total variance is $\tr\Sigma = 8$. The fractions kept are
+              $$k = 1:\ \tfrac58 = 62.5\%, \qquad k = 2:\ \tfrac78 = 87.5\%, \qquad k = 3:\ \tfrac{7.6}{8} = 95\%, \qquad k = 4:\ 98.75\% .$$
+              The smallest $k$ with at least $90\%$ is $k = 3$.</p>
+            <p><strong>Step 3: (c) beating PCA.</strong> Yes: a non-linear autoencoder is not limited to flat subspaces, so it
+              can go below the linear bound of $1.0$ for $k = 2$. Reaching $0.5$ on <em>validation</em> data (not just
+              training data) means the data lie near a curved two-dimensional surface that a plane cannot follow: two
+              non-linear coordinates do almost as well as three linear ones ($0.4$).</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-ae-k" data-name="Choosing the code size">
+          <p>An autoencoder is trained for several code sizes. The mean reconstruction errors are:</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th scope="col">$k$</th><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td><td>8</td></tr></thead>
+            <tbody>
+              <tr><th scope="row">Training</th><td>23.5</td><td>14.6</td><td>9.8</td><td>8.0</td><td>7.1</td><td>6.3</td><td>4.9</td></tr>
+              <tr><th scope="row">Validation</th><td>24.0</td><td>15.1</td><td>10.3</td><td>8.9</td><td>8.4</td><td>8.2</td><td>8.1</td></tr>
+            </tbody>
+          </table></div>
+          <ol type="a">
+            <li>Compute the decrease in validation error for each increase of $k$ from 1 to 6.</li>
+            <li>Which $k$ would you choose, and why?</li>
+            <li>Why does the training error keep falling while the validation error levels off?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-ae-k">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) decreases.</strong> From $k$ to $k + 1$:
+              $$1 \to 2:\ 8.9, \qquad 2 \to 3:\ 4.8, \qquad 3 \to 4:\ 1.4, \qquad 4 \to 5:\ 0.5, \qquad 5 \to 6:\ 0.2 .$$</p>
+            <p><strong>Step 2: (b) choose $k$.</strong> The gains are large up to $k = 3$, a clear drop at $k = 4$, and tiny
+              afterwards: an elbow at $k = 3$ or $4$. $k = 4$ is a reasonable choice: it reaches $8.9$, within about $10\%$ of
+              the best validation error, with half the code size of $k = 8$. For visualisation one would still use $k = 2$,
+              accepting a larger error.</p>
+            <p><strong>Step 3: (c) the gap.</strong> A larger code gives the network more freedom, so it can always reduce
+              the <em>training</em> error, partly by memorising details of the training images. Those details do not carry
+              over to new images, so the validation error stops improving. The growing gap
+              ($8.1 - 4.9 = 3.2$ at $k = 8$ versus $0.5$ at $k = 1$) is the usual sign of overfitting; the code size is chosen
+              on validation data, as $k$ in k-NN or the number of components in PCA.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-ae-denoise" data-name="The denoising loss in numbers">
+          <p>A clean binary image has pixels $\bx = (1, 0, 1, 1)$. Masking noise sets its third pixel to 0, giving
+            $\tilde\bx = (1, 0, 0, 1)$. A denoising autoencoder outputs $\hat\bx = (0.9,\ 0.2,\ 0.7,\ 1.0)$ for $\tilde\bx$.</p>
+          <ol type="a">
+            <li>Compute the denoising loss $\norm{\bx - \hat\bx}^2$.</li>
+            <li>Compute the loss of the identity map (output $= \tilde\bx$) on this example.</li>
+            <li>Compute the loss a plain autoencoder would assign to the identity map, and explain why denoising prevents the
+              network from learning the identity.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-ae-denoise">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) the denoising loss.</strong> The target is the clean image:
+              $$\norm{\bx - \hat\bx}^2 = 0.1^2 + 0.2^2 + 0.3^2 + 0^2 = 0.01 + 0.04 + 0.09 = 0.14 .$$</p>
+            <p><strong>Step 2: (b) the identity map.</strong> Outputting $\tilde\bx$ gives
+              $$\norm{\bx - \tilde\bx}^2 = 0 + 0 + 1^2 + 0 = 1 .$$
+              The trained network does much better ($0.14$): it has partly restored the missing pixel (0.7 instead of 0),
+              using what it learnt about typical images.</p>
+            <p><strong>Step 3: (c) why the identity fails.</strong> A plain autoencoder compares the output with its own input,
+              so the identity has loss 0 and is a perfect solution when $k \ge p$. In the denoising loss the input and the
+              target differ, so the identity pays for every corrupted pixel, here a loss of 1. Because the corruption is
+              drawn afresh at every step, the only way to keep the loss low is to learn the structure of clean images.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-ae-anomaly-num" data-name="Anomaly detection with a threshold">
+          <p>An autoencoder trained on normal transactions gives these reconstruction errors on 10 normal validation
+            transactions:
+            $$0.8,\ 1.1,\ 0.9,\ 1.4,\ 1.0,\ 1.2,\ 0.7,\ 2.1,\ 1.3,\ 1.0 .$$</p>
+          <ol type="a">
+            <li>With the threshold $\tau = 1.5$, what fraction of normal validation transactions is flagged?</li>
+            <li>Six test transactions have errors $0.9,\ 1.6,\ 1.2$ (normal) and $3.5,\ 1.4,\ 4.2$ (fraudulent). Which are
+              flagged? Compute the precision and the recall for fraud.</li>
+            <li>What happens to precision and recall if $\tau$ is raised to $2.5$? How would you choose $\tau$?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-ae-anomaly-num">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) false-alarm rate.</strong> Only $2.1$ exceeds $1.5$, so $1/10 = 10\%$ of normal transactions
+              are flagged. The threshold is the 90th percentile of the normal errors.</p>
+            <p><strong>Step 2: (b) the test set.</strong> Flagged: $1.6$ (normal: a false alarm), $3.5$ and $4.2$ (fraud: caught).
+              Missed: the fraud with error $1.4$. So
+              $$\text{precision} = \frac{2}{3} \approx 0.67, \qquad \text{recall} = \frac{2}{3} \approx 0.67 .$$</p>
+            <p><strong>Step 3: (c) a higher threshold.</strong> With $\tau = 2.5$ only $3.5$ and $4.2$ are flagged, both fraud:
+              precision $2/2 = 1$, recall still $2/3$. A higher threshold gives fewer false alarms but, in general, more
+              missed anomalies. $\tau$ is chosen from the cost of each error: the false-alarm rate one can afford sets a
+              percentile of the normal validation errors (for example the 99th); if some labelled anomalies exist, compare
+              precision and recall across thresholds, as with the threshold of a classifier in
+              <a href="../chapters/04-logistic-regression.html">Chapter 4</a>.</p>
+          </div>
+        </details>
+
+        <!-- ============================================================ -->
+        <h2 id="ae-challenging">Challenging questions</h2>
+
+        <div class="env exercise" id="exo-ae-subspace" data-name="The best line through four points">
+          <p>The centred points $(3, 1)$, $(-3, -1)$, $(1, -1)$, $(-1, 1)$ are encoded with $k = 1$ by a linear autoencoder.</p>
+          <ol type="a">
+            <li>Compute the covariance $\Sigma = \frac1n\sum_i\bx_i\bx_i\T$ and its eigenvalues.</li>
+            <li>Using $J = \tr\Sigma - \bv\T\Sigma\bv$ for a unit vector $\bv$, compute the reconstruction error for
+              $\bv = (1, 0)$ and $\bv = \frac{1}{\sqrt2}(1, 1)$.</li>
+            <li>What is the smallest error any linear autoencoder with $k = 1$ can reach, and in which direction is the best
+              line?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-ae-subspace">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) the covariance.</strong> Opposite points have the same $\bx\bx\T$:
+              $$\Sigma = \frac14\Big(2\begin{pmatrix} 9 & 3 \\ 3 & 1 \end{pmatrix} + 2\begin{pmatrix} 1 & -1 \\ -1 & 1 \end{pmatrix}\Big)
+              = \begin{pmatrix} 5 & 1 \\ 1 & 1 \end{pmatrix} .$$
+              With trace 6 and determinant 4, the eigenvalues solve $\lambda^2 - 6\lambda + 4 = 0$:
+              $$\lambda = 3 \pm \sqrt5, \qquad \lambda_1 \approx 5.236, \quad \lambda_2 \approx 0.764 .$$</p>
+            <p><strong>Step 2: (b) two directions.</strong> For $\bv = (1, 0)$, $\bv\T\Sigma\bv = 5$ and $J = 6 - 5 = 1$. For
+              $\bv = \frac{1}{\sqrt2}(1, 1)$, $\bv\T\Sigma\bv = \frac12(5 + 1 + 2) = 4$ and $J = 6 - 4 = 2$. The horizontal
+              line is much better than the diagonal.</p>
+            <p><strong>Step 3: (c) the optimum.</strong> The smallest error is
+              $$\lambda_2 = 3 - \sqrt5 \approx 0.764,$$
+              reached by the first eigenvector, $\bv_1 \propto (1,\ \lambda_1 - 5) \approx (0.973, 0.230)$, a line about
+              $13^\circ$ above the horizontal. It is slightly better than $(1, 0)$ because it tilts towards the long axis of
+              the points $\pm(3, 1)$. No linear autoencoder with $k = 1$ can do better, whatever its $E$ and $D$.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-ae-circle" data-name="Data on a circle">
+          <p>Data points lie uniformly on the unit circle $x_1^2 + x_2^2 = 1$ (centred, covariance $\frac12 I$).</p>
+          <ol type="a">
+            <li>What is the smallest reconstruction error of PCA (or any linear autoencoder) with $k = 1$? Why is no line
+              better than another?</li>
+            <li>Give an encoder and decoder with $k = 1$ that reconstruct every point exactly.</li>
+            <li>Your encoder in (b) must jump somewhere on the circle. Explain why a continuous encoder from the circle to
+              $\R$ cannot give every point a different code, and what a trained (continuous) autoencoder does as a
+              result.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-ae-circle">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) PCA.</strong> $\Sigma = \frac12 I$ has $\lambda_1 = \lambda_2 = \frac12$, so the best error is
+              $\lambda_2 = 0.5$. Every unit vector $\bv$ gives $\bv\T\Sigma\bv = \frac12$: the circle looks the same in every
+              direction, so all lines are equally good, and equally bad: they keep only half of the variance.</p>
+            <p><strong>Step 2: (b) a perfect code.</strong> Use the angle: encoder $z = \theta \in [0, 2\pi)$, the angle of
+              $\bx$ (so $\bx = (\cos\theta, \sin\theta)$), and decoder $h(z) = (\cos z, \sin z)$. Then $h(g(\bx)) = \bx$ for every
+              point on the circle: error 0 with a one-number code. The circle is one-dimensional, but curved.</p>
+            <p><strong>Step 3: (c) the cut.</strong> The angle jumps from almost $2\pi$ back to $0$ at the point $(1, 0)$. A
+              continuous encoder $g$ cannot avoid this: going once around the circle, $g$ starts and ends at the same value,
+              so on that closed loop it rises and falls, and (by the intermediate value theorem) two different points on
+              opposite sides of its maximum get the same code. Their reconstructions must then be the same point. A trained
+              network (continuous, since it is built from continuous activations) therefore reconstructs most of the circle
+              well but folds or cuts it somewhere, with a large error in a small region. Its error is far below $0.5$ but
+              not zero.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-ae-workflow" data-name="Few labels, many images">
+          <p>You have $50\,000$ unlabelled $8 \times 8$ digit images and only $200$ labelled ones. Design an experiment to test
+            whether autoencoder features help a classifier. Say which models you compare, what is fitted on which data, how
+            hyperparameters are chosen, and what you report.</p>
+        </div>
+        <details class="solution" data-for="exo-ae-workflow">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: split the labelled data.</strong> Set aside a test set from the labelled images (say 50), never
+              used for any choice. The remaining 150 labelled images are used for training and cross-validation.</p>
+            <p><strong>Step 2: learn the features without labels.</strong> Train the autoencoder on the $50\,000$ unlabelled
+              images (with a held-out part of them to choose the code size $k$ and to apply early stopping). Fit PCA on the
+              same unlabelled images for a fair comparison.</p>
+            <p><strong>Step 3: the models compared.</strong> (i) Logistic regression on the raw 64 pixels; (ii) logistic
+              regression on the PCA scores; (iii) logistic regression on the autoencoder codes $g_\phi(\bx)$. The encoders are
+              frozen; only the classifier is trained on the 150 labelled images. Its regularisation strength (and $k$, if
+              not fixed in Step 2) is chosen by stratified cross-validation on those 150 images.</p>
+            <p><strong>Step 4: report.</strong> Refit each chosen model on all 150 images and report its test accuracy and
+              confusion matrix, with the cross-validation scores and their spread. Since 50 test images give a noisy
+              estimate, repeat with several random splits. The autoencoder features help if they beat both the raw pixels and
+              PCA consistently; a natural follow-up is to vary the number of labelled images and see where the advantage
+              disappears.</p>
+          </div>
+        </details>
+
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>

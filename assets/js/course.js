@@ -19,6 +19,8 @@ window.COURSE = {
   // optionally by `sub` (a sub-heading inside the module, e.g. "Supervised").
   // status: "ready" (linked) | "planned" (shown as "Coming soon")
   // `sessions` = course sessions covered by the chapter.
+  // `exercises` (optional) = summary of the chapter's exercise page exercises/<slug>.html; chapters that have
+  // one are linked from the "Exercises" tab (exercises/index.html) and the sidebar, the others show "Coming soon".
   chapters: [
     { num: "0", slug: "00-style-guide", part: "Front matter", status: "ready",
       title: "How to read these notes",
@@ -46,22 +48,28 @@ window.COURSE = {
 
     { num: "7", slug: "07-knn", part: "Module 2 · Nonlinear & non-parametric methods", status: "ready", sessions: "14",
       title: "k-nearest neighbours",
-      summary: "Distance-based prediction for regression and classification; model complexity and the curse of dimensionality." },
+      summary: "Distance-based prediction for regression and classification; model complexity and the curse of dimensionality.",
+      exercises: "11 questions: predictions by hand, the choice of k, scaling, the curse of dimensionality, choosing k by cross-validation, weighted k-NN." },
     { num: "8", slug: "08-trees", part: "Module 2 · Nonlinear & non-parametric methods", status: "ready", sessions: "16–17",
       title: "Tree-based methods",
-      summary: "Decision trees, splitting criteria and pruning; bagging, random forests and gradient boosting." },
+      summary: "Decision trees, splitting criteria and pruning; bagging, random forests and gradient boosting.",
+      exercises: "18 questions: splits, Gini and entropy by hand, reading a tree, overfitting and greedy growth; bagging, random forests and boosting." },
     { num: "9", slug: "09-kernels", part: "Module 2 · Nonlinear & non-parametric methods", status: "ready", sessions: "19–20",
       title: "Kernel methods",
-      summary: "Feature maps, the dual of ridge regression, the kernel trick, kernel PCA." },
+      summary: "Feature maps, the dual of ridge regression, the kernel trick, kernel PCA.",
+      exercises: "11 questions: kernels as inner products, the kernel trick, polynomial and RBF kernels, kernel ridge regression, valid kernels." },
     { num: "10", slug: "10-neural-networks", part: "Module 3 · Neural networks", status: "ready", sessions: "22",
       title: "Neural networks",
-      summary: "Why networks after linear models, k-NN, trees and kernels; neurons, layers and activations; output layers and softmax; universal approximation and depth." },
+      summary: "Why networks after linear models, k-NN, trees and kernels; neurons, layers and activations; output layers and softmax; universal approximation and depth.",
+      exercises: "13 questions: forward pass by hand, parameter counts, softmax and cross-entropy, activations, ReLU networks, universal approximation, depth." },
     { num: "11", slug: "11-training-networks", part: "Module 3 · Neural networks", status: "ready", sessions: "23",
       title: "Backpropagation & training neural networks",
-      summary: "Computing gradients by backpropagation; optimisation and regularization for networks with many parameters." },
+      summary: "Computing gradients by backpropagation; optimisation and regularization for networks with many parameters.",
+      exercises: "13 questions: backpropagation by hand, softmax error signals, learning rates, momentum and Adam, weight decay, dropout, early stopping." },
     { num: "12", slug: "12-autoencoders", part: "Module 3 · Neural networks", status: "ready", sessions: "24",
       title: "Autoencoders",
-      summary: "Learning compressed representations without labels; the link with PCA." }
+      summary: "Learning compressed representations without labels; the link with PCA.",
+      exercises: "12 questions: encoding by hand, linear autoencoders and PCA, choosing the code size, denoising, anomaly detection." }
   ],
 
   // KaTeX macros available on every page: write \R, \E, \argmin, ... in math.

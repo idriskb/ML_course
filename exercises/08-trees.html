@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decision Tree, Random Forest &amp; Boosting Exercises with Solutions | ML Course Notes</title>
+  <meta name="description" content="Tree exercises with step-by-step solutions: regression splits, Gini and entropy by hand, overfitting, greedy splitting, bagging, random forests, boosting.">
+  <link rel="canonical" href="https://idriskb.github.io/ML_course/exercises/08-trees.html">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Machine Learning · Course notes">
+  <meta property="og:title" content="Decision Tree, Random Forest &amp; Boosting Exercises with Solutions | ML Course Notes">
+  <meta property="og:description" content="Tree exercises with step-by-step solutions: regression splits, Gini and entropy by hand, overfitting, greedy splitting, bagging, random forests, boosting.">
+  <meta property="og:url" content="https://idriskb.github.io/ML_course/exercises/08-trees.html">
+  <meta name="twitter:card" content="summary">
+  <script>(function(){var t;try{t=localStorage.getItem("ml-theme")}catch(e){}document.documentElement.dataset.theme=t||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")})()</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/main.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  <script defer src="../assets/js/course.js"></script>
+  <script defer src="../assets/js/layout.js"></script>
+</head>
+<body data-root="../" data-page="exercises" data-set="08-trees">
+  <div id="site-header"></div>
+
+  <div class="layout">
+    <nav id="sidebar"></nav>
+
+    <main id="main" class="content" tabindex="-1">
+      <article class="chapter">
+        <header class="chapter-head">
+          <p class="eyebrow">Exercises · Chapter 8 · Module 2 · Nonlinear &amp; non-parametric methods</p>
+          <h1>Exercises: tree-based methods</h1>
+          <p class="lede">Practice for <a href="../chapters/08-trees.html">Chapter 8</a>: single decision trees first, then ensembles of trees. For a node with class proportions $\pi_c$, the Gini impurity is $G = 1 - \sum_c \pi_c^2$ and the entropy is $H = -\sum_c \pi_c\log_2\pi_c$. Every exercise is followed by a collapsed solution: try the question first, then reveal the solution one step at a time.</p>
+        </header>
+
+        <section class="box objectives" aria-labelledby="obj-title">
+          <h2 class="box__title" id="obj-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>What you will practise</h2>
+          <ul>
+            <li>Computing the impurity of a node (variance, Gini, entropy) and the gain of a split.</li>
+            <li>Reading a tree as a partition of the input space into boxes with constant predictions.</li>
+            <li>Explaining why deep trees overfit and why greedy growth is not optimal.</li>
+            <li>Explaining why bagging and random forests reduce variance and how boosting reduces bias.</li>
+          </ul>
+        </section>
+
+        <!-- ============================================================ -->
+        <h2 id="trees">Decision trees</h2>
+        <p>Background: <a href="../chapters/08-trees.html">Chapter 8</a>, Sections 8.1–8.4. For a node $R$ with class
+          proportions $\pi_c$, the Gini impurity is $G = 1 - \sum_c \pi_c^2$ and the entropy is
+          $H = -\sum_c \pi_c\log_2\pi_c$.</p>
+
+        <h3 id="trees-core">Core conceptual questions</h3>
+
+        <div class="env exercise" id="exo-q10" data-name="Trees as recursive partitioning">
+          <p>Explain what it means to say that a decision tree partitions the input space recursively. What does each
+            internal node represent, and what does each leaf represent?</p>
+        </div>
+        <details class="solution" data-for="exo-q10">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: one split.</strong> The root asks one question about one feature, $x_j \le t$. This
+              cuts the input space into two half-spaces, $\{x_j \le t\}$ and $\{x_j > t\}$.</p>
+            <p><strong>Step 2: recursion.</strong> Each half is then split again by its own question, using only the
+              training points that fall in it, and so on. Each new split cuts one existing box into two smaller boxes.
+              The process repeats until a stopping rule is met. The final cells are axis-aligned boxes
+              $R_1, \dots, R_M$ that do not overlap and cover the whole space.</p>
+            <p><strong>Step 3: internal nodes.</strong> An internal node is a test $x_j \le t$ (a feature and a
+              threshold). It corresponds to the box of all inputs that pass the tests on the path from the root to it.
+              It sends each point to one of its two children.</p>
+            <p><strong>Step 4: leaves.</strong> A leaf is one final box $R_m$ together with a constant prediction
+              $c_m$, computed from the training points in $R_m$. The tree's prediction is
+              $$\hat f(\bx) = \sum_{m=1}^M c_m\,\mathbf 1\{\bx \in R_m\} .$$</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q11" data-name="Regression trees vs classification trees">
+          <p>Describe the prediction rule at a leaf for (a) regression trees, (b) classification trees. How does the
+            notion of impurity differ in the two settings?</p>
+        </div>
+        <details class="solution" data-for="exo-q11">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) regression leaf.</strong> Predict the mean of the training outputs in the leaf,
+              $$c_m = \bar y_{R_m} = \frac{1}{|R_m|}\sum_{i \in R_m} y_i ,$$
+              the constant that minimises the squared error in the leaf.</p>
+            <p><strong>Step 2: (b) classification leaf.</strong> Compute the class proportions $\pi_c$ in the leaf.
+              Predict the majority class $\argmax_c \pi_c$; the proportions themselves serve as class scores (for
+              <code>predict_proba</code>).</p>
+            <p><strong>Step 3: impurity in regression.</strong> Impurity measures the spread of the outputs, through the
+              variance within the node:
+              $$Q(R) = \frac{1}{|R|}\sum_{i \in R}(y_i - \bar y_R)^2 .$$</p>
+            <p><strong>Step 4: impurity in classification.</strong> Impurity measures how mixed the classes are, through
+              Gini $1 - \sum_c \pi_c^2$, entropy $-\sum_c \pi_c\log_2\pi_c$, or the misclassification rate
+              $1 - \max_c \pi_c$. All are 0 for a pure node and largest when the classes are equally frequent.</p>
+            <p><strong>Step 5: conclude.</strong> In both settings a split is chosen to maximise the decrease in impurity,
+              weighted by node sizes. Only the impurity measure changes: spread of numbers for regression, mixing of labels
+              for classification.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q12" data-name="Why trees are nonlinear">
+          <p>A student says: "A decision tree just compares variables to thresholds, so it is basically linear
+            regression in disguise." Explain why this statement is false.</p>
+        </div>
+        <details class="solution" data-for="exo-q12">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: the form of the function.</strong> Linear regression predicts
+              $\hat f(\bx) = w_0 + \bw\T\bx$: a plane, where increasing $x_j$ by one unit always changes the
+              prediction by the same amount $w_j$. A tree predicts
+              $$\hat f(\bx) = \sum_m c_m\,\mathbf 1\{\bx \in R_m\},$$
+              a piecewise constant function. It is flat inside each box and jumps at the thresholds. The indicator
+              functions are not linear in $\bx$.</p>
+            <p><strong>Step 2: interactions.</strong> In a tree, the effect of $x_1$ can depend on $x_2$. In
+              <a class="ref" href="#exo-q15"></a>, moving $x_1$ from $4$ to $6$ raises the prediction by $7$ if
+              $x_2 \le 2$ but by $4$ if $x_2 > 2$. A linear model cannot do this without hand-made product
+              features.</p>
+            <p><strong>Step 3: a counterexample.</strong> Let $y = 1$ when $x_1$ and $x_2$ have the same sign and
+              $y = 0$ otherwise (the XOR pattern). A depth-2 tree (split on $x_1 \le 0$, then on $x_2 \le 0$) fits it
+              exactly. Any linear function of $(x_1, x_2)$ thresholded at $\frac12$ gives a straight boundary, which
+              cannot separate the two diagonal quadrants from the other two.</p>
+            <p><strong>Step 4: conclude.</strong> Comparing a variable to a threshold is itself a nonlinear operation (a
+              step function). Combining such tests along paths gives nonlinear, interacting, piecewise constant fits.</p>
+          </div>
+        </details>
+
+        <h3 id="trees-intermediate">Intermediate exercises</h3>
+
+        <div class="env exercise" id="exo-q13" data-name="Splitting criterion in regression">
+          <p>A node contains four observations with target values $1, 2, 6, 7$. A candidate split sends $\{1, 2\}$ to the
+            left child and $\{6, 7\}$ to the right child.</p>
+          <ol type="a">
+            <li>Compute the mean target in the parent node.</li>
+            <li>Compute the sum of squared deviations from the mean in the parent node.</li>
+            <li>Compute the total within-node sum of squares after the split.</li>
+            <li>Determine the impurity reduction.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q13">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) parent mean.</strong>
+              $$\bar y = \frac{1 + 2 + 6 + 7}{4} = \frac{16}{4} = 4 .$$</p>
+            <p><strong>Step 2: (b) parent sum of squares.</strong>
+              $$\mathrm{SSE}(R) = (1-4)^2 + (2-4)^2 + (6-4)^2 + (7-4)^2 = 9 + 4 + 4 + 9 = 26 . \tag{1}$$</p>
+            <p><strong>Step 3: (c) children.</strong> The left mean is $1.5$ and the right mean is $6.5$:
+              $$\mathrm{SSE}(R_L) = (0.5)^2 + (0.5)^2 = 0.5, \qquad \mathrm{SSE}(R_R) = (0.5)^2 + (0.5)^2 = 0.5,$$
+              so the total within-node sum of squares is
+              $$\mathrm{SSE}(R_L) + \mathrm{SSE}(R_R) = 1 . \tag{2}$$</p>
+            <p><strong>Step 4: (d) reduction.</strong> Subtract (2) from (1):
+              $$\mathrm{SSE}(R) - \mathrm{SSE}(R_L) - \mathrm{SSE}(R_R) = 26 - 1 = 25 .$$
+              In terms of the variance impurity $Q = \mathrm{SSE}/|R|$ of Chapter 8, $Q(R) = 6.5$, the weighted children
+              give $\frac24(0.25) + \frac24(0.25) = 0.25$, and
+              $$\Delta Q = 6.5 - 0.25 = 6.25 = \frac{25}{4} .$$</p>
+            <p><strong>Step 5: conclude.</strong> The split removes $25/26 \approx 96\%$ of the squared error: it
+              separates the low values from the high ones, which is exactly the kind of split a regression tree looks for.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q14" data-name="Gini impurity">
+          <p>A classification node contains 10 observations: 7 from class 0 and 3 from class 1.</p>
+          <ol type="a">
+            <li>Compute the Gini impurity.</li>
+            <li>Compute the entropy.</li>
+            <li>Explain in words what these numbers are measuring.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q14">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: proportions.</strong> $\pi_0 = 0.7$ and $\pi_1 = 0.3$.</p>
+            <p><strong>Step 2: (a) Gini.</strong>
+              $$G = 1 - (0.7^2 + 0.3^2) = 1 - (0.49 + 0.09) = 0.42 .$$
+              Equivalently, for two classes $G = 2\pi_1(1 - \pi_1) = 2(0.3)(0.7) = 0.42$.</p>
+            <p><strong>Step 3: (b) entropy.</strong> With base-2 logarithms, $\log_2 0.7 \approx -0.515$ and
+              $\log_2 0.3 \approx -1.737$:
+              $$H = -\big(0.7\log_2 0.7 + 0.3\log_2 0.3\big) \approx 0.7(0.515) + 0.3(1.737) \approx 0.881 \text{ bits}.$$</p>
+            <p><strong>Step 4: (c) meaning.</strong> Both measure how mixed the node is. They are 0 for a pure node and
+              largest for a $50/50$ node, where $G = 0.5$ and $H = 1$. So this node is fairly impure. Gini is the probability
+              that two points drawn at random from the node (with replacement) have different labels. Entropy is the
+              average number of bits needed to encode the label of a point from the node. A good split produces
+              children with lower values of these measures.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q15" data-name="Interpreting a small tree">
+          <p>Suppose a regression tree produces the following rule:</p>
+          <ul>
+            <li>if $x_1 \le 5$ and $x_2 \le 2$, predict 3;</li>
+            <li>if $x_1 \le 5$ and $x_2 > 2$, predict 6;</li>
+            <li>if $x_1 > 5$, predict 10.</li>
+          </ul>
+          <p>Draw or describe the regions of the input space in the plane $(x_1, x_2)$ and explain why the fitted function
+            is piecewise constant.</p>
+        </div>
+        <details class="solution" data-for="exo-q15">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: the tree.</strong> The root tests $x_1 \le 5$. The right branch ($x_1 > 5$) is a leaf with
+              value 10. The left branch tests $x_2 \le 2$ and ends in two leaves with values 3 and 6.</p>
+            <p><strong>Step 2: the regions.</strong> The three leaves are three boxes that do not overlap and cover the plane:
+              $$R_1 = \{x_1 \le 5,\ x_2 \le 2\}, \quad R_2 = \{x_1 \le 5,\ x_2 > 2\}, \quad R_3 = \{x_1 > 5\} .$$
+              The vertical line $x_1 = 5$ splits the plane. The horizontal line $x_2 = 2$ splits only the left half.</p>
+            <figure class="numbered diagram" id="fig-q15">
+              <svg viewBox="0 0 640 300" role="img" aria-label="The plane with x1 on the horizontal axis and x2 on the vertical axis. A vertical line at x1 equals 5 splits it into a left and a right part. The right part, x1 greater than 5, is one region with prediction 10. The left part is split by a horizontal line at x2 equals 2 into a bottom region with prediction 3 and a top region with prediction 6.">
+                <rect class="d-panel" x="70" y="172" width="260" height="88"/>
+                <rect class="d-panel" x="70" y="40" width="260" height="132"/>
+                <rect class="d-panel" x="330" y="40" width="260" height="220"/>
+                <line class="d-ink" x1="330" y1="40" x2="330" y2="260" stroke-width="2"/>
+                <line class="d-ink" x1="70" y1="172" x2="330" y2="172" stroke-width="2"/>
+                <line class="d-ink" x1="70" y1="260" x2="600" y2="260"/>
+                <line class="d-ink" x1="70" y1="260" x2="70" y2="30"/>
+                <text class="d-text" x="200" y="214" text-anchor="middle" font-weight="700">R₁: ŷ = 3</text>
+                <text class="d-label" x="200" y="234" text-anchor="middle">x₁ ≤ 5, x₂ ≤ 2</text>
+                <text class="d-text" x="200" y="102" text-anchor="middle" font-weight="700">R₂: ŷ = 6</text>
+                <text class="d-label" x="200" y="122" text-anchor="middle">x₁ ≤ 5, x₂ &gt; 2</text>
+                <text class="d-text" x="460" y="146" text-anchor="middle" font-weight="700">R₃: ŷ = 10</text>
+                <text class="d-label" x="460" y="166" text-anchor="middle">x₁ &gt; 5</text>
+                <text class="d-text" x="330" y="280" text-anchor="middle">5</text>
+                <text class="d-text" x="60" y="176" text-anchor="end">2</text>
+                <text class="d-text" x="606" y="264">x₁</text>
+                <text class="d-text" x="64" y="24" text-anchor="middle">x₂</text>
+              </svg>
+              <figcaption>The partition of the plane produced by the tree. The prediction is constant inside each box
+                and jumps across the lines $x_1 = 5$ and, for $x_1 \le 5$, $x_2 = 2$.</figcaption>
+            </figure>
+            <p><strong>Step 3: the fitted function.</strong>
+              $$\hat f(x_1, x_2) = 3\cdot\mathbf 1\{\bx \in R_1\} + 6\cdot\mathbf 1\{\bx \in R_2\} + 10\cdot\mathbf 1\{\bx \in R_3\} .$$</p>
+            <p><strong>Step 4: why piecewise constant.</strong> Every point is sent to exactly one leaf, and the leaf
+              returns a fixed number (the mean of its training outputs) whatever the exact position of the point in the
+              box. So $\hat f$ is constant on each $R_m$ and changes only at the boundaries. Note also that $x_2$ only
+              matters when $x_1 \le 5$: this is an interaction between the two features.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-num-best-split" data-name="Finding the best split">
+          <p>A regression node contains six points with one feature:</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th scope="col">$x_i$</th><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td></tr></thead>
+            <tbody><tr><th scope="row">$y_i$</th><td>3</td><td>5</td><td>4</td><td>10</td><td>12</td><td>20</td></tr></tbody>
+          </table></div>
+          <ol type="a">
+            <li>Compute the mean and the sum of squared errors (SSE) of the node.</li>
+            <li>For each of the five thresholds $t = 1.5, 2.5, 3.5, 4.5, 5.5$ (split $x \le t$ versus $x > t$), compute the
+              total SSE of the two children.</li>
+            <li>Which split does the tree choose? Give the decrease in SSE and the two leaf predictions.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-num-best-split">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) the parent node.</strong> The mean is $\bar y = 54/6 = 9$, and
+              $$\mathrm{SSE} = 36 + 16 + 25 + 1 + 9 + 121 = 208 .$$</p>
+            <p><strong>Step 2: (b) every candidate split.</strong> For each threshold, compute the mean of each child
+              and the sum of squared deviations from it. For example, for $t = 3.5$: the left child $\{3, 5, 4\}$ has mean 4
+              and SSE $1 + 1 + 0 = 2$; the right child $\{10, 12, 20\}$ has mean 14 and SSE $16 + 4 + 36 = 56$.</p>
+            <div class="table-wrap"><table>
+              <thead><tr><th scope="col">$t$</th><th scope="col">Left mean</th><th scope="col">Right mean</th><th scope="col">SSE left</th><th scope="col">SSE right</th><th scope="col">Total</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">1.5</th><td>3</td><td>10.2</td><td>0</td><td>164.8</td><td>164.8</td></tr>
+                <tr><th scope="row">2.5</th><td>4</td><td>11.5</td><td>2</td><td>131</td><td>133</td></tr>
+                <tr><th scope="row">3.5</th><td>4</td><td>14</td><td>2</td><td>56</td><td><strong>58</strong></td></tr>
+                <tr><th scope="row">4.5</th><td>5.5</td><td>16</td><td>29</td><td>32</td><td>61</td></tr>
+                <tr><th scope="row">5.5</th><td>6.8</td><td>20</td><td>62.8</td><td>0</td><td>62.8</td></tr>
+              </tbody>
+            </table></div>
+            <p><strong>Step 3: (c) the chosen split.</strong> The smallest total is at $t = 3.5$, so the tree splits on
+              $x \le 3.5$. The decrease is
+              $$208 - 58 = 150,$$
+              which removes $72\%$ of the squared error (in terms of the variance impurity, $\Delta Q = 150/6 = 25$). The
+              leaves predict 4 for $x \le 3.5$ and 14 for $x > 3.5$. Note that $t = 4.5$ comes close (61): the large value
+              20 pulls the right child's mean up, so splitting it off later would also help.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-num-gain" data-name="Comparing two splits with Gini, entropy and error rate">
+          <p>A node contains 20 points, 10 of class 0 and 10 of class 1. Two candidate splits give the children (counts
+            written as class 0 / class 1):</p>
+          <ul>
+            <li>Split A: left $8/2$, right $2/8$;</li>
+            <li>Split B: left $10/4$, right $0/6$.</li>
+          </ul>
+          <ol type="a">
+            <li>Compute the weighted Gini impurity of the children and the Gini gain of each split.</li>
+            <li>Do the same with entropy (base 2).</li>
+            <li>Compute the weighted misclassification rate of each split. What do you notice?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-num-gain">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: the parent.</strong> With $\pi = 0.5$, $G = 0.5$, $H = 1$ and the misclassification rate is
+              $0.5$.</p>
+            <p><strong>Step 2: (a) Gini.</strong> For two classes $G = 2\pi(1 - \pi)$. Split A: both children have
+              $\pi = 0.2$, so $G = 2(0.2)(0.8) = 0.32$, the weighted impurity is $0.32$ and the gain is
+              $$0.5 - 0.32 = 0.18 .$$
+              Split B: the left child has $\pi = 4/14$, so $G = 2\cdot\frac{4}{14}\cdot\frac{10}{14} = \frac{80}{196} \approx 0.408$;
+              the right child is pure, $G = 0$. The weighted impurity is $\frac{14}{20}(0.408) + \frac{6}{20}(0) \approx 0.286$
+              and the gain is
+              $$0.5 - 0.286 = 0.214 .$$</p>
+            <p><strong>Step 3: (b) entropy.</strong> Split A: $H(0.2) = -(0.2\log_2 0.2 + 0.8\log_2 0.8) \approx 0.722$ in
+              both children, so the gain is $1 - 0.722 = 0.278$. Split B: $H(4/14) \approx 0.863$ on the left and $0$ on the
+              right; the weighted entropy is $0.7 \times 0.863 \approx 0.604$ and the gain is
+              $$1 - 0.604 = 0.396 .$$
+              Both Gini and entropy prefer <strong>split B</strong>, which creates a pure node.</p>
+            <p><strong>Step 4: (c) misclassification rate.</strong> Split A: each child misclassifies 2 of its 10 points,
+              in total $4/20 = 0.2$. Split B: the left child misclassifies 4 of 14 and the right child none, again
+              $4/20 = 0.2$. The error rate <em>cannot tell the two splits apart</em>, while Gini and entropy reward the pure
+              node in B. This is why trees are grown with Gini or entropy rather than the error rate.</p>
+          </div>
+        </details>
+
+        <h3 id="trees-challenging">Challenging questions</h3>
+
+        <div class="env exercise" id="exo-q16" data-name="Overfitting in trees">
+          <p>Why can a fully grown decision tree have very low training error and still generalise poorly? Relate your
+            answer to the bias–variance trade-off.</p>
+        </div>
+        <details class="solution" data-for="exo-q16">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: zero training error.</strong> A tree can keep splitting until every leaf is pure. If all
+              inputs are distinct, this can go down to one training point per leaf, and then each leaf predicts its own
+              $y_i$:
+              $$\hat f(\bx_i) = y_i \quad\text{for every } i, \qquad \text{training error} = 0 .$$</p>
+            <p><strong>Step 2: it has fitted the noise.</strong> The outputs are $y_i = f(\bx_i) + \varepsilon_i$. A leaf
+              with one point reproduces $\varepsilon_i$ too, so isolated noisy points create small regions with wrong
+              predictions. New points in those regions get the noise of one training point rather than an
+              average.</p>
+            <p><strong>Step 3: bias and variance.</strong> Such a tree has low bias (it can follow any shape) but very
+              high variance. Each leaf value is based on one or two points, and the splits themselves are unstable: a
+              small change in the data changes the first split, and then the whole tree below it. Two training samples
+              from the same population give very different trees.</p>
+            <p><strong>Step 4: conclude.</strong> The low training error comes from high variance, not from learning the true $f$. Limiting the
+              depth or the leaf size, pruning, or averaging many trees (bagging, random forests) adds a little bias and
+              removes much more variance.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q18" data-name="Greedy splitting and global optimality">
+          <p>Decision trees are usually built by greedy top-down splitting.</p>
+          <ol type="a">
+            <li>Explain what greedy means in this context.</li>
+            <li>Why does greedy splitting not guarantee a globally optimal tree?</li>
+            <li>Why is the greedy strategy still used in practice?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q18">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) greedy.</strong> At each node, the algorithm tries every feature and every
+              threshold and keeps the single split with the largest impurity decrease right now. The split is never
+              revisited, and its effect on later splits is not considered.</p>
+            <p><strong>Step 2: (b) not globally optimal.</strong> The best first split is not necessarily the first split of
+              the best tree. Take the XOR pattern of <a class="ref" href="#exo-q12"></a> with equal class counts in
+              the four quadrants. Any single split on $x_1 \le 0$ or $x_2 \le 0$ leaves both children $50/50$, so its gain
+              is zero and a greedy rule may choose an unhelpful split or stop. Yet two splits together classify
+              perfectly. Greedy search judges each split alone, not combinations.</p>
+            <p><strong>Step 3: (c) why it is used anyway.</strong> Finding the best tree of a given size means searching
+              over a number of trees that grows combinatorially with the depth and the number of candidate thresholds;
+              this is computationally infeasible beyond tiny problems. The greedy split only needs sorting each feature,
+              about $O(pN\log N)$ work per level, so it scales to large datasets. It works well in practice, and its
+              weaknesses are reduced by growing deep trees and pruning them back
+              (<a href="../chapters/08-trees.html#complexity">Section 8.4</a>) or by
+              averaging many trees (<a class="ref" href="#ensembles"></a>).</p>
+          </div>
+        </details>
+
+        <!-- ============================================================ -->
+        <h2 id="ensembles">Tree ensembles</h2>
+        <p>Background: <a href="../chapters/08-trees.html#bagging">Chapter 8</a>, Sections 8.5–8.7. For $B$ predictions
+          with variance $\tau^2$ and pairwise correlation $\rho$, the average has variance
+          $$\rho\,\tau^2 + \frac{1 - \rho}{B}\,\tau^2 . \tag{$\ast$}$$</p>
+
+        <h3 id="bagging">Random forests and bagging</h3>
+
+        <div class="env exercise" id="exo-q19" data-name="Why bagging helps trees">
+          <p>Explain why bagging is especially useful for decision trees. In your answer, discuss instability and variance
+            reduction.</p>
+        </div>
+        <details class="solution" data-for="exo-q19">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: trees are unstable.</strong> A deep tree has low bias but high variance. Its splits
+              depend on small differences in impurity, so changing a few training points can change the root split and
+              then the whole tree below it. Predictions from trees fitted to different samples differ a lot.</p>
+            <p><strong>Step 2: averaging reduces variance.</strong> Bagging fits $B$ trees on $B$ bootstrap samples and
+              averages their predictions (majority vote for classes). By ($\ast$), if the trees were uncorrelated
+              ($\rho = 0$) the variance would fall from $\tau^2$ to
+              $$\frac{\tau^2}{B} .$$
+              In practice $\rho > 0$, but the variance still falls to $\rho\tau^2 + (1 - \rho)\tau^2/B$, below $\tau^2$.</p>
+            <p><strong>Step 3: bias is unchanged.</strong> Each bagged tree has about the same bias as one deep tree, and
+              averaging does not change the expected prediction. So bagging keeps the low bias of deep trees and removes
+              much of their variance.</p>
+            <p><strong>Step 4: conclude.</strong> Bagging helps most for methods with high variance and low bias, which
+              describes deep trees. For a stable method such as linear regression, the bootstrap fits are nearly
+              identical ($\rho \approx 1$) and averaging gains almost nothing.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q20" data-name="Bootstrap samples">
+          <p>What is a bootstrap sample? Why is training many trees on bootstrap samples different from simply
+            duplicating the original dataset many times?</p>
+        </div>
+        <details class="solution" data-for="exo-q20">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: definition.</strong> A bootstrap sample is obtained by drawing $N$ points from the $N$
+              training points uniformly <em>with replacement</em>. Some points appear several times and others not at
+              all.</p>
+            <p><strong>Step 2: how many points are left out.</strong> A given point is missed by one draw with
+              probability $1 - \frac1N$, so it is missed by all $N$ draws with probability
+              $$\Big(1 - \frac1N\Big)^N \xrightarrow[N \to \infty]{} e^{-1} \approx 0.368 .$$
+              Each bootstrap sample therefore contains about $63.2\%$ of the distinct training points. The other $36.8\%$
+              are "out of bag" and can be used to estimate the test error.</p>
+            <p><strong>Step 3: copying the data gives identical trees.</strong> The tree algorithm is deterministic
+              (apart from ties). Fitting it to the same dataset $B$ times, or to the dataset repeated $B$ times (which
+              has the same proportions and therefore the same impurities and splits), gives $B$ identical trees. Then
+              $\rho = 1$ and ($\ast$) gives
+              $$\rho\tau^2 + \frac{1 - \rho}{B}\tau^2 = \tau^2 ,$$
+              no variance reduction at all.</p>
+            <p><strong>Step 4: conclude.</strong> Bootstrap samples differ from each other, so the trees differ. They
+              imitate drawing new training sets from the population, and averaging over that variation is what reduces
+              the variance.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q21" data-name="Random forests vs bagging">
+          <p>A random forest modifies bagging by selecting only a random subset of features at each split.</p>
+          <ol type="a">
+            <li>Why does this reduce correlation between trees?</li>
+            <li>Why can reducing correlation improve the ensemble?</li>
+            <li>Why are random forests often grown with deep trees rather than heavily pruned trees?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q21">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) less correlation.</strong> In plain bagging, if one feature is much stronger than
+              the others, almost every bootstrap tree splits on it at the root and on the same few features below. The
+              trees look alike and their predictions are highly correlated. If each split may use only $m \lt p$ randomly
+              chosen features (for example $m = \sqrt p$), the strong feature is not available at many splits, so
+              other features get used and the trees take different shapes.</p>
+            <p><strong>Step 2: (b) why lower correlation helps.</strong> In ($\ast$), the second term vanishes as $B$
+              grows, but the first does not:
+              $$\lim_{B \to \infty}\Big(\rho\tau^2 + \frac{1 - \rho}{B}\tau^2\Big) = \rho\,\tau^2 .$$
+              With bagging alone, adding trees cannot push the variance below $\rho\tau^2$. Lowering $\rho$ lowers this
+              floor. Each tree may become slightly worse (larger $\tau^2$, a little more bias), but the drop in $\rho$
+              usually wins.</p>
+            <p><strong>Step 3: (c) deep trees.</strong> Averaging reduces variance but does not reduce bias: the
+              forest has about the bias of its individual trees. So the individual trees should have low bias, which
+              means deep, unpruned trees. Their high variance is exactly what averaging removes. Heavily pruned trees
+              would add bias that the forest cannot remove.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-num-forest-var" data-name="How many trees?">
+          <p>Each tree in an ensemble has prediction variance $\tau^2 = 4$ at some point $\bx$.</p>
+          <ol type="a">
+            <li>Bagged trees have pairwise correlation $\rho = 0.3$. Compute the variance of the average for
+              $B = 1, 10, 100$ trees and its limit as $B \to \infty$.</li>
+            <li>A random forest lowers the correlation to $\rho = 0.1$. Repeat (a).</li>
+            <li>For a training set of $N = 10$ points, compute the probability that a given point is left out of a
+              bootstrap sample, and the expected number of distinct points in the sample.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-num-forest-var">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: the formula.</strong> The variance of the average of $B$ trees is
+              $$\rho\,\tau^2 + \frac{1 - \rho}{B}\,\tau^2 .$$</p>
+            <p><strong>Step 2: (a) $\rho = 0.3$.</strong> Here $\rho\tau^2 = 1.2$ and $(1 - \rho)\tau^2 = 2.8$:
+              $$B = 1:\ 4, \qquad B = 10:\ 1.2 + 0.28 = 1.48, \qquad B = 100:\ 1.2 + 0.028 = 1.228, \qquad B \to \infty:\ 1.2 .$$
+              Going from 10 to 100 trees gains little: the variance cannot go below $1.2$.</p>
+            <p><strong>Step 3: (b) $\rho = 0.1$.</strong> Now $\rho\tau^2 = 0.4$ and $(1 - \rho)\tau^2 = 3.6$:
+              $$B = 1:\ 4, \qquad B = 10:\ 0.76, \qquad B = 100:\ 0.436, \qquad B \to \infty:\ 0.4 .$$
+              The floor is three times lower. Even if each forest tree were a little worse (larger $\tau^2$), the
+              lower correlation would usually win.</p>
+            <p><strong>Step 4: (c) the bootstrap with $N = 10$.</strong> A point is missed by one draw with probability
+              $0.9$, so by all ten draws with probability
+              $$0.9^{10} \approx 0.349 .$$
+              The expected number of distinct points is $10 \times (1 - 0.349) \approx 6.5$. This is already close to the
+              large-$N$ values $e^{-1} \approx 0.368$ and $63.2\%$.</p>
+          </div>
+        </details>
+
+        <h3 id="boosting">Boosting</h3>
+
+        <div class="env exercise" id="exo-q22" data-name="Sequential correction of errors">
+          <p>Explain the key idea behind boosting. How is it conceptually different from bagging?</p>
+        </div>
+        <details class="solution" data-for="exo-q22">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: the idea of boosting.</strong> Build the model as a sum of small trees, added one at a
+              time:
+              $$f_M(\bx) = f_0 + \nu\sum_{m=1}^M h_m(\bx) .$$
+              Each new tree $h_m$ is fitted to what the current model $f_{m-1}$ still gets wrong (for squared loss, the
+              residuals). Each tree corrects the errors of the trees before it.</p>
+            <p><strong>Step 2: what it reduces.</strong> The individual trees are shallow (high bias, low variance).
+              Adding many of them, each correcting the previous errors, mainly reduces <em>bias</em>.</p>
+            <p><strong>Step 3: the contrast with bagging.</strong></p>
+            <div class="table-wrap"><table>
+              <thead><tr><th scope="col"></th><th scope="col">Bagging / random forest</th><th scope="col">Boosting</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">Trees fitted</th><td>independently, in parallel</td><td>sequentially, each depending on the previous ones</td></tr>
+                <tr><th scope="row">Data for each tree</th><td>a bootstrap sample of $(\bx_i, y_i)$</td><td>all points, with targets = current residuals</td></tr>
+                <tr><th scope="row">Individual trees</th><td>deep (low bias, high variance)</td><td>shallow (high bias, low variance)</td></tr>
+                <tr><th scope="row">Combination</th><td>average</td><td>sum of small steps</td></tr>
+                <tr><th scope="row">Mainly reduces</th><td>variance</td><td>bias</td></tr>
+                <tr><th scope="row">More trees</th><td>never overfits; it stabilises</td><td>can overfit</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q23" data-name="Gradient boosting intuition">
+          <p>In gradient boosting for regression with squared loss, each new tree is fitted to the residuals of the current
+            model.</p>
+          <ol type="a">
+            <li>Explain why the residuals are the relevant signal here.</li>
+            <li>What happens if you add too many trees?</li>
+            <li>What is the role of the learning rate?</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q23">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) residuals are what is missing.</strong> If the current model is $f_{m-1}$, the
+              residual $r_i = y_i - f_{m-1}(\bx_i)$ is exactly the amount to add at $\bx_i$ to reach $y_i$. A tree that
+              predicts the residuals therefore improves the fit where it is worst. Also, for $L(y, f) = \frac12(y - f)^2$,
+              $$-\frac{\partial L(y_i, f)}{\partial f}\Big|_{f = f_{m-1}(\bx_i)} = y_i - f_{m-1}(\bx_i) = r_i ,$$
+              so fitting the residuals is a gradient descent step on the training loss, with the tree generalising the
+              step to new inputs.</p>
+            <p><strong>Step 2: (b) too many trees.</strong> Each stage decreases the training error
+              (<a href="../chapters/08-trees.html#boosting-residuals">Section 8.6.1</a>), so with enough trees the model
+              starts to fit the noise in the residuals. The test error first falls, reaches a minimum, then rises: the
+              model overfits. The number of trees $M$ is chosen by validation or early stopping (stop when the
+              validation error has not improved for a while).</p>
+            <p><strong>Step 3: (c) the learning rate.</strong> The update is $f_m = f_{m-1} + \nu\,h_m$ with
+              $0 \lt \nu \le 1$. A small $\nu$ (e.g. $0.05$) adds only a fraction of each tree, so the model moves in
+              small, cautious steps and no single tree can fit the noise strongly. It needs more trees, but the minimum of
+              the test error is usually lower and wider, so the exact choice of $M$ matters less. $\nu$ and $M$ are tuned
+              together: halving $\nu$ roughly doubles the number of trees needed.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-num-boost" data-name="Two rounds of gradient boosting by hand">
+          <p>Fit gradient boosting with squared loss, stumps (trees with one split) and learning rate $\nu = 0.5$ to</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th scope="col">$x_i$</th><td>1</td><td>2</td><td>3</td><td>4</td></tr></thead>
+            <tbody><tr><th scope="row">$y_i$</th><td>2</td><td>3</td><td>7</td><td>10</td></tr></tbody>
+          </table></div>
+          <ol type="a">
+            <li>Give $f_0$ and its training SSE.</li>
+            <li>Round 1: compute the residuals, find the best stump among the thresholds $1.5, 2.5, 3.5$, and give $f_1$ and
+              its training SSE.</li>
+            <li>Round 2: repeat to get $f_2$ and its training SSE.</li>
+            <li>Check both decreases against $\sum_i r_i^2 - \nu(2 - \nu)\sum_i h_i^2$.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-num-boost">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) start.</strong> $f_0 = \bar y = 22/4 = 5.5$ at every point. Its training SSE is
+              $$3.5^2 + 2.5^2 + 1.5^2 + 4.5^2 = 12.25 + 6.25 + 2.25 + 20.25 = 41 .$$</p>
+            <p><strong>Step 2: (b) round 1.</strong> The residuals are $r = (-3.5, -2.5, 1.5, 4.5)$. The SSE of the stump
+              fitted to them is $24.67$ for $t = 1.5$, $5$ for $t = 2.5$ and $14$ for $t = 3.5$, so the best stump splits at
+              $x \le 2.5$ with leaf values $-3$ and $3$ (the means of the residuals). Then
+              $$f_1 = f_0 + 0.5\,h_1 = (5.5 - 1.5,\ 5.5 - 1.5,\ 5.5 + 1.5,\ 5.5 + 1.5) = (4, 4, 7, 7),$$
+              with training SSE $4 + 1 + 0 + 9 = 14$.</p>
+            <p><strong>Step 3: (c) round 2.</strong> The residuals are now $r = (-2, -1, 0, 3)$. The stump SSEs are
+              $8.67$ for $t = 1.5$, $5$ for $t = 2.5$ and $2$ for $t = 3.5$, so this time the best stump splits at
+              $x \le 3.5$, with leaf values $-1$ and $3$. Then
+              $$f_2 = f_1 + 0.5\,h_2 = (3.5,\ 3.5,\ 6.5,\ 8.5),$$
+              with training SSE $2.25 + 0.25 + 0.25 + 2.25 = 5$. The second tree corrects the point the first one fitted
+              worst ($x = 4$).</p>
+            <p><strong>Step 4: (d) check.</strong> With $\nu(2 - \nu) = 0.75$. Round 1: $\sum r_i^2 = 41$ and
+              $\sum h_i^2 = 4 \times 9 = 36$, so
+              $$41 - 0.75 \times 36 = 14 . \;\checkmark$$
+              Round 2: $\sum r_i^2 = 14$ and $\sum h_i^2 = 1 + 1 + 1 + 9 = 12$, so
+              $$14 - 0.75 \times 12 = 5 . \;\checkmark$$
+              The training error keeps falling (41, 14, 5); with more rounds it would approach 0 and the model would fit
+              the noise.</p>
+          </div>
+        </details>
+
+        <div class="env exercise" id="exo-q24" data-name="Random forest or boosting?">
+          <p>You are given a medium-sized tabular dataset and need a strong baseline quickly.</p>
+          <ol type="a">
+            <li>Give one reason to start with a random forest.</li>
+            <li>Give one reason to try gradient boosting afterwards.</li>
+            <li>Explain one trade-off between the two approaches.</li>
+          </ol>
+        </div>
+        <details class="solution" data-for="exo-q24">
+          <summary>Solution</summary>
+          <div class="solution__body">
+            <p><strong>Step 1: (a) start with a random forest.</strong> It works well with default settings: adding trees
+              never hurts, deep trees need no depth tuning, and only $m$ (<code>max_features</code>) and the leaf size
+              matter much. It needs no feature scaling, trains in parallel, and the out-of-bag score gives a free
+              estimate of the test error. It is a strong baseline with little effort.</p>
+            <p><strong>Step 2: (b) then try boosting.</strong> Because boosting reduces bias step by step, a well-tuned
+              gradient boosting model is often more accurate than a random forest on tabular data. It is worth trying
+              once the baseline is in place.</p>
+            <p><strong>Step 3: (c) a trade-off.</strong> Boosting has more hyperparameters that interact (learning rate,
+              number of trees, depth, subsampling) and can overfit if they are chosen badly, so it needs careful
+              validation and early stopping. Its trees are fitted one after another, so training cannot be
+              parallelised across trees. The forest is safer and faster to set up; boosting can be more accurate but
+              costs more tuning time and has a higher risk of overfitting.</p>
+          </div>
+        </details>
+
+      </article>
+
+      <nav id="pager"></nav>
+    </main>
+
+    <aside id="toc"></aside>
+  </div>
+
+  <div id="site-footer"></div>
+</body>
+</html>
